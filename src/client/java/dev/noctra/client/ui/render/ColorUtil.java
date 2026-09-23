@@ -1,4 +1,4 @@
-package dev.nativelaunch.client.ui.render;
+package dev.noctra.client.ui.render;
 
 public class ColorUtil {
 

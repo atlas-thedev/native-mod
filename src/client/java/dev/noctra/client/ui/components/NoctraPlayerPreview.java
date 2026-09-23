@@ -1,4 +1,4 @@
-package dev.nativelaunch.client.ui.components;
+package dev.noctra.client.ui.components;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -16,7 +16,7 @@ import net.minecraft.world.entity.player.PlayerSkin;
 
 import java.util.function.Supplier;
 
-public class NativePlayerPreview extends NativeWidget {
+public class NoctraPlayerPreview extends NoctraWidget {
 
     private final Model.Simple wideModel;
     private final Model.Simple slimModel;
@@ -25,40 +25,18 @@ public class NativePlayerPreview extends NativeWidget {
     private float rotationX = -5.0f;
     private float rotationY = 25.0f; // Turned 25 degrees naturally like Essential
 
-    public NativePlayerPreview(int x, int y, int width, int height) {
+    public NoctraPlayerPreview(int x, int y, int width, int height) {
         super(x, y, width, height, Component.literal("Player Preview"), null);
 
         Minecraft mc = Minecraft.getInstance();
         EntityModelSet modelSet = mc.getEntityModels();
         this.skinSupplier = mc.getSkinManager().createLookup(mc.getGameProfile(), true);
 
-        // 1. Bake both Wide (Steve) and Slim (Alex) player models
         ModelPart widePart = modelSet.bakeLayer(ModelLayers.PLAYER);
         ModelPart slimPart = modelSet.bakeLayer(ModelLayers.PLAYER_SLIM);
 
-        // 2. Pose the arms with a natural slight outward rest angle (zRot ~ 0.08 rad)
-        // This stops the arms from colliding and clipping into the torso, which caused the black stripe shadow!
-        adjustArmPose(widePart);
-        adjustArmPose(slimPart);
-
         this.wideModel = new Model.Simple(widePart, RenderTypes::entityTranslucent);
         this.slimModel = new Model.Simple(slimPart, RenderTypes::entityTranslucent);
-    }
-
-    private void adjustArmPose(ModelPart root) {
-        try {
-            ModelPart rightArm = root.getChild("right_arm");
-            ModelPart leftArm = root.getChild("left_arm");
-
-            // Angle arms slightly outward into natural resting stance
-            rightArm.zRot = 0.07f;
-            leftArm.zRot = -0.07f;
-
-            // Slight outward X translation to eliminate torso intersection
-            rightArm.x = -5.2f;
-            leftArm.x = 5.2f;
-        } catch (Exception ignored) {
-        }
     }
 
     @Override

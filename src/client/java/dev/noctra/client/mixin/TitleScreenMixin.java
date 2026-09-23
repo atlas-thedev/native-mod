@@ -1,8 +1,8 @@
-package dev.nativelaunch.client.mixin;
+package dev.noctra.client.mixin;
 
-import dev.nativelaunch.client.ui.components.NativePlayerPreview;
-import dev.nativelaunch.client.ui.components.VanillaIconButton;
-import dev.nativelaunch.client.ui.render.IconDrawUtil;
+import dev.noctra.client.ui.components.NoctraPlayerPreview;
+import dev.noctra.client.ui.components.VanillaIconButton;
+import dev.noctra.client.ui.render.IconDrawUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -23,15 +23,15 @@ public abstract class TitleScreenMixin extends Screen {
     }
 
     @Inject(method = "init", at = @At("TAIL"))
-    private void initNativeTitleScreen(CallbackInfo ci) {
+    private void initNoctraTitleScreen(CallbackInfo ci) {
         // --- 1. Left Side: Natural Tall 3D Player Avatar & Wardrobe Button ---
         int playerWidth = 80;
         int playerHeight = 135;
         int playerX = 30;
         // Vertically center player nicely so head is level with Singleplayer row
-        int playerY = Math.max(20, (this.height / 2) - 68);
+        int playerY = Math.max(10, (this.height / 2) - 85);
 
-        NativePlayerPreview playerPreview = new NativePlayerPreview(playerX, playerY, playerWidth, playerHeight);
+        NoctraPlayerPreview playerPreview = new NoctraPlayerPreview(playerX, playerY, playerWidth, playerHeight);
         this.addRenderableWidget(playerPreview);
 
         // Vanilla-style 20x20 Wardrobe Button directly below player avatar
@@ -113,7 +113,7 @@ public abstract class TitleScreenMixin extends Screen {
         // 5. Settings / Mixer Sliders Icon
         this.addRenderableWidget(new VanillaIconButton(
                 rightX, startY + (step * 4), btnSize,
-                Component.literal("Native Settings"),
+                Component.literal("Noctra Settings"),
                 btn -> {
                     if (this.minecraft != null) {
                         this.minecraft.setScreenAndShow(new net.minecraft.client.gui.screens.options.OptionsScreen(this, this.minecraft.options));
@@ -138,21 +138,21 @@ public abstract class TitleScreenMixin extends Screen {
     }
 
     @Inject(method = "extractRenderState", at = @At("TAIL"))
-    private void renderNativeTitleScreenOverlay(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+    private void renderNoctraTitleScreenOverlay(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float delta, CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
 
         // 1. Calculate dynamically lowest button Y position so account text never overlaps
         int maxBtnBottom = 0;
         for (GuiEventListener listener : this.children()) {
             if (listener instanceof AbstractWidget widget) {
-                if (!(widget instanceof VanillaIconButton) && !(widget instanceof NativePlayerPreview)) {
+                if (!(widget instanceof VanillaIconButton) && !(widget instanceof NoctraPlayerPreview)) {
                     maxBtnBottom = Math.max(maxBtnBottom, widget.getY() + widget.getHeight());
                 }
             }
         }
 
-        // Place cleanly 12 pixels below the lowest vanilla button (Options/Quit)
-        int accountY = (maxBtnBottom > 0) ? (maxBtnBottom + 12) : (this.height - 24);
+        // Place cleanly 24 pixels below the lowest vanilla button (Options/Quit)
+        int accountY = (maxBtnBottom > 0) ? (maxBtnBottom + 24) : (this.height - 15);
 
         String username = mc.getUser() != null ? mc.getUser().getName() : "Player";
         String accountText = "Current Account: " + username;
@@ -163,7 +163,7 @@ public abstract class TitleScreenMixin extends Screen {
         extractor.text(mc.font, accountText, centerX, accountY, 0xFFE58B68, true);
 
         // 2. Client Branding on Bottom Left (Cleanly above Minecraft version to prevent collision)
-        String branding = "Native Client v1.0.0";
+        String branding = "Noctra Client v1.0.0";
         extractor.text(mc.font, branding, 2, this.height - 20, 0xFFAAAAAA, true);
     }
 }

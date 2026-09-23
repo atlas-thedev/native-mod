@@ -1,4 +1,4 @@
-package dev.nativelaunch;
+package dev.noctra;
 
 import net.fabricmc.api.ModInitializer;
 
@@ -7,8 +7,8 @@ import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Native implements ModInitializer {
-	public static final String MOD_ID = "native";
+public class Noctra implements ModInitializer {
+	public static final String MOD_ID = "noctra";
 
 	// This logger is used to write text to the console and the log file.
 	// It is considered best practice to use your mod id as the logger's name.

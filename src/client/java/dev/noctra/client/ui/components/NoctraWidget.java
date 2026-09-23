@@ -1,17 +1,17 @@
-package dev.nativelaunch.client.ui.components;
+package dev.noctra.client.ui.components;
 
-import dev.nativelaunch.client.ui.render.AnimationUtil;
+import dev.noctra.client.ui.render.AnimationUtil;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
-public abstract class NativeWidget extends AbstractWidget {
+public abstract class NoctraWidget extends AbstractWidget {
 
     protected float hoverProgress = 0.0f;
     protected Runnable onClickAction;
 
-    public NativeWidget(int x, int y, int width, int height, Component message, Runnable onClickAction) {
+    public NoctraWidget(int x, int y, int width, int height, Component message, Runnable onClickAction) {
         super(x, y, width, height, message);
         this.onClickAction = onClickAction;
     }

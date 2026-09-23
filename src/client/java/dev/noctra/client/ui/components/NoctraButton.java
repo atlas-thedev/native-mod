@@ -1,17 +1,17 @@
-package dev.nativelaunch.client.ui.components;
+package dev.noctra.client.ui.components;
 
-import dev.nativelaunch.client.ui.render.ColorUtil;
-import dev.nativelaunch.client.ui.render.Render2D;
+import dev.noctra.client.ui.render.ColorUtil;
+import dev.noctra.client.ui.render.Render2D;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
-public class NativeButton extends NativeWidget {
+public class NoctraButton extends NoctraWidget {
 
     private final int cornerRadius;
 
-    public NativeButton(int x, int y, int width, int height, Component message, Runnable onClickAction) {
+    public NoctraButton(int x, int y, int width, int height, Component message, Runnable onClickAction) {
         super(x, y, width, height, message, onClickAction);
         this.cornerRadius = 5;
     }

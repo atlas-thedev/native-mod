@@ -1,8 +1,8 @@
 {
 	"schemaVersion": 1,
-	"id": "native",
+	"id": "noctra",
 	"version": "${version}",
-	"name": "Native",
+	"name": "Noctra",
 	"description": "This is an example description! Tell everyone what your mod is about!",
 	"authors": [
 		"Me!"
@@ -12,20 +12,20 @@
 		"sources": "https://github.com/FabricMC/fabric-example-mod"
 	},
 	"license": "CC0-1.0",
-	"icon": "assets/native/icon.png",
+	"icon": "assets/noctra/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"dev.nativelaunch.Native"
+			"dev.noctra.Noctra"
 		],
 		"client": [
-			"dev.nativelaunch.client.NativeClient"
+			"dev.noctra.client.NoctraClient"
 		]
 	},
 	"mixins": [
-		"native.mixins.json",
+		"noctra.mixins.json",
 		{
-			"config": "native.client.mixins.json",
+			"config": "noctra.client.mixins.json",
 			"environment": "client"
 		}
 	],

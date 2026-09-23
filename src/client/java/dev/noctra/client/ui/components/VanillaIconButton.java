@@ -1,4 +1,4 @@
-package dev.nativelaunch.client.ui.components;
+package dev.noctra.client.ui.components;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
