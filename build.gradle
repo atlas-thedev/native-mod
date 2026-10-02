@@ -11,17 +11,11 @@ repositories {
 	maven { url = 'https://libraries.minecraft.net/' }
 }
 
-// One jar, four source sets:
+// One jar, three source sets:
 //   main   - platform-neutral code (sync, directory, account hand-off)
 //   legacy - hook for Minecraft 1.16 - 1.20.2   (compiled against an old authlib)
 //   modern - hook for Minecraft 1.20.3 - 26.x   (compiled against a new authlib)
-//   ui     - Noctra title screen, Minecraft 26.3 only (Java 25 bytecode, loaded only there)
 sourceSets {
-	ui {
-		java.setSrcDirs(['src/client/java'])
-		resources.setSrcDirs(['src/client/resources'])
-		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-	}
 	legacy {
 		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
 	}
@@ -62,57 +56,6 @@ tasks.withType(JavaCompile).configureEach {
 	options.compilerArgs += ['-Xlint:-options']
 }
 
-// The title screen is written against Minecraft 26.3's own (unobfuscated) classes.
-// They are fetched straight from Mojang so no extra Gradle plugin is needed.
-def uiMinecraft = '26.3'
-def uiMcDir = layout.buildDirectory.dir("minecraft/${uiMinecraft}").get().asFile
-
-def sha1Of = { File file ->
-	def digest = java.security.MessageDigest.getInstance('SHA-1')
-	file.withInputStream { input ->
-		byte[] buffer = new byte[65536]
-		int read
-		while ((read = input.read(buffer)) > 0) digest.update(buffer, 0, read)
-	}
-	digest.digest().encodeHex().toString()
-}
-
-tasks.register('fetchMinecraft') {
-	outputs.dir(uiMcDir)
-	doLast {
-		def slurper = new groovy.json.JsonSlurper()
-		def fetch = { String url, File target, String expected ->
-			if (target.isFile() && (expected == null || sha1Of(target) == expected)) return
-			target.parentFile.mkdirs()
-			def tmp = new File(target.parentFile, target.name + '.part')
-			new URL(url).withInputStream { input -> tmp.withOutputStream { output -> output << input } }
-			if (expected != null && sha1Of(tmp) != expected) throw new GradleException("Checksum mismatch for ${url}")
-			if (target.exists()) target.delete()
-			tmp.renameTo(target)
-		}
-		def manifest = slurper.parse(new URL('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'))
-		def entry = manifest.versions.find { it.id == uiMinecraft }
-		if (entry == null) throw new GradleException("Minecraft ${uiMinecraft} is not in Mojang's manifest")
-		def version = slurper.parse(new URL(entry.url))
-		fetch(version.downloads.client.url, new File(uiMcDir, 'client.jar'), version.downloads.client.sha1)
-		version.libraries.each { lib ->
-			def artifact = lib.downloads?.artifact
-			if (artifact == null || artifact.path.contains('natives')) return
-			fetch(artifact.url, new File(uiMcDir, "libs/${new File(artifact.path).name}"), artifact.sha1)
-		}
-	}
-}
-
-dependencies {
-	uiCompileOnly files("${uiMcDir}/client.jar")
-	uiCompileOnly fileTree(dir: "${uiMcDir}/libs", include: '*.jar')
-}
-
-tasks.named('compileUiJava') {
-	dependsOn 'fetchMinecraft'
-	options.release = 25
-}
-
 // Tests run on the build JDK and use newer language features.
 tasks.named('compileTestJava') {
 	options.release = 17
@@ -134,7 +77,6 @@ jar {
 	archiveBaseName = project.archives_base_name
 	from sourceSets.legacy.output
 	from sourceSets.modern.output
-	from sourceSets.ui.output
 	from('LICENSE') {
 		rename { "${it}_${project.archives_base_name}" }
 	}

@@ -1,7 +1,5 @@
-# Noctra title screen (Minecraft 26.3)
+# Noctra title screen (parked, not built)
 
-Player preview on the left, Noctra toolbar on the right, account line and branding.
-Compiled as the `ui` source set (Java 25 bytecode) against Minecraft 26.3's own classes, which Gradle
-downloads from Mojang (`./gradlew fetchMinecraft`). It is loaded **only** on 26.3: `NoctraPreLaunch`
-registers `noctra.client.mixins.json` at runtime after checking the game version, so every other
-version never touches these classes.
+Prototype of the Noctra title screen for Minecraft 26.3 (3D player preview, toolbar, account line).
+It is **not** compiled into the mod right now. To bring it back, restore the `ui` source set,
+`NoctraPreLaunch`, `UiGate` and the `title-screen` CI job from commit `f248183` (v1.1.0).
