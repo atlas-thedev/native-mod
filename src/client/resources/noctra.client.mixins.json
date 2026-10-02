@@ -1,15 +1,11 @@
 {
-	"required": true,
+	"required": false,
 	"package": "dev.noctra.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"ExampleClientMixin",
 		"TitleScreenMixin"
 	],
 	"injectors": {
-		"defaultRequire": 1
-	},
-	"overwrites": {
-		"requireAnnotations": true
+		"defaultRequire": 0
 	}
 }

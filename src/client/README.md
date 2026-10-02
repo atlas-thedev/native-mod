@@ -1,5 +1,7 @@
-# UI prototype (not built)
+# Noctra title screen (Minecraft 26.3)
 
-Early Noctra title-screen UI for Minecraft 26.3 (Mojang mappings). It is **not** part of the shipped jar:
-the Gradle build only compiles `src/main`, `src/legacy` and `src/modern`. Kept here as a starting point
-for the in-game UI (needs a Loom-based, version-specific build).
+Player preview on the left, Noctra toolbar on the right, account line and branding.
+Compiled as the `ui` source set (Java 25 bytecode) against Minecraft 26.3's own classes, which Gradle
+downloads from Mojang (`./gradlew fetchMinecraft`). It is loaded **only** on 26.3: `NoctraPreLaunch`
+registers `noctra.client.mixins.json` at runtime after checking the game version, so every other
+version never touches these classes.

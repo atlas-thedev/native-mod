@@ -22,6 +22,17 @@ public abstract class TitleScreenMixin extends Screen {
         super(title);
     }
 
+    private static String noctraVersionCache;
+
+    private static String noctraVersion() {
+        if (noctraVersionCache == null) {
+            noctraVersionCache = net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("noctra")
+                    .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                    .orElse("");
+        }
+        return noctraVersionCache;
+    }
+
     @Inject(method = "init", at = @At("TAIL"))
     private void initNoctraTitleScreen(CallbackInfo ci) {
         // --- 1. Left Side: Natural Tall 3D Player Avatar & Wardrobe Button ---
@@ -163,7 +174,7 @@ public abstract class TitleScreenMixin extends Screen {
         extractor.text(mc.font, accountText, centerX, accountY, 0xFFE58B68, true);
 
         // 2. Client Branding on Bottom Left (Cleanly above Minecraft version to prevent collision)
-        String branding = "Noctra Client v1.0.0";
+        String branding = "Noctra Client v" + noctraVersion();
         extractor.text(mc.font, branding, 2, this.height - 20, 0xFFAAAAAA, true);
     }
 }

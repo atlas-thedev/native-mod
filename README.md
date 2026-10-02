@@ -9,6 +9,7 @@ No Fabric API needed, one jar for every version.
   shows them (tab list, nametag, player model, inventory).
 * Signs in with your Noctra account automatically when started from the Noctra Launcher (short-lived launch
   ticket in `<gameDir>/.noctra/session.json`). Without the launcher it runs as a guest: you still see everyone's skins.
+* On **Minecraft 26.3** it also replaces the title screen with the Noctra one (3D player preview, toolbar, account line). Other versions keep the vanilla menu.
 * Versions older than 1.16 (and Forge/NeoForge) keep using CustomSkinLoader through the launcher.
 
 ## How it hooks (why one jar works)
@@ -36,7 +37,7 @@ The launcher reads `releases/latest/download/manifest.json` (sha256-verified) an
 ## Local build
 
 ```
-./gradlew build      # needs JDK 17+ ; output: build/libs/noctra-client-<version>.jar
+./gradlew build      # needs JDK 25 (downloads Minecraft 26.3 once, for the title screen) ; output: build/libs/noctra-client-<version>.jar
 ```
 
 License: CC0-1.0.

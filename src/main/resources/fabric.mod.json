@@ -15,6 +15,9 @@
   "icon": "assets/noctra/icon.png",
   "environment": "client",
   "entrypoints": {
+    "preLaunch": [
+      "dev.noctra.NoctraPreLaunch"
+    ],
     "client": [
       "dev.noctra.NoctraMod"
     ]
