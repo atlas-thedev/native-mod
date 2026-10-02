@@ -1,5 +1,5 @@
-﻿@echo off
-setlocal enabledelayedexpansion
+@echo off
+setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
 title Noctra Mod - Git Pull
 
@@ -9,79 +9,63 @@ echo ========================================================
 echo.
 
 cd /d "%~dp0"
+set "GIT=git -c gc.auto=0 -c maintenance.auto=false"
 
 if not exist ".git" (
     echo [ERROR] No .git repository found in %~dp0
-    echo.
-    pause
-    exit /b 1
+    goto :FAIL
+)
+where git >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Git is not installed or not in PATH.
+    goto :FAIL
+)
+git config --global --add safe.directory "%CD%" >nul 2>&1
+
+for /f "delims=" %%B in ('git branch --show-current') do set "BRANCH=%%B"
+if "!BRANCH!"=="" (
+    echo [ERROR] You are not on a branch ^(detached HEAD^). Run:  git checkout main
+    goto :FAIL
 )
 
-echo [1/3] Checking for local uncommitted changes...
-set HAS_LOCAL_CHANGES=
-for /f "delims=" %%i in ('git status --porcelain') do set HAS_LOCAL_CHANGES=1
+if exist ".git\rebase-merge" goto :STUCK
+if exist ".git\rebase-apply" goto :STUCK
+if exist ".git\MERGE_HEAD" goto :STUCK
 
-if not defined HAS_LOCAL_CHANGES goto :CLEAN_TREE
-
-echo.
-echo [WARNING] You have local uncommitted changes:
-git status --short
-echo.
-echo Choose an option:
-echo   [1] Stash local changes, pull latest, and restore changes [Recommended]
-echo   [2] Try pulling directly [may fail if there are merge conflicts]
-echo   [3] Cancel
-echo.
-set /p "choice=Select option [1/2/3, default 1]: "
-if "!choice!"=="" set "choice=1"
-if "!choice!"=="3" goto :CANCEL_PULL
-if "!choice!"=="1" goto :DO_STASH
-goto :START_PULL
-
-:DO_STASH
-echo.
-echo Stashing local changes...
-git stash push -m "Auto-stash before pull %date% %time%"
-set STASHED=1
-goto :START_PULL
-
-:CLEAN_TREE
-echo [OK] Working tree clean. Ready to pull.
-
-:START_PULL
-echo.
-echo [2/3] Fetching and pulling latest changes from GitHub (git -c gc.auto=0 -c maintenance.auto=false pull origin main)...
-git -c gc.auto=0 -c maintenance.auto=false pull origin main
-set PULL_EXIT=!errorlevel!
-
-if defined STASHED (
+echo [1/2] Pulling latest changes into "!BRANCH!" ^(your local edits are kept^)...
+%GIT% pull --rebase --autostash origin !BRANCH!
+if errorlevel 1 (
     echo.
-    echo Restoring stashed local changes...
-    git stash pop
-)
-
-if not !PULL_EXIT!==0 (
+    echo [ERROR] Pull failed. Common causes:
+    echo   - no internet / not logged in to GitHub
+    echo   - the same lines were changed here and on GitHub ^(conflict^)
     echo.
-    echo [ERROR] Git pull failed! Please check your network or resolve any conflicts.
-    echo.
-    pause
-    exit /b 1
+    echo Undo the half-finished pull with:  git rebase --abort
+    echo Or, if you do NOT need your local changes, make this folder match GitHub:
+    echo     git fetch origin ^&^& git reset --hard origin/!BRANCH!
+    goto :FAIL
 )
 
 echo.
-echo [3/3] Current branch status:
+echo [2/2] Now at:
 git log -1 --oneline
 echo.
 echo ========================================================
 echo      SUCCESS: Repository updated from GitHub!
 echo ========================================================
+goto :END
+
+:STUCK
+echo [ERROR] A previous pull/merge is still unfinished in this folder.
+echo         Run  git rebase --abort  ^(or  git merge --abort^)  and try again.
+goto :FAIL
+
+:FAIL
 echo.
 pause
-exit /b 0
+exit /b 1
 
-:CANCEL_PULL
-echo.
-echo [CANCELLED] Pull operation cancelled.
+:END
 echo.
 pause
 exit /b 0
