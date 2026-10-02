@@ -1,0 +1,72 @@
+name: release
+
+# Runs when release.bat pushes a version tag (vX.Y.Z), and also when a push to main changes the
+# version in gradle.properties and that version has no GitHub Release yet. Either way the
+# jar is tested on real Minecraft servers before anything is published.
+on:
+  push:
+    tags: ['v*.*.*']
+    branches: [main]
+    paths: [gradle.properties]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    name: Work out the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      exists: ${{ steps.v.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          file="$(grep -E '^version=' gradle.properties | head -n1 | cut -d= -f2 | tr -d '\r ')"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$file" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match gradle.properties version $file"; exit 1
+          fi
+          echo "version=$file" >> "$GITHUB_OUTPUT"
+          if gh release view "v$file" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"; echo "Release v$file already exists - nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Build and test
+    needs: check
+    if: needs.check.outputs.exists == 'false'
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish GitHub Release
+    needs: [check, test]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-${{ needs.check.outputs.version }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: noctra-client-jar
+          path: dist
+      - name: Write manifest
+        run: |
+          python3 scripts/make-manifest.py "dist/noctra-client-${{ needs.check.outputs.version }}.jar" \
+            "${{ needs.check.outputs.version }}" "${{ github.repository }}" dist/manifest.json
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ needs.check.outputs.version }}"
+          if gh release view "v$v" >/dev/null 2>&1; then echo "v$v was published by a parallel run."; exit 0; fi
+          gh release create "v$v" "dist/noctra-client-$v.jar" dist/manifest.json \
+            --title "Noctra Client $v" --generate-notes --latest --target "$GITHUB_SHA"

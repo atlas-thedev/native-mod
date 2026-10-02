@@ -1,81 +1,97 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
-	id 'maven-publish'
+	id 'java'
 }
+
+version = project.version
+group = project.group
 
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
+	mavenCentral()
+	maven { url = 'https://maven.fabricmc.net/' }
+	maven { url = 'https://libraries.minecraft.net/' }
 }
 
-loom {
-	splitEnvironmentSourceSets()
-
-	mods {
-		"noctra" {
-			sourceSet sourceSets.main
-			sourceSet sourceSets.client
-		}
+// One jar, three source sets:
+//   main   - platform-neutral code (sync, directory, account hand-off)
+//   legacy - hook for Minecraft 1.16 - 1.20.2   (compiled against an old authlib)
+//   modern - hook for Minecraft 1.20.3 - 26.x   (compiled against a new authlib)
+sourceSets {
+	legacy {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+	}
+	modern {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
 	}
 }
 
 dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	compileOnly "net.fabricmc:fabric-loader:${fabric_loader_version}"
+	compileOnly "net.fabricmc:sponge-mixin:${sponge_mixin_version}"
+	compileOnly "com.google.code.gson:gson:${gson_version}"
+	compileOnly "org.apache.logging.log4j:log4j-api:${log4j_version}"
 
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	legacyCompileOnly "com.mojang:authlib:${authlib_legacy_version}@jar"
+	legacyCompileOnly "com.google.guava:guava:${guava_version}"
+	modernCompileOnly "com.mojang:authlib:${authlib_modern_version}@jar"
+	modernCompileOnly "com.google.guava:guava:${guava_version}"
+
+	testImplementation platform('org.junit:junit-bom:5.11.4')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation "com.google.code.gson:gson:${gson_version}"
+	testImplementation "org.apache.logging.log4j:log4j-api:${log4j_version}"
+}
+
+// authlib 7 is published for newer JVMs; we only read its classes, so relax the variant check.
+configurations.named('modernCompileClasspath') {
+	attributes {
+		attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
+	}
+}
+
+// Minecraft 1.16 still runs on Java 8, so everything is Java 8 bytecode.
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+	options.release = 8
+	options.compilerArgs += ['-Xlint:-options']
+}
+
+// Tests run on the build JDK and use newer language features.
+tasks.named('compileTestJava') {
+	options.release = 17
 }
 
 processResources {
-	def version = project.version
-	inputs.property "version", version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": version
+	def modVersion = project.version
+	inputs.property 'version', modVersion
+	filesMatching('fabric.mod.json') {
+		expand 'version': modVersion
 	}
 }
 
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 25
-}
-
-java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
-	withSourcesJar()
-
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+test {
+	useJUnitPlatform()
 }
 
 jar {
-	def projectName = project.name
-	inputs.property "projectName", projectName
-
-	from("LICENSE") {
-		rename { "${it}_$projectName"}
+	archiveBaseName = project.archives_base_name
+	from sourceSets.legacy.output
+	from sourceSets.modern.output
+	from('LICENSE') {
+		rename { "${it}_${project.archives_base_name}" }
+	}
+	manifest {
+		attributes(
+			'Implementation-Title': 'Noctra Client mod',
+			'Implementation-Version': project.version
+		)
 	}
 }
 
-// configure the maven publication
-publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			from components.java
-		}
-	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
+// The jar launchers download: keep the file name predictable.
+tasks.register('releaseAssets') {
+	dependsOn jar
+	doLast {
+		println "Built ${jar.archiveFile.get().asFile.name}"
 	}
 }

@@ -1,38 +1,28 @@
 {
-	"schemaVersion": 1,
-	"id": "noctra",
-	"version": "${version}",
-	"name": "Noctra",
-	"description": "This is an example description! Tell everyone what your mod is about!",
-	"authors": [
-		"Me!"
-	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
-	"license": "CC0-1.0",
-	"icon": "assets/noctra/icon.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			"dev.noctra.Noctra"
-		],
-		"client": [
-			"dev.noctra.client.NoctraClient"
-		]
-	},
-	"mixins": [
-		"noctra.mixins.json",
-		{
-			"config": "noctra.client.mixins.json",
-			"environment": "client"
-		}
-	],
-	"depends": {
-		"fabricloader": ">=0.19.5",
-		"minecraft": "~26.3",
-		"java": ">=25",
-		"fabric-api": "*"
-	}
+  "schemaVersion": 1,
+  "id": "noctra",
+  "version": "${version}",
+  "name": "Noctra Client",
+  "description": "Connects Minecraft to your Noctra account and shows every Noctra player's skin and cape, live. Works on Minecraft 1.16 through 26.3.",
+  "authors": [
+    "Noctra Team"
+  ],
+  "contact": {
+    "homepage": "https://nativelaunch.xyz",
+    "sources": "https://github.com/atlas-thedev/noctra-mod"
+  },
+  "license": "CC0-1.0",
+  "icon": "assets/noctra/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.noctra.NoctraMod"
+    ]
+  },
+  "mixins": [
+    "noctra.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.11.0"
+  }
 }
