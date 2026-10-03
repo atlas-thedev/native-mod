@@ -16,7 +16,11 @@ repositories {
 //   legacy - hook for Minecraft 1.16 - 1.20.2   (compiled against an old authlib)
 //   modern - hook for Minecraft 1.20.3 - 26.x   (compiled against a new authlib)
 //   anim   - animated capes, Minecraft 26.x only (Java 25 bytecode, only loaded there)
+//   glanim - animated capes, Minecraft 1.16 - 1.21.x (OpenGL, reached through intermediary names)
 sourceSets {
+	glanim {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+	}
 	anim {
 		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
 	}
@@ -38,12 +42,17 @@ dependencies {
 	legacyCompileOnly "com.google.guava:guava:${guava_version}"
 	modernCompileOnly "com.mojang:authlib:${authlib_modern_version}@jar"
 	modernCompileOnly "com.google.guava:guava:${guava_version}"
+	glanimCompileOnly "com.mojang:authlib:${authlib_legacy_version}@jar"
+	glanimCompileOnly "org.lwjgl:lwjgl:${lwjgl_version}"
+	glanimCompileOnly "org.lwjgl:lwjgl-opengl:${lwjgl_version}"
+	glanimCompileOnly "org.lwjgl:lwjgl-stb:${lwjgl_version}"
 
 	testImplementation platform('org.junit:junit-bom:5.11.4')
 	testImplementation 'org.junit.jupiter:junit-jupiter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testImplementation "com.google.code.gson:gson:${gson_version}"
 	testImplementation "org.apache.logging.log4j:log4j-api:${log4j_version}"
+	testImplementation "com.google.guava:guava:${guava_version}"
 }
 
 // authlib 7 is published for newer JVMs; we only read its classes, so relax the variant check.
@@ -133,6 +142,7 @@ jar {
 	from sourceSets.legacy.output
 	from sourceSets.modern.output
 	from sourceSets.anim.output
+	from sourceSets.glanim.output
 	from('LICENSE') {
 		rename { "${it}_${project.archives_base_name}" }
 	}

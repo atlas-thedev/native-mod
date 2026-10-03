@@ -2,20 +2,32 @@ package dev.noctra.core;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AnimGateTest {
 	@Test
-	void animatesOnlyOnMinecraft26AndLater() {
+	void animatesOnEveryReleaseFrom116() {
+		assertEquals(AnimGate.Mode.MODERN, AnimGate.mode("26.3"));
+		assertEquals(AnimGate.Mode.MODERN, AnimGate.mode("26.1.2"));
+		assertEquals(AnimGate.Mode.MODERN, AnimGate.mode("27.1"));
+		assertEquals(AnimGate.Mode.MODERN, AnimGate.mode("26.4-pre.1"));
+		assertEquals(AnimGate.Mode.GL, AnimGate.mode("1.21.11"));
+		assertEquals(AnimGate.Mode.GL, AnimGate.mode("1.21.5"));
+		assertEquals(AnimGate.Mode.GL, AnimGate.mode("1.20.1"));
+		assertEquals(AnimGate.Mode.GL, AnimGate.mode("1.16.5"));
+		assertEquals(AnimGate.Mode.GL, AnimGate.mode("1.16"));
+		assertEquals(AnimGate.Mode.GL, AnimGate.mode("1.20.5-rc.1"));
+		assertEquals(AnimGate.Mode.NONE, AnimGate.mode("1.15.2"));
+		assertEquals(AnimGate.Mode.NONE, AnimGate.mode("1.8.9"));
+		assertEquals(AnimGate.Mode.NONE, AnimGate.mode("25w14a"));
+		assertEquals(AnimGate.Mode.NONE, AnimGate.mode(""));
+		assertEquals(AnimGate.Mode.NONE, AnimGate.mode(null));
+		assertEquals(AnimGate.Mode.NONE, AnimGate.mode("snapshot"));
+		assertTrue(AnimGate.supported("1.16.5"));
 		assertTrue(AnimGate.supported("26.3"));
-		assertTrue(AnimGate.supported("26.1.2"));
-		assertTrue(AnimGate.supported("27.1"));
-		assertFalse(AnimGate.supported("1.21.11"));
-		assertFalse(AnimGate.supported("1.16.5"));
-		assertFalse(AnimGate.supported(""));
-		assertFalse(AnimGate.supported(null));
-		assertFalse(AnimGate.supported("snapshot"));
+		assertFalse(AnimGate.supported("1.12.2"));
 	}
 
 	@Test

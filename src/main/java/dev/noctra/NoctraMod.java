@@ -15,7 +15,10 @@ public final class NoctraMod implements ClientModInitializer {
 		startCapeAnimator();
 	}
 
-	/** Animated capes play on Minecraft 26.x; older versions show the cape's first frame. */
+	/**
+	 * Animated capes play on every supported release: Minecraft 26.x uses the animator built
+	 * against its own classes, 1.16 - 1.21.x the OpenGL one. Anything else shows the first frame.
+	 */
 	private static void startCapeAnimator() {
 		String version = null;
 		try {
@@ -24,12 +27,14 @@ public final class NoctraMod implements ClientModInitializer {
 		} catch (Throwable ignored) {
 			// unknown version: stay on still capes
 		}
-		if (!AnimGate.supported(version)) {
-			Log.info("Animated capes need Minecraft {}+ (this is {}): showing still capes.", AnimGate.MIN_MAJOR, version);
+		AnimGate.Mode mode = AnimGate.mode(version);
+		if (mode == AnimGate.Mode.NONE) {
+			Log.info("Animated capes are not available on Minecraft {}: showing still capes.", version);
 			return;
 		}
+		String animator = mode == AnimGate.Mode.MODERN ? "dev.noctra.anim.CapeAnimator" : "dev.noctra.glanim.GlCapeAnimator";
 		try {
-			Class.forName("dev.noctra.anim.CapeAnimator").getMethod("start").invoke(null);
+			Class.forName(animator).getMethod("start").invoke(null);
 		} catch (Throwable t) {
 			Log.warn("Animated capes are unavailable ({}): showing still capes.", t.toString());
 		}

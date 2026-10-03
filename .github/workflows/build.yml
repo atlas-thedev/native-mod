@@ -72,3 +72,36 @@ jobs:
           chmod +x ci/compat/run.sh
           # javac of the probe needs a JDK (not a JRE); Temurin ships one.
           ci/compat/run.sh "${{ matrix.mc }}" "${{ matrix.loader }}" "$(ls dist/noctra-client-*.jar | head -n1)"
+
+  # Boots a REAL Minecraft client (Mesa software OpenGL under Xvfb) for both animator paths on
+  # 1.16 - 1.21.x and checks every frame of a test animated cape is written into the cape texture.
+  animated-capes:
+    name: Animated capes on ${{ matrix.mc }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mc: "1.16.5",  java: 8,  loader: "0.16.14" }
+          - { mc: "1.20.1",  java: 17, loader: "0.16.14" }
+          - { mc: "1.21.4",  java: 21, loader: "0.16.14" }
+          - { mc: "1.21.8",  java: 21, loader: "0.16.14" }
+          - { mc: "1.21.11", java: 21, loader: "0.19.5" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: noctra-client-jar
+          path: dist
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Install Xvfb + Mesa
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxcursor1 libxi6 libxxf86vm1 zip > /dev/null
+      - name: Real-client animated cape test
+        run: |
+          chmod +x ci/client/run.sh
+          ci/client/run.sh "${{ matrix.mc }}" "${{ matrix.loader }}" "$(ls dist/noctra-client-*.jar | head -n1)"
