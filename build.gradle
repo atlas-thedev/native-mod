@@ -11,11 +11,15 @@ repositories {
 	maven { url = 'https://libraries.minecraft.net/' }
 }
 
-// One jar, three source sets:
+// One jar, four source sets:
 //   main   - platform-neutral code (sync, directory, account hand-off)
 //   legacy - hook for Minecraft 1.16 - 1.20.2   (compiled against an old authlib)
 //   modern - hook for Minecraft 1.20.3 - 26.x   (compiled against a new authlib)
+//   anim   - animated capes, Minecraft 26.x only (Java 25 bytecode, only loaded there)
 sourceSets {
+	anim {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+	}
 	legacy {
 		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
 	}
@@ -56,6 +60,57 @@ tasks.withType(JavaCompile).configureEach {
 	options.compilerArgs += ['-Xlint:-options']
 }
 
+// Animated capes are written against Minecraft 26.3's own (unobfuscated) classes.
+// They are fetched straight from Mojang so no extra Gradle plugin is needed.
+def animMinecraft = '26.3'
+def animMcDir = layout.buildDirectory.dir("minecraft/${animMinecraft}").get().asFile
+
+def sha1Of = { File file ->
+	def digest = java.security.MessageDigest.getInstance('SHA-1')
+	file.withInputStream { input ->
+		byte[] buffer = new byte[65536]
+		int read
+		while ((read = input.read(buffer)) > 0) digest.update(buffer, 0, read)
+	}
+	digest.digest().encodeHex().toString()
+}
+
+tasks.register('fetchMinecraft') {
+	outputs.dir(animMcDir)
+	doLast {
+		def slurper = new groovy.json.JsonSlurper()
+		def fetch = { String url, File target, String expected ->
+			if (target.isFile() && (expected == null || sha1Of(target) == expected)) return
+			target.parentFile.mkdirs()
+			def tmp = new File(target.parentFile, target.name + '.part')
+			new URL(url).withInputStream { input -> tmp.withOutputStream { output -> output << input } }
+			if (expected != null && sha1Of(tmp) != expected) throw new GradleException("Checksum mismatch for ${url}")
+			if (target.exists()) target.delete()
+			tmp.renameTo(target)
+		}
+		def manifest = slurper.parse(new URL('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'))
+		def entry = manifest.versions.find { it.id == animMinecraft }
+		if (entry == null) throw new GradleException("Minecraft ${animMinecraft} is not in Mojang's manifest")
+		def version = slurper.parse(new URL(entry.url))
+		fetch(version.downloads.client.url, new File(animMcDir, 'client.jar'), version.downloads.client.sha1)
+		version.libraries.each { lib ->
+			def artifact = lib.downloads?.artifact
+			if (artifact == null || artifact.path.contains('natives')) return
+			fetch(artifact.url, new File(animMcDir, "libs/${new File(artifact.path).name}"), artifact.sha1)
+		}
+	}
+}
+
+dependencies {
+	animCompileOnly files("${animMcDir}/client.jar")
+	animCompileOnly fileTree(dir: "${animMcDir}/libs", include: '*.jar')
+}
+
+tasks.named('compileAnimJava') {
+	dependsOn 'fetchMinecraft'
+	options.release = 25
+}
+
 // Tests run on the build JDK and use newer language features.
 tasks.named('compileTestJava') {
 	options.release = 17
@@ -77,6 +132,7 @@ jar {
 	archiveBaseName = project.archives_base_name
 	from sourceSets.legacy.output
 	from sourceSets.modern.output
+	from sourceSets.anim.output
 	from('LICENSE') {
 		rename { "${it}_${project.archives_base_name}" }
 	}

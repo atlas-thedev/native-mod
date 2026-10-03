@@ -1,5 +1,7 @@
 package dev.noctra.core;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +27,22 @@ public final class SkinDirectory {
 
 	public long revision() {
 		return revision;
+	}
+
+	/** Base URL every texture hash is appended to ("" until the first sync). */
+	public String textureBase() {
+		return textureBase;
+	}
+
+	/** Every player currently wearing an animated cape. */
+	public List<SkinEntry> animated() {
+		List<SkinEntry> out = new ArrayList<SkinEntry>();
+		for (SkinEntry entry : entries.values()) {
+			if (entry.hasAnimatedCape()) {
+				out.add(entry);
+			}
+		}
+		return out;
 	}
 
 	public int size() {

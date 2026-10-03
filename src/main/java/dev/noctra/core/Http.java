@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.GZIPInputStream;
 
 /** Minimal HTTP helper (Java 8 compatible; Minecraft 1.16 still runs on Java 8). */
-final class Http {
+public final class Http {
 	static final String USER_AGENT = "NoctraMod/" + Version.MOD + " (Minecraft)";
 
 	private Http() {
@@ -52,6 +52,32 @@ final class Http {
 				out.write(buffer, 0, read);
 			}
 			return new String(out.toByteArray(), StandardCharsets.UTF_8);
+		} finally {
+			connection.disconnect();
+		}
+	}
+
+	/** GET raw bytes (a texture). Throws on any non-2xx status or when the body exceeds maxBytes. */
+	public static byte[] getBytes(String url, int maxBytes) throws IOException {
+		HttpURLConnection connection = open(url, null, 8000, 20000, "image/png,*/*");
+		try {
+			int status = connection.getResponseCode();
+			if (status / 100 != 2) {
+				throw new IOException("HTTP " + status + " from " + url);
+			}
+			InputStream in = connection.getInputStream();
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			byte[] buffer = new byte[8192];
+			int read;
+			long total = 0;
+			while ((read = in.read(buffer)) != -1) {
+				total += read;
+				if (total > maxBytes) {
+					throw new IOException("Texture too large");
+				}
+				out.write(buffer, 0, read);
+			}
+			return out.toByteArray();
 		} finally {
 			connection.disconnect();
 		}
