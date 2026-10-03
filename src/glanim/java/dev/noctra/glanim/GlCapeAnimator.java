@@ -2,7 +2,7 @@ package dev.noctra.glanim;
 
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
 import dev.noctra.core.CapeTextureIds;
-import dev.noctra.core.Http;
+import dev.noctra.core.TextureCache;
 import dev.noctra.core.Log;
 import dev.noctra.core.NoctraState;
 import dev.noctra.core.SkinEntry;
@@ -216,7 +216,7 @@ public final class GlCapeAnimator {
 			return false;
 		}
 		try {
-			BYTES.put(stripHash, Http.getBytes(base + stripHash, MAX_STRIP_BYTES));
+			BYTES.put(stripHash, TextureCache.getOrDownload(base, stripHash, MAX_STRIP_BYTES));
 			FAILED.remove(stripHash);
 			return true;
 		} catch (Exception e) {

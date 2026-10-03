@@ -3,7 +3,7 @@ package dev.noctra.anim;
 import com.google.common.hash.Hashing;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
 import com.mojang.blaze3d.platform.NativeImage;
-import dev.noctra.core.Http;
+import dev.noctra.core.TextureCache;
 import dev.noctra.core.Log;
 import dev.noctra.core.NoctraState;
 import dev.noctra.core.SkinEntry;
@@ -113,7 +113,7 @@ public final class CapeAnimator {
 			return false;
 		}
 		try {
-			STRIPS.put(stripHash, Http.getBytes(base + stripHash, MAX_STRIP_BYTES));
+			STRIPS.put(stripHash, TextureCache.getOrDownload(base, stripHash, MAX_STRIP_BYTES));
 			FAILED.remove(stripHash);
 			return true;
 		} catch (Exception e) {

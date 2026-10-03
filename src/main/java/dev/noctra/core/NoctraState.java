@@ -48,6 +48,7 @@ public final class NoctraState {
 			return;
 		}
 		started = true;
+		TextureCache.init(gameDir);
 		Handoff handoff = Handoff.read(gameDir);
 		api = chooseApi(System.getProperty("noctra.api"), handoff == null ? null : handoff.api);
 		sync = new SkinSync(directory, api);
