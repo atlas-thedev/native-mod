@@ -18,18 +18,34 @@ public final class Textures {
 	private Textures() {
 	}
 
+	/** CAPE metadata keys describing an animated cape. */
+	public static final String ANIM_STRIP = "noctra_anim_strip";
+	public static final String ANIM_FRAMES = "noctra_anim_frames";
+	public static final String ANIM_FPS = "noctra_anim_fps";
+
 	/** The decoded contents of a Noctra textures property. */
 	public static final class Parsed {
 		public final String skinUrl;
 		public final boolean slim;
 		public final String capeUrl;
 		public final String elytraUrl;
+		/** Animated cape strip URL from the CAPE metadata, or null. */
+		public final String capeStripUrl;
+		public final int capeFrames;
+		public final int capeFps;
 
 		Parsed(String skinUrl, boolean slim, String capeUrl, String elytraUrl) {
+			this(skinUrl, slim, capeUrl, elytraUrl, null, 0, 0);
+		}
+
+		Parsed(String skinUrl, boolean slim, String capeUrl, String elytraUrl, String capeStripUrl, int capeFrames, int capeFps) {
 			this.skinUrl = skinUrl;
 			this.slim = slim;
 			this.capeUrl = capeUrl;
 			this.elytraUrl = elytraUrl;
+			this.capeStripUrl = capeStripUrl;
+			this.capeFrames = capeFrames;
+			this.capeFps = capeFps;
 		}
 	}
 
@@ -68,6 +84,15 @@ public final class Textures {
 		if (override.capeUrl != null) {
 			JsonObject cape = new JsonObject();
 			cape.addProperty("url", override.capeUrl);
+			if (override.hasAnimatedCape()) {
+				// Texture metadata is a string map in authlib; vanilla ignores unknown keys and keeps
+				// showing "url" (the first frame). Renderers that can animate read the strip from here.
+				JsonObject metadata = new JsonObject();
+				metadata.addProperty(ANIM_STRIP, override.capeStripUrl);
+				metadata.addProperty(ANIM_FRAMES, Integer.toString(override.capeFrames));
+				metadata.addProperty(ANIM_FPS, Integer.toString(override.capeFps));
+				cape.add("metadata", metadata);
+			}
 			textures.add("CAPE", cape);
 		}
 		root.addProperty("timestamp", System.currentTimeMillis());
@@ -101,7 +126,26 @@ public final class Textures {
 			JsonObject metadata = skin.getAsJsonObject("metadata");
 			slim = metadata.has("model") && "slim".equals(metadata.get("model").getAsString());
 		}
-		return new Parsed(url(skin), slim, url(obj(textures, "CAPE")), url(obj(textures, "ELYTRA")));
+		JsonObject cape = obj(textures, "CAPE");
+		String strip = null;
+		int frames = 0;
+		int fps = 0;
+		try {
+			JsonObject meta = cape != null ? obj(cape, "metadata") : null;
+			if (meta != null && meta.has(ANIM_STRIP)) {
+				strip = meta.get(ANIM_STRIP).getAsString();
+				frames = Integer.parseInt(meta.get(ANIM_FRAMES).getAsString());
+				fps = Integer.parseInt(meta.get(ANIM_FPS).getAsString());
+			}
+		} catch (RuntimeException ignored) {
+			strip = null;
+		}
+		if (strip == null || frames < 2 || fps < 1) {
+			strip = null;
+			frames = 0;
+			fps = 0;
+		}
+		return new Parsed(url(skin), slim, url(cape), url(obj(textures, "ELYTRA")), strip, frames, fps);
 	}
 
 	private static JsonObject obj(JsonObject parent, String key) {

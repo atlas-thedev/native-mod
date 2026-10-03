@@ -126,13 +126,31 @@ public final class SkinSync {
 		if (!o.has("n")) {
 			return null;
 		}
+		String stripHash = null;
+		int frames = 0;
+		int fps = 0;
+		// "a": {"h": strip hash, "f": frames, "p": fps} for animated capes; null or absent otherwise.
+		// Parsed defensively: a malformed animation must never cost the player their skin or cape.
+		try {
+			if (o.has("a") && o.get("a").isJsonObject()) {
+				JsonObject a = o.getAsJsonObject("a");
+				stripHash = nullable(a, "h");
+				frames = (int) longOf(a, "f", 0);
+				fps = (int) longOf(a, "p", 0);
+			}
+		} catch (RuntimeException ignored) {
+			stripHash = null;
+		}
 		return new SkinEntry(
 				o.get("n").getAsString(),
 				o.has("m") && "slim".equals(o.get("m").getAsString()),
 				nullable(o, "s"),
 				nullable(o, "c"),
 				nullable(o, "u"),
-				longOf(o, "r", 0));
+				longOf(o, "r", 0),
+				stripHash,
+				frames,
+				fps);
 	}
 
 	private static String nullable(JsonObject o, String key) {

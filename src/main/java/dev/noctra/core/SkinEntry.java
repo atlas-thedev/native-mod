@@ -11,14 +11,37 @@ public final class SkinEntry {
 	/** Dashless lowercase Minecraft UUID when the Noctra account is linked to a premium account. */
 	public final String minecraftUuid;
 	public final long revision;
+	/**
+	 * SHA-256 of the animated cape strip (frames stacked top to bottom), or null for a still cape.
+	 * {@link #capeHash} is always the first frame, so anything that cannot animate shows a normal cape.
+	 */
+	public final String capeStripHash;
+	/** Frame count of the animated cape strip (0 when the cape is not animated). */
+	public final int capeFrames;
+	/** Playback speed of the animated cape strip in frames per second (0 when not animated). */
+	public final int capeFps;
 
 	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision) {
+		this(name, slim, skinHash, capeHash, minecraftUuid, revision, null, 0, 0);
+	}
+
+	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision,
+			String capeStripHash, int capeFrames, int capeFps) {
 		this.name = name;
 		this.slim = slim;
 		this.skinHash = skinHash;
 		this.capeHash = capeHash;
 		this.minecraftUuid = minecraftUuid;
 		this.revision = revision;
+		boolean animated = capeHash != null && capeStripHash != null && capeFrames > 1 && capeFps > 0;
+		this.capeStripHash = animated ? capeStripHash : null;
+		this.capeFrames = animated ? Math.min(capeFrames, 256) : 0;
+		this.capeFps = animated ? Math.min(capeFps, 60) : 0;
+	}
+
+	/** True when the player wears an animated cape (strip hash, frames and fps are all valid). */
+	public boolean hasAnimatedCape() {
+		return capeStripHash != null;
 	}
 
 	public boolean isEmpty() {

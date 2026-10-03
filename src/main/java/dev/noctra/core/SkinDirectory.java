@@ -112,7 +112,10 @@ public final class SkinDirectory {
 		return new SkinOverride(
 				entry.skinHash == null ? null : base + entry.skinHash,
 				entry.capeHash == null ? null : base + entry.capeHash,
-				entry.slim);
+				entry.slim,
+				entry.capeStripHash == null ? null : base + entry.capeStripHash,
+				entry.capeFrames,
+				entry.capeFps);
 	}
 
 	private static String key(String name) {
