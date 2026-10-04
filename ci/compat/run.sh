@@ -9,7 +9,7 @@
 set -euo pipefail
 MC="$1"; LOADER="$2"; MOD_JAR="$(readlink -f "$3")"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-WORK="${RUNNER_TEMP:-/tmp}/noctra-compat-$MC"
+WORK="${RUNNER_TEMP:-/tmp}/native-compat-$MC"
 rm -rf "$WORK"; mkdir -p "$WORK/mods" "$WORK/probe/out" "$WORK/mod"
 cd "$WORK"
 
@@ -30,7 +30,7 @@ PY
 )
 
 # 2. our mod, switched to environment "*" so it also loads on a dedicated server
-python3 - "$MOD_JAR" mods/noctra-test.jar <<'PY'
+python3 - "$MOD_JAR" mods/native-test.jar <<'PY'
 import sys, zipfile
 src, dst = sys.argv[1], sys.argv[2]
 with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
