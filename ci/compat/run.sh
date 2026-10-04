@@ -3,7 +3,7 @@
 # loaded, then asks the game's own authlib session service for a player's textures.
 # Passes only when Noctra's skin + cape come back (and an unknown player is untouched).
 #
-#   ci/compat/run.sh <minecraft> <fabric-loader> <path/to/noctra-client.jar>
+#   ci/compat/run.sh <minecraft> <fabric-loader> <path/to/native-client.jar>
 #
 # Needs: java (the version Minecraft wants) on PATH, node, python3, curl, unzip.
 set -euo pipefail

@@ -1,4 +1,4 @@
-# Noctra Client (Fabric mod)
+# Native Client (Fabric mod)
 
 Shows every Noctra player's **skin and cape in real time** on Minecraft **1.16 → 26.3** (Fabric / Quilt).
 No Fabric API needed, one jar for every version.
@@ -43,14 +43,14 @@ and pushes. GitHub Actions then:
 1. builds the jar and runs the unit tests,
 2. boots a real Fabric server for 1.16.5 … 26.3 with the jar and checks skins and capes arrive (`ci/compat`),
    and a real Minecraft client (1.16.5 … 1.21.11, software OpenGL) to check animated capes play (`ci/client`),
-3. publishes a GitHub Release with `noctra-client-X.Y.Z.jar` and `manifest.json`.
+3. publishes a GitHub Release with `native-client-X.Y.Z.jar` and `manifest.json`.
 
 The launcher reads `releases/latest/download/manifest.json` (sha256-verified) and installs the jar into Fabric/Quilt instances.
 
 ## Local build
 
 ```
-./gradlew build      # needs JDK 17+ ; output: build/libs/noctra-client-<version>.jar
+./gradlew build      # needs JDK 17+ ; output: build/libs/native-client-<version>.jar
 ```
 
 License: CC0-1.0.

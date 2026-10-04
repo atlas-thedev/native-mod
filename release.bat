@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
-title Noctra Client Mod - Release
+title Native Client Mod - Release
 
 REM ------------------------------------------------------------------
 REM  One click release:
@@ -14,11 +14,11 @@ REM  Usage:  release.bat            (asks what to bump)
 REM          release.bat patch      (patch ^| minor ^| major ^| none)
 REM ------------------------------------------------------------------
 
-set "REPO_URL=https://github.com/atlas-thedev/noctra-mod"
+set "REPO_URL=https://github.com/atlas-thedev/native-mod"
 set "BUMP_PS=powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bump-version.ps1"
 
 echo ========================================================
-echo     Noctra Client Mod - Build and Publish Release
+echo     Native Client Mod - Build and Publish Release
 echo ========================================================
 echo.
 
@@ -151,7 +151,7 @@ if defined HAS_CHANGES (
     echo [INFO] Nothing to commit, tagging the current commit.
 )
 
-git tag -a "!TAG!" -m "Noctra Client Mod !TAG!"
+git tag -a "!TAG!" -m "Native Client Mod !TAG!"
 if errorlevel 1 (
     echo [ERROR] Could not create tag !TAG!.
     goto :FAIL

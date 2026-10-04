@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
-title Noctra Mod - Git Pull
+title Native Mod - Git Pull
 
 echo ========================================================
-echo               Noctra Mod - Quick Pull
+echo               Native Mod - Quick Pull
 echo ========================================================
 echo.
 

@@ -148,7 +148,7 @@ jar {
 	}
 	manifest {
 		attributes(
-			'Implementation-Title': 'Noctra Client mod',
+			'Implementation-Title': 'Native Client mod',
 			'Implementation-Version': project.version
 		)
 	}

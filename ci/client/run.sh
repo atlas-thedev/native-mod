@@ -4,13 +4,13 @@
 # id the game gives a downloaded Noctra cape, then reads it back from the GPU several times.
 # Passes only when every frame of the 4-frame test strip (red, green, blue, yellow) shows up.
 #
-#   ci/client/run.sh <minecraft> <fabric-loader> <path/to/noctra-client.jar>
+#   ci/client/run.sh <minecraft> <fabric-loader> <path/to/native-client.jar>
 #
 # Needs: java (the version Minecraft wants, JDK) on PATH, python3, zip, Xvfb + Mesa.
 set -euo pipefail
 MC="$1"; LOADER="$2"; JAR="$(readlink -f "$3")"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-export WORK="${RUNNER_TEMP:-/tmp}/noctra-client"
+export WORK="${RUNNER_TEMP:-/tmp}/native-client"
 mkdir -p "$WORK"
 python3 "$HERE/setup.py" "$MC" "$LOADER"
 python3 "$HERE/assets.py" "$MC"

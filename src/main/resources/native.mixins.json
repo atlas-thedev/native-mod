@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "xyz.nativelaunch.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "plugin": "xyz.nativelaunch.mixin.NativeMixinPlugin",
+  "mixins": [
+    "LegacyTexturesMixin",
+    "PackedTexturesMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

@@ -1,0 +1,11 @@
+{
+	"required": false,
+	"package": "xyz.nativelaunch.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"TitleScreenMixin"
+	],
+	"injectors": {
+		"defaultRequire": 0
+	}
+}

@@ -56,11 +56,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: noctra-client-jar
+          name: native-client-jar
           path: dist
       - name: Write manifest
         run: |
-          python3 scripts/make-manifest.py "dist/noctra-client-${{ needs.check.outputs.version }}.jar" \
+          python3 scripts/make-manifest.py "dist/native-client-${{ needs.check.outputs.version }}.jar" \
             "${{ needs.check.outputs.version }}" "${{ github.repository }}" dist/manifest.json
       - name: Create release
         env:
@@ -68,5 +68,5 @@ jobs:
         run: |
           v="${{ needs.check.outputs.version }}"
           if gh release view "v$v" >/dev/null 2>&1; then echo "v$v was published by a parallel run."; exit 0; fi
-          gh release create "v$v" "dist/noctra-client-$v.jar" dist/manifest.json \
-            --title "Noctra Client $v" --generate-notes --latest --target "$GITHUB_SHA"
+          gh release create "v$v" "dist/native-client-$v.jar" dist/manifest.json \
+            --title "Native Client $v" --generate-notes --latest --target "$GITHUB_SHA"
