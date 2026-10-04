@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
 /**
- * Plays Noctra animated capes on Minecraft 1.16 - 1.21.x.
+ * Plays Native animated capes on Minecraft 1.16 - 1.21.x.
  *
  * The game downloads an animated cape's first frame like any other cape and keeps it in
  * its texture manager under {@code skins/<sha1>} (up to 1.20.1) or {@code capes/<sha1>}.
@@ -45,7 +45,7 @@ import java.util.concurrent.Executor;
  *   AbstractTexture.getTexture()       class_1044.method_68004    (1.21.5+)
  *   GlTexture.glId()                   class_10868.method_68427   (1.21.5+)
  * </pre>
- * {@code ci/compat/check-anim-names.py} checks these names against every supported version.
+ * The real-client job in {@code ci/client} (1.16.5 - 1.21.11) fails if any of these names stops resolving.
  */
 public final class GlCapeAnimator {
 	private static final int MAX_STRIP_BYTES = 16 * 1024 * 1024;

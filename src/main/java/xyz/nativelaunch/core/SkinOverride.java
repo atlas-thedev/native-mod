@@ -1,6 +1,6 @@
 package xyz.nativelaunch.core;
 
-/** What Noctra wants shown for one player. Either URL may be null (keep the vanilla texture). */
+/** What Native wants shown for one player. Either URL may be null (keep the vanilla texture). */
 public final class SkinOverride {
 	public final String skinUrl;
 	public final String capeUrl;

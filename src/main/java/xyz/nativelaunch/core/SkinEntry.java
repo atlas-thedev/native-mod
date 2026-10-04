@@ -1,6 +1,6 @@
 package xyz.nativelaunch.core;
 
-/** One row of the Noctra skin directory: a player's published skin and cape. */
+/** One row of the Native skin directory: a player's published skin and cape. */
 public final class SkinEntry {
 	public final String name;
 	public final boolean slim;
@@ -8,7 +8,7 @@ public final class SkinEntry {
 	public final String skinHash;
 	/** SHA-256 of the cape PNG, or null when the player has none. */
 	public final String capeHash;
-	/** Dashless lowercase Minecraft UUID when the Noctra account is linked to a premium account. */
+	/** Dashless lowercase Minecraft UUID when the Native account is linked to a premium account. */
 	public final String minecraftUuid;
 	public final long revision;
 	/**

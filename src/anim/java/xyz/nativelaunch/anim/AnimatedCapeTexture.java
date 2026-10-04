@@ -22,7 +22,7 @@ public final class AnimatedCapeTexture extends DynamicTexture implements Tickabl
 	private boolean closed;
 
 	AnimatedCapeTexture(NativeImage strip, String stripHash, int frames, int fps) {
-		super(() -> "noctra-animated-cape", strip.getWidth(), strip.getHeight() / frames, false);
+		super(() -> "native-animated-cape", strip.getWidth(), strip.getHeight() / frames, false);
 		this.strip = strip;
 		this.stripHash = stripHash;
 		this.frames = frames;

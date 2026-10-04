@@ -10,7 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * In-memory copy of every skin and cape published on Noctra. Lookups are plain
+ * In-memory copy of every skin and cape published on Native. Lookups are plain
  * hash-map reads, so they are safe to call from the render thread and from
  * Minecraft's texture workers without ever touching the network.
  */
@@ -102,9 +102,9 @@ public final class SkinDirectory {
 	}
 
 	/**
-	 * The Noctra wardrobe to show for a player, or null.
+	 * The Native wardrobe to show for a player, or null.
 	 *
-	 * Premium players carry a random (version 4) UUID, so a Noctra profile only
+	 * Premium players carry a random (version 4) UUID, so a Native profile only
 	 * applies to them when its account is linked to exactly that UUID: nobody can
 	 * take over a real player's look by registering the same name. Offline
 	 * players (version 3 UUIDs, which are derived from the name) match by name.

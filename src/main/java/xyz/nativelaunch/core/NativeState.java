@@ -33,7 +33,7 @@ public final class NativeState {
 		return directory;
 	}
 
-	/** The Noctra account the launcher connected, or null in guest mode. */
+	/** The Native account the launcher connected, or null in guest mode. */
 	public AccountInfo account() {
 		return account;
 	}
@@ -74,9 +74,9 @@ public final class NativeState {
 			JsonObject account = new JsonParser().parse(body).getAsJsonObject().getAsJsonObject("account");
 			this.account = new AccountInfo(
 					text(account, "id"), text(account, "name"), text(account, "uuid"), text(account, "model"));
-			Log.info("Connected to Noctra account {}", this.account.name);
+			Log.info("Connected to Native account {}", this.account.name);
 		} catch (Exception e) {
-			Log.warn("Could not verify the Noctra account ({}). Continuing as a guest.", e.getMessage());
+			Log.warn("Could not verify the Native account ({}). Continuing as a guest.", e.getMessage());
 		}
 	}
 
@@ -94,8 +94,23 @@ public final class NativeState {
 		return DEFAULT_API;
 	}
 
-	private static boolean acceptable(String url) {
-		return url.startsWith("https://") || url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost");
+	/** Parses the address instead of prefix-matching, so "http://localhost.evil.com" is not loopback. */
+	static boolean acceptable(String url) {
+		java.net.URI uri;
+		try {
+			uri = new java.net.URI(url);
+		} catch (java.net.URISyntaxException e) {
+			return false;
+		}
+		String scheme = uri.getScheme();
+		String host = uri.getHost();
+		if (scheme == null || host == null || uri.getUserInfo() != null) {
+			return false;
+		}
+		if ("https".equalsIgnoreCase(scheme)) {
+			return true;
+		}
+		return "http".equalsIgnoreCase(scheme) && (host.equals("localhost") || host.equals("127.0.0.1"));
 	}
 
 	/**

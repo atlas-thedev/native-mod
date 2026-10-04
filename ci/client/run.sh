@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Starts a REAL Minecraft client (Fabric, software OpenGL under Xvfb) with the Noctra jar and
+# Starts a REAL Minecraft client (Fabric, software OpenGL under Xvfb) with the Native jar and
 # checks that an animated cape actually plays: a probe mod registers a cape texture under the
-# id the game gives a downloaded Noctra cape, then reads it back from the GPU several times.
+# id the game gives a downloaded Native cape, then reads it back from the GPU several times.
 # Passes only when every frame of the 4-frame test strip (red, green, blue, yellow) shows up.
 #
 #   ci/client/run.sh <minecraft> <fabric-loader> <path/to/native-client.jar>
@@ -36,11 +36,11 @@ MAIN=$(python3 -c "import json;print(json.load(open('$R/launch.json'))['main'])"
 cd "$G"
 set +e
 LIBGL_ALWAYS_SOFTWARE=1 timeout 300 java -Xmx2G -Djava.library.path="$R/natives" -Dorg.lwjgl.librarypath="$R/natives" \
-  -Dnoctra.api=http://127.0.0.1:8099 -cp "$CP" "$MAIN" --username TestAlice --version "$MC" --gameDir "$G" \
+  -Dnative.api=http://127.0.0.1:8099 -cp "$CP" "$MAIN" --username TestAlice --version "$MC" --gameDir "$G" \
   --assetsDir "$R/assets" --assetIndex "$AI" --accessToken 0 --uuid 00000000000000000000000000000001 \
   --userType legacy --versionType release > "$G/out.log" 2>&1
 set -e
-grep -E "CPROBE (registered|distinct|FATAL)|\[Noctra\]" "$G/out.log" || true
+grep -E "CPROBE (registered|distinct|FATAL)|\[Native\]" "$G/out.log" || true
 if ! grep -q "CPROBE distinct=.*ff0000ff/ff0000.*" "$G/out.log" \
   || ! grep "CPROBE distinct=" "$G/out.log" | grep -q "00ff00ff/00ff00" \
   || ! grep "CPROBE distinct=" "$G/out.log" | grep -q "0000ffff/0000ff" \

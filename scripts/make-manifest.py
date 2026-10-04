@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes the manifest.json the Noctra launcher reads to find the mod jar.
+"""Writes the manifest.json the Native Client launcher reads to find the mod jar.
 
 usage: make-manifest.py <jar> <version> <repo> <out>
 """

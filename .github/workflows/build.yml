@@ -33,7 +33,7 @@ jobs:
           if-no-files-found: error
 
   # Boots a REAL Fabric dedicated server for each Minecraft generation with the built jar and
-  # checks that Noctra's skin + cape come back from the game's own authlib session service.
+  # checks that Native's skin + cape come back from the game's own authlib session service.
   compat:
     name: Minecraft ${{ matrix.mc }}
     needs: build

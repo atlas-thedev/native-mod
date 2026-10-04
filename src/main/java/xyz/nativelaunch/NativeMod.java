@@ -7,7 +7,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 
-/** Client entrypoint: start the Noctra skin sync and pick up the launcher's account hand-off. */
+/** Client entrypoint: start the Native skin sync and pick up the launcher's account hand-off. */
 public final class NativeMod implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {

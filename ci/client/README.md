@@ -1,7 +1,7 @@
 # Animated cape client test
 
 `run.sh` boots a **real Minecraft client** (Fabric, Mesa software OpenGL under Xvfb) with the built
-Noctra jar. `mock.py` stands in for the Noctra API and serves one player with a 4-frame animated cape
+Native jar. `mock.py` stands in for the Native API and serves one player with a 4-frame animated cape
 (red, green, blue, yellow). `ClientProbe.java` (test-only mod) registers a 64×32 cape texture under the
 id the game gives that downloaded cape, then reads the texture back from the GPU a few times a second.
 

@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Plays Noctra animated capes on Minecraft 26.x.
+ * Plays Native animated capes on Minecraft 26.x.
  *
  * The game loads an animated cape's first frame like any other cape and keeps it
  * under {@code minecraft:capes/<sha1 of the texture hash>}. A background thread
