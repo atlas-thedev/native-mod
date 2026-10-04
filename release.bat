@@ -8,7 +8,7 @@ REM  One click release:
 REM    bump version -> commit -> tag -> push
 REM  GitHub Actions then builds the jar, boots real Minecraft servers
 REM  (1.16.5 ... 26.3) to test it, and publishes the GitHub Release.
-REM  The Noctra launcher picks the new jar up on its own.
+REM  The Native launcher picks the new jar up on its own.
 REM
 REM  Usage:  release.bat            (asks what to bump)
 REM          release.bat patch      (patch ^| minor ^| major ^| none)
@@ -177,7 +177,7 @@ echo   Progress : %REPO_URL%/actions
 echo   Release  : %REPO_URL%/releases
 echo.
 echo About 5-10 minutes. When every test is green the release goes public
-echo and the Noctra launcher starts using it automatically.
+echo and the Native launcher starts using it automatically.
 echo.
 start "" "%REPO_URL%/actions"
 goto :END
