@@ -105,4 +105,12 @@ class SkinDirectoryTest {
 		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi("http://evil.example", "ftp://x"));
 		assertFalse(NativeState.chooseApi("http://evil.example", null).contains("evil"));
 	}
+
+	@Test
+	void loopbackLookalikesAreRejected() {
+		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi("http://localhost.evil.com", null));
+		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi("http://127.0.0.1.evil.com/api", null));
+		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi("http://localhost@evil.com", null));
+		assertEquals("http://localhost:3418", NativeState.chooseApi("http://localhost:3418/", null));
+	}
 }

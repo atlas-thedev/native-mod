@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * Minecraft 1.16 - 1.20.2: the skin manager asks the session service for a
- * player's textures. Lay Noctra's skin and cape over whatever it found.
+ * player's textures. Lay Native's skin and cape over whatever it found.
  */
 @Pseudo
 @Mixin(targets = "com.mojang.authlib.yggdrasil.YggdrasilMinecraftSessionService")

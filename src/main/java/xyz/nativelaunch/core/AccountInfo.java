@@ -1,6 +1,6 @@
 package xyz.nativelaunch.core;
 
-/** The Noctra account a game ticket belongs to. */
+/** The Native account a game ticket belongs to. */
 public final class AccountInfo {
 	public final String id;
 	public final String name;

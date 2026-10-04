@@ -12,8 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Minecraft 1.20.3+: the skin manager reads a profile's packed "textures"
- * Property and unpacks it. Swap in a Noctra-built Property for players who have
- * a Noctra wardrobe, then unpack it ourselves so Mojang's texture-domain
+ * Property and unpacks it. Swap in a Native-built Property for players who have
+ * a Native wardrobe, then unpack it ourselves so Mojang's texture-domain
  * whitelist does not reject our URLs.
  */
 @Pseudo

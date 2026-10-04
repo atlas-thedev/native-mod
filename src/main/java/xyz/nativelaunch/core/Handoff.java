@@ -10,8 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * What the Noctra launcher leaves for the game: a short-lived, game-only ticket
- * and the API address. Lives in {@code <game dir>/.noctra/session.json}. The
+ * What the Native Client launcher leaves for the game: a short-lived, game-only ticket
+ * and the API address. Lives in {@code <game dir>/.native/session.json} (older launchers wrote {@code .noctra/}). The
  * mod works fine without it (guest mode: skins and capes still load).
  */
 public final class Handoff {

@@ -11,7 +11,7 @@ repositories {
 	maven { url = 'https://libraries.minecraft.net/' }
 }
 
-// One jar, four source sets:
+// One jar, five source sets:
 //   main   - platform-neutral code (sync, directory, account hand-off)
 //   legacy - hook for Minecraft 1.16 - 1.20.2   (compiled against an old authlib)
 //   modern - hook for Minecraft 1.20.3 - 26.x   (compiled against a new authlib)

@@ -13,6 +13,7 @@ import xyz.nativelaunch.core.Textures;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -51,9 +52,17 @@ public final class ModernHook {
 			}
 			Map<String, String> slim = Collections.singletonMap("model", "slim");
 			Map<String, String> none = Collections.<String, String>emptyMap();
+			Map<String, String> capeMeta = none;
+			if (parsed.capeStripUrl != null) {
+				// keep the animation description on the cape texture; vanilla ignores unknown keys
+				capeMeta = new HashMap<String, String>();
+				capeMeta.put(Textures.ANIM_STRIP, parsed.capeStripUrl);
+				capeMeta.put(Textures.ANIM_FRAMES, Integer.toString(parsed.capeFrames));
+				capeMeta.put(Textures.ANIM_FPS, Integer.toString(parsed.capeFps));
+			}
 			cir.setReturnValue(new MinecraftProfileTextures(
 					parsed.skinUrl == null ? null : new MinecraftProfileTexture(parsed.skinUrl, parsed.slim ? slim : none),
-					parsed.capeUrl == null ? null : new MinecraftProfileTexture(parsed.capeUrl, none),
+					parsed.capeUrl == null ? null : new MinecraftProfileTexture(parsed.capeUrl, capeMeta),
 					parsed.elytraUrl == null ? null : new MinecraftProfileTexture(parsed.elytraUrl, none),
 					SignatureState.UNSIGNED));
 		} catch (Throwable t) {

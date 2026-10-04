@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * Builds and reads the "textures" profile property that newer Minecraft
- * versions (1.20.3+) pass around. Our version carries a {@code "noctra":true}
+ * versions (1.20.3+) pass around. Our version carries a {@code "native":true} (or the legacy {@code "noctra":true})
  * marker so the session-service hook can recognise it and skip Mojang's
  * texture-domain whitelist, which would otherwise reject our URLs.
  */
@@ -26,7 +26,7 @@ public final class Textures {
 	public static final String LEGACY_ANIM_FRAMES = "noctra_anim_frames";
 	public static final String LEGACY_ANIM_FPS = "noctra_anim_fps";
 
-	/** The decoded contents of a Noctra textures property. */
+	/** The decoded contents of a Native textures property. */
 	public static final class Parsed {
 		public final String skinUrl;
 		public final boolean slim;
@@ -53,8 +53,8 @@ public final class Textures {
 	}
 
 	/**
-	 * Merge Noctra's textures over whatever the profile already had (Mojang's
-	 * skin stays when Noctra only supplies a cape, and the other way round).
+	 * Merge Native's textures over whatever the profile already had (Mojang's
+	 * skin stays when Native only supplies a cape, and the other way round).
 	 *
 	 * @param existingValue the profile's current base64 "textures" value, or null
 	 * @return the new base64 value

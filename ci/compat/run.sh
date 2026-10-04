@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Boots a real Fabric dedicated server for one Minecraft version with the Noctra mod
+# Boots a real Fabric dedicated server for one Minecraft version with the Native mod
 # loaded, then asks the game's own authlib session service for a player's textures.
-# Passes only when Noctra's skin + cape come back (and an unknown player is untouched).
+# Passes only when Native's skin + cape come back (and an unknown player is untouched).
 #
 #   ci/compat/run.sh <minecraft> <fabric-loader> <path/to/native-client.jar>
 #
@@ -41,7 +41,7 @@ with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED
         zout.writestr(item, data)
 PY
 
-# 3. a stand-in Noctra API
+# 3. a stand-in Native API
 node "$HERE/mock-api.js" > mock.log 2>&1 &
 MOCK=$!
 trap 'kill $MOCK 2>/dev/null || true' EXIT
@@ -53,12 +53,12 @@ curl -fsSL -o server.jar "https://meta.fabricmc.net/v2/versions/loader/$MC/$LOAD
 echo "eula=true" > eula.txt
 printf "online-mode=false\nserver-port=0\nview-distance=2\nmax-tick-time=-1\n" > server.properties
 set +e
-timeout 600 java -Xmx900M -Dnoctra.api=http://127.0.0.1:8099 -jar server.jar nogui > server.log 2>&1
+timeout 600 java -Xmx900M -Dnative.api=http://127.0.0.1:8099 -jar server.jar nogui > server.log 2>&1
 set -e
 
-grep -E "PROBE|\[Noctra\]" server.log || true
+grep -E "PROBE|\[Native\]" server.log || true
 if ! grep -q "PROBE TestAlice .*SKIN=.*aaaa.*model=slim.*CAPE=.*bbbb" server.log && ! grep -q "PROBE TestAlice shape=B skin=.*aaaa.* model=slim cape=.*bbbb" server.log; then
-  echo "::error::Noctra skin/cape were NOT applied on Minecraft $MC"; tail -60 server.log; exit 1
+  echo "::error::Native skin/cape were NOT applied on Minecraft $MC"; tail -60 server.log; exit 1
 fi
 if grep -E "PROBE Nobody" server.log | grep -q "aaaa"; then
   echo "::error::An unknown player was modified on Minecraft $MC"; exit 1

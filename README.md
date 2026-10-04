@@ -1,14 +1,14 @@
 # Native Client (Fabric mod)
 
-Shows every Noctra player's **skin and cape in real time** on Minecraft **1.16 → 26.3** (Fabric / Quilt).
+Shows every Native player's **skin and cape in real time** on Minecraft **1.16 → 26.3** (Fabric / Quilt).
 No Fabric API needed, one jar for every version.
 
 * Fetches the live skin directory from `https://api.nativelaunch.xyz` (snapshot + server-sent events), so skin and
   cape changes show up for everyone without a restart of the server or a file download per player.
 * Works by hooking the game's own authlib session service, so skins/capes appear everywhere the game normally
   shows them (tab list, nametag, player model, inventory).
-* Signs in with your Noctra account automatically when started from the Noctra Launcher (short-lived launch
-  ticket in `<gameDir>/.noctra/session.json`). Without the launcher it runs as a guest: you still see everyone's skins.
+* Signs in with your Native account automatically when started from the Native Client launcher (short-lived launch
+  ticket in `<gameDir>/.native/session.json`). Without the launcher it runs as a guest: you still see everyone's skins.
 * **Animated capes play on every supported version** (1.16 → 26.3). Players on other launchers or versions see the
   cape's first frame as a normal cape.
 * Versions older than 1.16 (and Forge/NeoForge) keep using CustomSkinLoader through the launcher.
@@ -32,7 +32,7 @@ Animated capes:
 On 1.16 – 1.21.x the mod reaches the game through Fabric intermediary names, which are stable across
 versions, so the same jar works everywhere. GL state is saved and restored around every upload.
 
-A premium (online) UUID is only overridden when the Noctra account is linked to that exact Minecraft account;
+A premium (online) UUID is only overridden when the Native account is linked to that exact Minecraft account;
 offline UUIDs are matched by name.
 
 ## Releasing

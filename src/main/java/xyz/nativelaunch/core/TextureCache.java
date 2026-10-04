@@ -16,8 +16,8 @@ import java.util.regex.Pattern;
 /**
  * The launcher's shared texture cache: {@code <hash>.png} files named by the sha256 of
  * their bytes (the same hashes as the API's {@code /csl/textures/<hash>} URLs). The
- * launcher writes its location to {@code <game dir>/.noctra/launcher.json}; without it the
- * mod falls back to {@code <game dir>/.noctra/textures}. Capes the launcher already
+ * launcher writes its location to {@code <game dir>/.native/launcher.json} (or the older {@code .noctra/}); without it the
+ * mod falls back to {@code <game dir>/.native/textures}. Capes the launcher already
  * downloaded in the store are read from disk instead of the network.
  */
 public final class TextureCache {

@@ -33,11 +33,11 @@ class TexturesTest {
 	}
 
 	@Test
-	void mojangTexturesAreKeptWhereNoctraHasNone() {
+	void mojangTexturesAreKeptWhereNativeHasNone() {
 		String vanilla = mojang("{\"profileName\":\"Alice\",\"textures\":{"
 				+ "\"SKIN\":{\"url\":\"http://textures.minecraft.net/texture/abc\"},"
 				+ "\"CAPE\":{\"url\":\"http://textures.minecraft.net/texture/def\"}}}");
-		// Noctra only has a skin: Mojang's cape stays
+		// Native only has a skin: Mojang's cape stays
 		Textures.Parsed parsed = Textures.parse(Textures.pack(vanilla, new SkinOverride("https://x/skin", null, false), ID, "Alice"));
 		assertEquals("https://x/skin", parsed.skinUrl);
 		assertEquals("http://textures.minecraft.net/texture/def", parsed.capeUrl);

@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Keeps a {@link SkinDirectory} current: one snapshot up front, then a
- * Server-Sent-Events stream so a skin or cape change anywhere on Noctra reaches
+ * Server-Sent-Events stream so a skin or cape change anywhere on Native reaches
  * this game within moments. Runs on a single daemon thread and reconnects
  * with back-off, so it can never block or crash the game.
  */
@@ -61,13 +61,17 @@ public final class SkinSync {
 		}
 	}
 
+	/** A stream that stayed up this long counts as healthy: only then is the retry delay reset. */
+	private static final long HEALTHY_STREAM_NANOS = TimeUnit.SECONDS.toNanos(30);
+
 	private void loop() {
 		long backoff = 2000;
 		while (!stopped) {
+			long streamStarted = 0;
 			try {
 				fetchDirectory();
 				firstAttempt.countDown();
-				backoff = 2000;
+				streamStarted = System.nanoTime();
 				stream();
 			} catch (IOException | RuntimeException e) {
 				Log.debug("Skin sync interrupted: {}", e.toString());
@@ -76,6 +80,10 @@ public final class SkinSync {
 			}
 			if (stopped) {
 				return;
+			}
+			// A stream that dies at once (e.g. HTTP 429) must back off, not retry every 2 seconds.
+			if (streamStarted != 0 && System.nanoTime() - streamStarted >= HEALTHY_STREAM_NANOS) {
+				backoff = 2000;
 			}
 			try {
 				Thread.sleep(backoff);
