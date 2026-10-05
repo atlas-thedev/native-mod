@@ -40,6 +40,19 @@ public class LiveSkinFixesTest {
 	}
 
 	@Test
+	void animatedPremiumCapeIsAnimated() {
+		String strip = "d".repeat(64);
+		SkinDirectory d = directoryWith("{\"n\":\"Sok\",\"u\":\"091abb03ebfc4c4faf715efc69eb945d\",\"p\":{\"c\":\"" + PC
+				+ "\",\"a\":{\"h\":\"" + strip + "\",\"f\":32,\"p\":16}}}");
+		List<SkinEntry> animated = d.animated();
+		assertEquals(1, animated.size(), "the premium Store cape is handed to the animator");
+		assertEquals(PC, animated.get(0).capeHash);
+		assertEquals(strip, animated.get(0).capeStripHash);
+		assertEquals(32, animated.get(0).capeFrames);
+		assertEquals(16, animated.get(0).capeFps);
+	}
+
+	@Test
 	void premiumSessionWithoutPremiumCapeIsLeftAlone() {
 		SkinDirectory d = directoryWith("{\"n\":\"Sok\",\"s\":\"" + S + "\",\"u\":\"091abb03ebfc4c4faf715efc69eb945d\",\"p\":{\"c\":null}}");
 		assertNull(d.find("Sok", PREMIUM, true));

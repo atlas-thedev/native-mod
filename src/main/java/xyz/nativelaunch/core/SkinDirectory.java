@@ -42,6 +42,11 @@ public final class SkinDirectory {
 			if (entry.hasAnimatedCape()) {
 				out.add(entry);
 			}
+			// the animated Store cape a same-name premium player wears on the premium session
+			if (entry.premiumStripHash != null) {
+				out.add(new SkinEntry(entry.name, false, null, entry.premiumCapeHash, entry.minecraftUuid, entry.revision,
+						entry.premiumStripHash, entry.premiumFrames, entry.premiumFps));
+			}
 		}
 		return out;
 	}
