@@ -101,7 +101,7 @@ public final class Textures {
 			}
 			textures.add("CAPE", cape);
 		}
-		root.addProperty("timestamp", System.currentTimeMillis());
+		root.addProperty("timestamp", override.stamp);
 		if (id != null) {
 			root.addProperty("profileId", id.toString().replace("-", ""));
 		}

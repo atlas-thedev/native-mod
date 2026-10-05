@@ -9,6 +9,11 @@ public final class SkinOverride {
 	public final String capeStripUrl;
 	public final int capeFrames;
 	public final int capeFps;
+	/**
+	 * Changes exactly when what is shown changes. Used as the textures timestamp so the game's skin
+	 * cache (keyed by the textures property) stays warm between lookups and reloads after a change.
+	 */
+	public final long stamp;
 
 	public SkinOverride(String skinUrl, String capeUrl, boolean slim) {
 		this(skinUrl, capeUrl, slim, null, 0, 0);
@@ -22,6 +27,12 @@ public final class SkinOverride {
 		this.capeStripUrl = animated ? capeStripUrl : null;
 		this.capeFrames = animated ? capeFrames : 0;
 		this.capeFps = animated ? capeFps : 0;
+		long h = 1125899906842597L;
+		for (String part : new String[] {skinUrl, capeUrl, this.capeStripUrl, slim ? "slim" : "default",
+				Integer.toString(this.capeFrames), Integer.toString(this.capeFps)}) {
+			h = 31 * h + (part == null ? 0 : part.hashCode());
+		}
+		this.stamp = h & Long.MAX_VALUE;
 	}
 
 	public boolean hasAnimatedCape() {

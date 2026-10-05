@@ -20,6 +20,7 @@ public final class SkinDirectory {
 	private volatile long epoch = -1;
 	private volatile long revision = -1;
 	private final CopyOnWriteArrayList<Consumer<SkinEntry>> listeners = new CopyOnWriteArrayList<Consumer<SkinEntry>>();
+	private final CopyOnWriteArrayList<Runnable> resetListeners = new CopyOnWriteArrayList<Runnable>();
 
 	public long epoch() {
 		return epoch;
@@ -53,6 +54,11 @@ public final class SkinDirectory {
 		listeners.add(listener);
 	}
 
+	/** Called after the whole directory was replaced (first sync, resync): every player may have changed. */
+	public void onReset(Runnable listener) {
+		resetListeners.add(listener);
+	}
+
 	/** Replace everything (first sync, or the server restarted / we fell too far behind). */
 	public void replaceAll(long newEpoch, long newRevision, String base, Iterable<SkinEntry> all) {
 		Map<String, SkinEntry> next = new ConcurrentHashMap<String, SkinEntry>();
@@ -65,6 +71,13 @@ public final class SkinDirectory {
 		this.entries = next;
 		this.epoch = newEpoch;
 		this.revision = newRevision;
+		for (Runnable listener : resetListeners) {
+			try {
+				listener.run();
+			} catch (RuntimeException ignored) {
+				// a listener must never break the sync
+			}
+		}
 	}
 
 	/** Apply one change. Entries with neither skin nor cape remove the player. */
@@ -110,6 +123,15 @@ public final class SkinDirectory {
 	 * players (version 3 UUIDs, which are derived from the name) match by name.
 	 */
 	public SkinOverride find(String name, UUID id) {
+		return find(name, id, false);
+	}
+
+	/**
+	 * @param premiumSession true when the game already holds Mojang-signed textures for this player (a real
+	 *                       premium session). When the Native name is also the linked premium name, such a
+	 *                       player keeps the Mojang skin and only wears the cape picked for the premium name.
+	 */
+	public SkinOverride find(String name, UUID id, boolean premiumSession) {
 		if (name == null || name.isEmpty()) {
 			return null;
 		}
@@ -126,6 +148,14 @@ public final class SkinDirectory {
 		String base = textureBase;
 		if (base.isEmpty()) {
 			return null;
+		}
+		if (premiumSession && entry.hasPremium && id != null && id.version() != 3) {
+			if (entry.premiumCapeHash == null) {
+				return null;
+			}
+			return new SkinOverride(null, base + entry.premiumCapeHash, false,
+					entry.premiumStripHash == null ? null : base + entry.premiumStripHash,
+					entry.premiumFrames, entry.premiumFps);
 		}
 		return new SkinOverride(
 				entry.skinHash == null ? null : base + entry.skinHash,
