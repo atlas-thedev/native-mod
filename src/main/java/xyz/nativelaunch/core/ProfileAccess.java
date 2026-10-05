@@ -27,6 +27,12 @@ public final class ProfileAccess {
 		return value instanceof String ? (String) value : null;
 	}
 
+	/** The property's signature, or null when it is unsigned. */
+	public static String propertySignature(Object property) {
+		Object value = call(property, "signature", "getSignature");
+		return value instanceof String && !((String) value).isEmpty() ? (String) value : null;
+	}
+
 	private static Object call(Object target, String first, String second) {
 		if (target == null) {
 			return null;

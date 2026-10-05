@@ -35,6 +35,18 @@ versions, so the same jar works everywhere. GL state is saved and restored aroun
 A premium (online) UUID is only overridden when the Native account is linked to that exact Minecraft account;
 offline UUIDs are matched by name.
 
+### Skins other players see
+
+Native textures are not signed by Mojang. Since 1.20.2 the game silently replaces any *unsigned* skin of a
+non-local player with Steve/Alex, and on ≤ 1.20.2 `getTextures(profile, true)` throws for unsigned textures.
+The mod therefore marks the textures it builds as trusted (`SignatureState.SIGNED` on modern authlib) and,
+on legacy authlib, reads the original textures without the signature check before applying the override.
+
+- **Live refresh:** when the skin directory changes (someone changes skin/cape) the cached `PlayerInfo` skins
+  and `SkinManager` caches are reset on the game thread, so new skins show without rejoining.
+- **Stable cache keys:** the textures `timestamp` is a hash of the skin content, not the current time.
+- **Premium accounts:** on a signed (premium) session only the Native cape is added; the Mojang skin is kept.
+
 ## Releasing
 
 Double-click **`release.bat`** (pick patch / minor / major). It bumps `gradle.properties`, commits, tags `vX.Y.Z`

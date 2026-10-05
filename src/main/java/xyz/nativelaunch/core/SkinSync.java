@@ -149,6 +149,29 @@ public final class SkinSync {
 		} catch (RuntimeException ignored) {
 			stripHash = null;
 		}
+		// "p": {"c": cape hash, "a": animation} when the Native name is also the linked premium name.
+		boolean hasPremium = false;
+		String premiumCape = null;
+		String premiumStrip = null;
+		int premiumFrames = 0;
+		int premiumFps = 0;
+		try {
+			if (o.has("p") && o.get("p").isJsonObject()) {
+				JsonObject p = o.getAsJsonObject("p");
+				hasPremium = true;
+				premiumCape = nullable(p, "c");
+				if (p.has("a") && p.get("a").isJsonObject()) {
+					JsonObject a = p.getAsJsonObject("a");
+					premiumStrip = nullable(a, "h");
+					premiumFrames = (int) longOf(a, "f", 0);
+					premiumFps = (int) longOf(a, "p", 0);
+				}
+			}
+		} catch (RuntimeException ignored) {
+			hasPremium = false;
+			premiumCape = null;
+			premiumStrip = null;
+		}
 		return new SkinEntry(
 				o.get("n").getAsString(),
 				o.has("m") && "slim".equals(o.get("m").getAsString()),
@@ -158,7 +181,12 @@ public final class SkinSync {
 				longOf(o, "r", 0),
 				stripHash,
 				frames,
-				fps);
+				fps,
+				hasPremium,
+				premiumCape,
+				premiumStrip,
+				premiumFrames,
+				premiumFps);
 	}
 
 	private static String nullable(JsonObject o, String key) {

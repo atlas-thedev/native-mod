@@ -105,3 +105,47 @@ jobs:
         run: |
           chmod +x ci/client/run.sh
           ci/client/run.sh "${{ matrix.mc }}" "${{ matrix.loader }}" "$(ls dist/native-client-*.jar | head -n1)"
+
+  # Boots a REAL Minecraft client and asks the game which skin it would draw for the local player and for two
+  # other players (one with an unsigned Native textures property, one with none). Default Steve/Alex = fail.
+  skins:
+    name: Skins in game on ${{ matrix.mc }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 26.x uses SDL3 + EGL; hosted-runner GL stacks vary, so those are informative rather than release-blocking
+    continue-on-error: ${{ matrix.egl == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mc: "1.16.5",  java: 8,  loader: "0.16.14" }
+          - { mc: "1.17.1",  java: 17, loader: "0.16.14" }
+          - { mc: "1.18.2",  java: 17, loader: "0.16.14" }
+          - { mc: "1.19.4",  java: 17, loader: "0.16.14" }
+          - { mc: "1.20.1",  java: 17, loader: "0.16.14" }
+          - { mc: "1.20.2",  java: 17, loader: "0.16.14" }
+          - { mc: "1.20.4",  java: 17, loader: "0.16.14" }
+          - { mc: "1.21.1",  java: 21, loader: "0.16.14" }
+          - { mc: "1.21.4",  java: 21, loader: "0.16.14" }
+          - { mc: "1.21.8",  java: 21, loader: "0.16.14" }
+          - { mc: "1.21.11", java: 21, loader: "0.19.5" }
+          - { mc: "26.1.2",  java: 25, loader: "0.19.5", egl: true }
+          - { mc: "26.2",    java: 25, loader: "0.19.5", egl: true }
+          - { mc: "26.3",    java: 25, loader: "0.19.5", egl: true }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-client-jar
+          path: dist
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Install Xvfb + Mesa
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libgles2 libxrandr2 libxcursor1 libxi6 libxxf86vm1 zip > /dev/null
+      - name: Real-client skin test
+        run: |
+          chmod +x ci/skins/run.sh
+          ci/skins/run.sh "${{ matrix.mc }}" "${{ matrix.loader }}" "$(ls dist/native-client-*.jar | head -n1)"

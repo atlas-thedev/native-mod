@@ -51,6 +51,7 @@ public final class NativeState {
 		TextureCache.init(gameDir);
 		Handoff handoff = Handoff.read(gameDir);
 		api = chooseApi(System.getProperty("native.api", System.getProperty("noctra.api")), handoff == null ? null : handoff.api);
+		SkinRefresh.install(directory);
 		sync = new SkinSync(directory, api);
 		sync.start();
 		if (handoff != null) {
@@ -118,11 +119,16 @@ public final class NativeState {
 	 * (beyond a one-time 1.5 s grace for the very first snapshot).
 	 */
 	public SkinOverride lookup(String name, UUID id) {
+		return lookup(name, id, false);
+	}
+
+	/** @param premiumSession the game already has Mojang-signed textures for this player */
+	public SkinOverride lookup(String name, UUID id, boolean premiumSession) {
 		SkinSync current = sync;
 		if (current == null) {
 			return null;
 		}
 		current.awaitFirstAttempt(1500);
-		return directory.find(name, id);
+		return directory.find(name, id, premiumSession);
 	}
 }

@@ -20,6 +20,15 @@ public final class SkinEntry {
 	public final int capeFrames;
 	/** Playback speed of the animated cape strip in frames per second (0 when not animated). */
 	public final int capeFps;
+	/**
+	 * True when the server sent a premium block ({@code "p"}): the Native name equals the linked premium
+	 * name, so a real premium session keeps its Mojang skin and only wears {@link #premiumCapeHash}.
+	 */
+	public final boolean hasPremium;
+	public final String premiumCapeHash;
+	public final String premiumStripHash;
+	public final int premiumFrames;
+	public final int premiumFps;
 
 	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision) {
 		this(name, slim, skinHash, capeHash, minecraftUuid, revision, null, 0, 0);
@@ -27,6 +36,12 @@ public final class SkinEntry {
 
 	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision,
 			String capeStripHash, int capeFrames, int capeFps) {
+		this(name, slim, skinHash, capeHash, minecraftUuid, revision, capeStripHash, capeFrames, capeFps, false, null, null, 0, 0);
+	}
+
+	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision,
+			String capeStripHash, int capeFrames, int capeFps,
+			boolean hasPremium, String premiumCapeHash, String premiumStripHash, int premiumFrames, int premiumFps) {
 		this.name = name;
 		this.slim = slim;
 		this.skinHash = skinHash;
@@ -37,6 +52,12 @@ public final class SkinEntry {
 		this.capeStripHash = animated ? capeStripHash : null;
 		this.capeFrames = animated ? Math.min(capeFrames, 256) : 0;
 		this.capeFps = animated ? Math.min(capeFps, 60) : 0;
+		this.hasPremium = hasPremium;
+		this.premiumCapeHash = hasPremium ? premiumCapeHash : null;
+		boolean premiumAnimated = this.premiumCapeHash != null && premiumStripHash != null && premiumFrames > 1 && premiumFps > 0;
+		this.premiumStripHash = premiumAnimated ? premiumStripHash : null;
+		this.premiumFrames = premiumAnimated ? Math.min(premiumFrames, 256) : 0;
+		this.premiumFps = premiumAnimated ? Math.min(premiumFps, 60) : 0;
 	}
 
 	/** True when the player wears an animated cape (strip hash, frames and fps are all valid). */

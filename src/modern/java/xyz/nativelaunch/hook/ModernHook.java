@@ -29,12 +29,15 @@ public final class ModernHook {
 			}
 			String name = ProfileAccess.name(profile);
 			UUID id = ProfileAccess.id(profile);
-			SkinOverride override = NativeBoot.ensure().lookup(name, id);
+			Property existing = cir.getReturnValue();
+			String existingValue = existing == null ? null : ProfileAccess.propertyValue(existing);
+			// Mojang-signed textures that are not ours: a real premium session
+			boolean premium = existing != null && ProfileAccess.propertySignature(existing) != null && Textures.parse(existingValue) == null;
+			SkinOverride override = NativeBoot.ensure().lookup(name, id, premium);
 			if (override == null) {
 				return;
 			}
-			Property existing = cir.getReturnValue();
-			String merged = Textures.pack(existing == null ? null : ProfileAccess.propertyValue(existing), override, id, name);
+			String merged = Textures.pack(existingValue, override, id, name);
 			cir.setReturnValue(new Property("textures", merged));
 		} catch (Throwable t) {
 			Log.warn("Skin hook failed: {}", t.toString());
@@ -64,7 +67,10 @@ public final class ModernHook {
 					parsed.skinUrl == null ? null : new MinecraftProfileTexture(parsed.skinUrl, parsed.slim ? slim : none),
 					parsed.capeUrl == null ? null : new MinecraftProfileTexture(parsed.capeUrl, capeMeta),
 					parsed.elytraUrl == null ? null : new MinecraftProfileTexture(parsed.elytraUrl, none),
-					SignatureState.UNSIGNED));
+					// Native textures come from the Native API, not from a game server, so they are trusted like
+					// Mojang's. UNSIGNED would make 1.20.2+ draw Steve/Alex for every player except yourself
+					// (PlayerInfo / SkinManager.createLookup drop insecure skins of other players).
+					SignatureState.SIGNED));
 		} catch (Throwable t) {
 			Log.warn("Skin hook failed: {}", t.toString());
 		}
