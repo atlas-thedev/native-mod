@@ -15,7 +15,7 @@ R="$WORK/mc-$MC"
 pick() { python3 -c "import json,sys;print([p for p in json.load(open('$R/launch.json'))['cp'] if sys.argv[1] in p][0])" "$1"; }
 LOADER_JAR=$(pick fabric-loader); GUAVA=$(pick "/com/google/guava/guava/")
 P="$WORK/sprobe-$MC"; rm -rf "$P" && mkdir -p "$P"
-javac -nowarn --release 8 -cp "$LOADER_JAR:$GUAVA" -d "$P" "$HERE/SkinProbe.java" 2>&1 | grep -v "^Note:" || true
+javac -nowarn -source 8 -target 8 -cp "$LOADER_JAR:$GUAVA" -d "$P" "$HERE/SkinProbe.java" 2>/dev/null || { echo "::error::could not compile SkinProbe"; exit 1; }
 echo '{"schemaVersion":1,"id":"sprobe","version":"1.0.0","environment":"client","entrypoints":{"client":["sprobe.SkinProbe"]}}' > "$P/fabric.mod.json"
 G="$R/game"; rm -rf "$G/mods" "$G/.native"; mkdir -p "$G/mods"
 (cd "$P" && zip -qr "$G/mods/sprobe.jar" .)
