@@ -113,4 +113,22 @@ class SkinDirectoryTest {
 		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi("http://localhost@evil.com", null));
 		assertEquals("http://localhost:3418", NativeState.chooseApi("http://localhost:3418/", null));
 	}
+
+	@Test
+	void sameNamePremiumPlayerKeepsMojangSkinAndGetsLockerCape() {
+		UUID premium = UUID.fromString("069a79f4-44e9-4726-a5be-fca90e38aaf5");
+		String linked = premium.toString().replace("-", "");
+		String premiumCape = "c".repeat(64);
+		SkinEntry withCape = new SkinEntry("Notch", false, SKIN, CAPE, linked, 1, null, 0, 0,
+				new SkinEntry("Notch", false, null, premiumCape, linked, 1));
+		SkinOverride onPremium = directory(withCape).find("Notch", premium);
+		assertNotNull(onPremium);
+		assertNull(onPremium.skinUrl, "the Mojang skin stays on the premium account");
+		assertEquals(BASE + premiumCape, onPremium.capeUrl);
+		SkinOverride onNative = directory(withCape).find("Notch", offlineUuid("Notch"));
+		assertEquals(BASE + SKIN, onNative.skinUrl, "Native mode still shows the Native look");
+		SkinEntry noCape = new SkinEntry("Notch", false, SKIN, CAPE, linked, 1, null, 0, 0,
+				new SkinEntry("Notch", false, null, null, linked, 1));
+		assertNull(directory(noCape).find("Notch", premium), "no Locker cape: plain Mojang look");
+	}
 }

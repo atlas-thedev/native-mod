@@ -20,6 +20,12 @@ public final class SkinEntry {
 	public final int capeFrames;
 	/** Playback speed of the animated cape strip in frames per second (0 when not animated). */
 	public final int capeFps;
+	/**
+	 * The look for the linked premium player when the Native and premium names are the same:
+	 * the Mojang skin stays and only this cape (or nothing, when null) is shown.
+	 * Null when the entry has no separate premium look (older servers).
+	 */
+	public final SkinEntry premium;
 
 	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision) {
 		this(name, slim, skinHash, capeHash, minecraftUuid, revision, null, 0, 0);
@@ -27,6 +33,12 @@ public final class SkinEntry {
 
 	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision,
 			String capeStripHash, int capeFrames, int capeFps) {
+		this(name, slim, skinHash, capeHash, minecraftUuid, revision, capeStripHash, capeFrames, capeFps, null);
+	}
+
+	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision,
+			String capeStripHash, int capeFrames, int capeFps, SkinEntry premium) {
+		this.premium = premium;
 		this.name = name;
 		this.slim = slim;
 		this.skinHash = skinHash;
@@ -45,6 +57,6 @@ public final class SkinEntry {
 	}
 
 	public boolean isEmpty() {
-		return skinHash == null && capeHash == null;
+		return skinHash == null && capeHash == null && (premium == null || premium.capeHash == null);
 	}
 }

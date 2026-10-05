@@ -41,6 +41,9 @@ public final class SkinDirectory {
 			if (entry.hasAnimatedCape()) {
 				out.add(entry);
 			}
+			if (entry.premium != null && entry.premium.hasAnimatedCape()) {
+				out.add(entry.premium);
+			}
 		}
 		return out;
 	}
@@ -121,6 +124,14 @@ public final class SkinDirectory {
 			String linked = entry.minecraftUuid;
 			if (linked == null || !linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT))) {
 				return null;
+			}
+			// Same name on Native and premium: playing on the premium account keeps the
+			// Mojang skin and shows only the cape picked for it in the Locker.
+			if (entry.premium != null) {
+				entry = entry.premium;
+				if (entry.capeHash == null) {
+					return null;
+				}
 			}
 		}
 		String base = textureBase;

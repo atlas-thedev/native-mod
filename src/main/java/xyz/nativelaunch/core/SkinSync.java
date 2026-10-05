@@ -149,6 +149,26 @@ public final class SkinSync {
 		} catch (RuntimeException ignored) {
 			stripHash = null;
 		}
+		// "p": {"c": cape hash, "a": animation} — the premium look for a same-name linked player.
+		SkinEntry premium = null;
+		try {
+			if (o.has("p") && o.get("p").isJsonObject()) {
+				JsonObject p = o.getAsJsonObject("p");
+				String pStrip = null;
+				int pFrames = 0;
+				int pFps = 0;
+				if (p.has("a") && p.get("a").isJsonObject()) {
+					JsonObject a = p.getAsJsonObject("a");
+					pStrip = nullable(a, "h");
+					pFrames = (int) longOf(a, "f", 0);
+					pFps = (int) longOf(a, "p", 0);
+				}
+				premium = new SkinEntry(o.get("n").getAsString(), false, null, nullable(p, "c"), nullable(o, "u"),
+						longOf(o, "r", 0), pStrip, pFrames, pFps);
+			}
+		} catch (RuntimeException ignored) {
+			premium = null;
+		}
 		return new SkinEntry(
 				o.get("n").getAsString(),
 				o.has("m") && "slim".equals(o.get("m").getAsString()),
@@ -158,7 +178,8 @@ public final class SkinSync {
 				longOf(o, "r", 0),
 				stripHash,
 				frames,
-				fps);
+				fps,
+				premium);
 	}
 
 	private static String nullable(JsonObject o, String key) {
