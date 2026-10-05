@@ -66,6 +66,6 @@ public final class SkinEntry {
 	}
 
 	public boolean isEmpty() {
-		return skinHash == null && capeHash == null;
+		return skinHash == null && capeHash == null && premiumCapeHash == null;
 	}
 }
