@@ -49,6 +49,7 @@ public final class NativeState {
 		}
 		started = true;
 		TextureCache.init(gameDir);
+		directory.setLocal(TextureCache.localLook(gameDir));
 		Handoff handoff = Handoff.read(gameDir);
 		api = chooseApi(System.getProperty("native.api", System.getProperty("noctra.api")), handoff == null ? null : handoff.api);
 		SkinRefresh.install(directory);
