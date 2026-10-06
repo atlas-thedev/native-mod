@@ -17,6 +17,7 @@ repositories {
 //   modern - hook for Minecraft 1.20.3 - 26.x   (compiled against a new authlib)
 //   anim   - animated capes, Minecraft 26.x only (Java 25 bytecode, only loaded there)
 //   glanim - animated capes, Minecraft 1.16 - 1.21.x (OpenGL, reached through intermediary names)
+// plus one small 3D-cosmetics renderer per Minecraft era (cos116, cos117, cos1212, cos1219, cos26), see below.
 sourceSets {
 	glanim {
 		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
@@ -120,6 +121,146 @@ tasks.named('compileAnimJava') {
 	options.release = 25
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// 3D cosmetics (hats, glasses, back items, shoes): one renderer per Minecraft era, each written against that
+// era's real classes. 1.16 - 1.21.11 are compiled against Yarn-named jars and then remapped to the stable
+// Fabric intermediary names the game runs with (what Loom would do, without needing Loom); 26.x is
+// unobfuscated and compiles straight against the official jar.
+// ---------------------------------------------------------------------------------------------------------
+def cosmeticEras = [
+	[name: 'cos116',  mc: '1.16.5', yarn: '1.16.5+build.10'],  // 1.16.x
+	[name: 'cos117',  mc: '1.17.1', yarn: '1.17.1+build.65'],  // 1.17 - 1.21.1
+	[name: 'cos1212', mc: '1.21.2', yarn: '1.21.2+build.1'],   // 1.21.2 - 1.21.8 (render states)
+	[name: 'cos1219', mc: '1.21.9', yarn: '1.21.9+build.1'],   // 1.21.9 - 1.21.11 (render command queue)
+]
+
+configurations {
+	tinyRemapper
+}
+
+dependencies {
+	tinyRemapper 'net.fabricmc:tiny-remapper:0.14.1:fat'
+}
+
+def mcRoot = layout.buildDirectory.dir('minecraft').get().asFile
+
+def libJars = { File dir -> (new File(dir, 'libs').listFiles() ?: new File[0]).findAll { it.name.endsWith('.jar') }.sort { it.name } }
+
+cosmeticEras.each { era ->
+	def mc = era.mc
+	def dir = new File(mcRoot, mc)
+	def fetchTask = "fetchMinecraft_${mc.replace('.', '_')}"
+	if (tasks.findByName(fetchTask) == null) {
+		tasks.register(fetchTask) {
+			outputs.dir(dir)
+			doLast {
+				def slurper = new groovy.json.JsonSlurper()
+				def fetch = { String url, File target, String expected ->
+					if (target.isFile() && (expected == null || sha1Of(target) == expected)) return
+					target.parentFile.mkdirs()
+					def tmp = new File(target.parentFile, target.name + '.part')
+					new URL(url).withInputStream { input -> tmp.withOutputStream { output -> output << input } }
+					if (expected != null && sha1Of(tmp) != expected) throw new GradleException("Checksum mismatch for ${url}")
+					if (target.exists()) target.delete()
+					tmp.renameTo(target)
+				}
+				def manifest = slurper.parse(new URL('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'))
+				def entry = manifest.versions.find { it.id == mc }
+				if (entry == null) throw new GradleException("Minecraft ${mc} is not in Mojang's manifest")
+				def version = slurper.parse(new URL(entry.url))
+				fetch(version.downloads.client.url, new File(dir, 'client.jar'), version.downloads.client.sha1)
+				version.libraries.each { lib ->
+					def artifact = lib.downloads?.artifact
+					if (artifact == null || lib.name.contains('natives') || artifact.path.contains('natives')) return
+					fetch(artifact.url, new File(dir, "libs/${new File(artifact.path).name}"), artifact.sha1)
+				}
+				def unpack = { String url, File target ->
+					if (target.isFile()) return
+					def jar = new File(dir, target.name + '.jar')
+					fetch(url, jar, null)
+					new java.util.zip.ZipFile(jar).withCloseable { zip ->
+						target.bytes = zip.getInputStream(zip.getEntry('mappings/mappings.tiny')).bytes
+					}
+				}
+				unpack("https://maven.fabricmc.net/net/fabricmc/intermediary/${mc}/intermediary-${mc}-v2.jar", new File(dir, 'intermediary.tiny'))
+				unpack("https://maven.fabricmc.net/net/fabricmc/yarn/${era.yarn}/yarn-${era.yarn}-v2.jar", new File(dir, 'yarn.tiny'))
+			}
+		}
+		tasks.register("remapMinecraftIntermediary_${mc.replace('.', '_')}", JavaExec) {
+			dependsOn fetchTask
+			inputs.file(new File(dir, 'client.jar'))
+			outputs.file(new File(dir, 'client-intermediary.jar'))
+			classpath = configurations.tinyRemapper
+			mainClass = 'net.fabricmc.tinyremapper.Main'
+			maxHeapSize = '2g'
+			doFirst {
+				new File(dir, 'client-intermediary.jar').delete()
+				args = [new File(dir, 'client.jar'), new File(dir, 'client-intermediary.jar'), new File(dir, 'intermediary.tiny'), 'official', 'intermediary'] +
+						libJars(dir).collect { it.absolutePath } + ['--renameInvalidLocals']
+			}
+		}
+		tasks.register("remapMinecraftNamed_${mc.replace('.', '_')}", JavaExec) {
+			dependsOn "remapMinecraftIntermediary_${mc.replace('.', '_')}"
+			inputs.file(new File(dir, 'client-intermediary.jar'))
+			outputs.file(new File(dir, 'client-named.jar'))
+			classpath = configurations.tinyRemapper
+			mainClass = 'net.fabricmc.tinyremapper.Main'
+			maxHeapSize = '2g'
+			doFirst {
+				new File(dir, 'client-named.jar').delete()
+				args = [new File(dir, 'client-intermediary.jar'), new File(dir, 'client-named.jar'), new File(dir, 'yarn.tiny'), 'intermediary', 'named'] +
+						libJars(dir).collect { it.absolutePath } + ['--renameInvalidLocals']
+			}
+		}
+	}
+
+	def set = sourceSets.create(era.name) {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+	}
+	dependencies.add(set.compileOnlyConfigurationName, files(new File(dir, 'client-named.jar')))
+	dependencies.add(set.compileOnlyConfigurationName, fileTree(dir: new File(dir, 'libs'), include: '*.jar'))
+	tasks.named(set.compileJavaTaskName) {
+		dependsOn "remapMinecraftNamed_${mc.replace('.', '_')}"
+	}
+	def namedJar = tasks.register("${era.name}NamedJar", Jar) {
+		from set.output
+		archiveFileName = "${era.name}-named.jar"
+		destinationDirectory = layout.buildDirectory.dir('cosmetics')
+	}
+	tasks.register("${era.name}Remap", JavaExec) {
+		dependsOn namedJar, "remapMinecraftNamed_${mc.replace('.', '_')}"
+		def output = layout.buildDirectory.file("cosmetics/${era.name}-intermediary.jar").get().asFile
+		inputs.files(namedJar)
+		outputs.file(output)
+		classpath = configurations.tinyRemapper
+		mainClass = 'net.fabricmc.tinyremapper.Main'
+		maxHeapSize = '1g'
+		doFirst {
+			output.delete()
+			args = [namedJar.get().archiveFile.get().asFile, output, new File(dir, 'yarn.tiny'), 'named', 'intermediary',
+					new File(dir, 'client-named.jar')] + libJars(dir).collect { it.absolutePath } +
+					sourceSets.main.output.classesDirs.files.collect { it.absolutePath }
+		}
+	}
+}
+
+// 26.x: the official jar fetched for the animated-cape source set.
+sourceSets {
+	cos26 {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+	}
+}
+
+dependencies {
+	cos26CompileOnly files("${animMcDir}/client.jar")
+	cos26CompileOnly fileTree(dir: "${animMcDir}/libs", include: '*.jar')
+}
+
+tasks.named('compileCos26Java') {
+	dependsOn 'fetchMinecraft'
+	options.release = 25
+}
+
 // Tests run on the build JDK and use newer language features.
 tasks.named('compileTestJava') {
 	options.release = 17
@@ -143,6 +284,13 @@ jar {
 	from sourceSets.modern.output
 	from sourceSets.anim.output
 	from sourceSets.glanim.output
+	from sourceSets.cos26.output
+	cosmeticEras.each { era ->
+		dependsOn "${era.name}Remap"
+		from(zipTree(layout.buildDirectory.file("cosmetics/${era.name}-intermediary.jar"))) {
+			exclude 'META-INF/**'
+		}
+	}
 	from('LICENSE') {
 		rename { "${it}_${project.archives_base_name}" }
 	}

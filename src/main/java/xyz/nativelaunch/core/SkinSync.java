@@ -186,7 +186,36 @@ public final class SkinSync {
 				premiumCape,
 				premiumStrip,
 				premiumFrames,
-				premiumFps);
+				premiumFps,
+				cosmetics(o));
+	}
+
+	private static final java.util.regex.Pattern HASH = java.util.regex.Pattern.compile("^[a-f0-9]{64}$");
+
+	/** "k": [{"i": item id, "m": model hash, "x": texture hash}] - the 3D cosmetics a player wears. */
+	static List<xyz.nativelaunch.cosmetic.CosmeticRef> cosmetics(JsonObject o) {
+		List<xyz.nativelaunch.cosmetic.CosmeticRef> out = new ArrayList<xyz.nativelaunch.cosmetic.CosmeticRef>();
+		try {
+			if (!o.has("k") || !o.get("k").isJsonArray()) {
+				return out;
+			}
+			for (JsonElement element : o.getAsJsonArray("k")) {
+				if (!element.isJsonObject() || out.size() >= SkinEntry.MAX_COSMETICS) {
+					continue;
+				}
+				JsonObject k = element.getAsJsonObject();
+				String model = nullable(k, "m");
+				String texture = nullable(k, "x");
+				if (model == null || texture == null || !HASH.matcher(model).matches() || !HASH.matcher(texture).matches()) {
+					continue;
+				}
+				String id = nullable(k, "i");
+				out.add(new xyz.nativelaunch.cosmetic.CosmeticRef(id == null ? model.substring(0, 12) : id, model, texture));
+			}
+		} catch (RuntimeException ignored) {
+			// a malformed list wears nothing
+		}
+		return out;
 	}
 
 	private static String nullable(JsonObject o, String key) {

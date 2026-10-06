@@ -187,6 +187,27 @@ public final class SkinDirectory {
 				entry.capeFps);
 	}
 
+	/**
+	 * The 3D cosmetics a player wears (never null). Same rule as {@link #find}: premium UUIDs only match the
+	 * account linked to exactly that UUID, offline (version 3) players match by name.
+	 */
+	public java.util.List<xyz.nativelaunch.cosmetic.CosmeticRef> cosmetics(String name, UUID id) {
+		if (name == null || name.isEmpty()) {
+			return java.util.Collections.emptyList();
+		}
+		SkinEntry entry = entries.get(key(name));
+		if (entry == null || entry.cosmetics.isEmpty()) {
+			return java.util.Collections.emptyList();
+		}
+		if (id != null && id.version() != 3) {
+			String linked = entry.minecraftUuid;
+			if (linked == null || !linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT))) {
+				return java.util.Collections.emptyList();
+			}
+		}
+		return entry.cosmetics;
+	}
+
 	private static String key(String name) {
 		return name.toLowerCase(Locale.ROOT);
 	}
