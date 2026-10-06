@@ -71,6 +71,11 @@ public final class CosmeticFeature extends FeatureRenderer<PlayerEntityRenderSta
 		if (filled(state.equippedChestStack)) armor |= CosmeticRenderer.ARMOR_CHEST;
 		if (filled(state.equippedLegsStack)) armor |= CosmeticRenderer.ARMOR_LEGS;
 		if (filled(state.equippedFeetStack)) armor |= CosmeticRenderer.ARMOR_FEET;
+		boolean leftMain = ((AbstractClientPlayerEntity) entity).getMainArm() == net.minecraft.util.Arm.LEFT;
+		boolean mainBusy = !((AbstractClientPlayerEntity) entity).getMainHandStack().isEmpty();
+		boolean offBusy = !((AbstractClientPlayerEntity) entity).getOffHandStack().isEmpty();
+		if (leftMain ? mainBusy : offBusy) armor |= CosmeticRenderer.ARMOR_LEFT_HAND;
+		if (leftMain ? offBusy : mainBusy) armor |= CosmeticRenderer.ARMOR_RIGHT_HAND;
 		this.matrices = matrices;
 		this.buffers = buffers;
 		this.light = light;

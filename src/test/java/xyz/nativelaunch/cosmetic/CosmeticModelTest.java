@@ -50,9 +50,9 @@ class CosmeticModelTest {
 		CosmeticModel m = CosmeticModel.parse("{\"parts\":[{\"cubes\":[{\"origin\":[999,0,0],\"size\":[500,-3,2.6]}]}]}");
 		CosmeticModel.Cube c = m.roots.get(0).cubes.get(0);
 		assertEquals(64, c.x, 1e-6);
-		assertEquals(64, c.w);
-		assertEquals(0, c.h);
-		assertEquals(3, c.d);
+		assertEquals(64, c.w, 1e-6);
+		assertEquals(0, c.h, 1e-6);
+		assertEquals(2.6f, c.d, 1e-6);
 	}
 
 	@Test
@@ -117,5 +117,15 @@ class CosmeticModelTest {
 		assertEquals(CosmeticPose.seed("Alice"), CosmeticPose.seed("alice"));
 		double s = CosmeticPose.seed("Bob");
 		assertTrue(s >= 0 && s < 10);
+	}
+
+	@Test
+	void handItemsKeepSideAndHandSlots() {
+		CosmeticModel m = CosmeticModel.parse("{\"parts\":[{\"side\":\"left\",\"attach\":\"leftarm\",\"armor\":{\"slot\":\"lefthand\"}},{\"side\":\"right\",\"attach\":\"rightarm\",\"armor\":{\"slot\":\"righthand\"}}]}");
+		assertEquals(1, m.roots.get(0).side);
+		assertEquals(2, m.roots.get(1).side);
+		assertEquals(1, m.defaultSide());
+		assertEquals(CosmeticModel.Slot.LEFT_HAND, m.roots.get(0).armorSlot);
+		assertEquals(CosmeticModel.Slot.RIGHT_HAND, m.roots.get(1).armorSlot);
 	}
 }

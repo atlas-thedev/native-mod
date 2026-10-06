@@ -7,12 +7,19 @@ public final class CosmeticRef {
 	public final String textureHash;
 	/** Store slot ("hats", "glasses", "back", "shoes"), or null when the server did not say. */
 	public final String slot;
+	/** The hand/side the player picked for hand items and balloons: 1 left, 2 right, 0 = the item's default. */
+	public final int side;
 
 	public CosmeticRef(String id, String modelHash, String textureHash) {
 		this(id, modelHash, textureHash, null);
 	}
 
 	public CosmeticRef(String id, String modelHash, String textureHash, String slot) {
+		this(id, modelHash, textureHash, slot, 0);
+	}
+
+	public CosmeticRef(String id, String modelHash, String textureHash, String slot, int side) {
+		this.side = side;
 		this.id = id;
 		this.modelHash = modelHash;
 		this.textureHash = textureHash;
@@ -35,7 +42,7 @@ public final class CosmeticRef {
 			return false;
 		}
 		CosmeticRef o = (CosmeticRef) other;
-		return key().equals(o.key()) && (id == null ? o.id == null : id.equals(o.id));
+		return key().equals(o.key()) && side == o.side && (id == null ? o.id == null : id.equals(o.id));
 	}
 
 	@Override

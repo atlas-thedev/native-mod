@@ -20,8 +20,8 @@ import java.util.concurrent.ThreadFactory;
  * a cosmetic simply appears once its files are ready.
  */
 public final class CosmeticLibrary {
-	static final int MAX_MODEL_BYTES = 256 * 1024;
-	static final int MAX_TEXTURE_BYTES = 1024 * 1024;
+	static final int MAX_MODEL_BYTES = 1024 * 1024;
+	static final int MAX_TEXTURE_BYTES = 2 * 1024 * 1024;
 	private static final long RETRY_MS = 60_000;
 
 	/** A cosmetic ready to draw. {@link #baked} belongs to the running version's renderer. */

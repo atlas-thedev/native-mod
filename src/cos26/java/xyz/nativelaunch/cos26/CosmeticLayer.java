@@ -77,6 +77,11 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
 		if (filled(state.chestEquipment)) armor |= CosmeticRenderer.ARMOR_CHEST;
 		if (filled(state.legsEquipment)) armor |= CosmeticRenderer.ARMOR_LEGS;
 		if (filled(state.feetEquipment)) armor |= CosmeticRenderer.ARMOR_FEET;
+		boolean leftMain = ((AbstractClientPlayer) entity).getMainArm() == net.minecraft.world.entity.HumanoidArm.LEFT;
+		boolean mainBusy = !((AbstractClientPlayer) entity).getMainHandItem().isEmpty();
+		boolean offBusy = !((AbstractClientPlayer) entity).getOffhandItem().isEmpty();
+		if (leftMain ? mainBusy : offBusy) armor |= CosmeticRenderer.ARMOR_LEFT_HAND;
+		if (leftMain ? offBusy : mainBusy) armor |= CosmeticRenderer.ARMOR_RIGHT_HAND;
 		this.poses = poses;
 		this.collector = collector;
 		this.light = light;

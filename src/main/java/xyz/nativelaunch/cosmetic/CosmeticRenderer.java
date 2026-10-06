@@ -8,6 +8,9 @@ public final class CosmeticRenderer {
 	public static final int ARMOR_CHEST = 2;
 	public static final int ARMOR_LEGS = 4;
 	public static final int ARMOR_FEET = 8;
+	/** The left / right hand (as seen on the model) holds an item. */
+	public static final int ARMOR_LEFT_HAND = 16;
+	public static final int ARMOR_RIGHT_HAND = 32;
 
 	private final float[] pose = new float[6];
 
@@ -18,8 +21,9 @@ public final class CosmeticRenderer {
 	public void render(List<CosmeticLibrary.Loaded> worn, CosmeticSink sink, double time, float moving, int armor) {
 		for (int i = 0; i < worn.size(); i++) {
 			CosmeticLibrary.Loaded cosmetic = worn.get(i);
+			int side = cosmetic.ref.side != 0 ? cosmetic.ref.side : cosmetic.model.defaultSide();
 			for (CosmeticModel.Part root : cosmetic.model.roots) {
-				if (hidden(root, armor)) {
+				if ((root.side != 0 && root.side != side) || hidden(root, armor)) {
 					continue;
 				}
 				sink.push();
@@ -71,6 +75,10 @@ public final class CosmeticRenderer {
 				return (armor & ARMOR_LEGS) != 0;
 			case FEET:
 				return (armor & ARMOR_FEET) != 0;
+			case LEFT_HAND:
+				return (armor & ARMOR_LEFT_HAND) != 0;
+			case RIGHT_HAND:
+				return (armor & ARMOR_RIGHT_HAND) != 0;
 			default:
 				return false;
 		}
