@@ -1,6 +1,8 @@
 package xyz.nativelaunch;
 
 import xyz.nativelaunch.core.AnimGate;
+import xyz.nativelaunch.core.Handoff;
+import xyz.nativelaunch.presence.PresenceService;
 import xyz.nativelaunch.core.Log;
 import xyz.nativelaunch.core.NativeState;
 import net.fabricmc.api.ClientModInitializer;
@@ -11,8 +13,20 @@ import net.fabricmc.loader.api.ModContainer;
 public final class NativeMod implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
-		NativeState.get().start(FabricLoader.getInstance().getGameDir());
+		java.nio.file.Path gameDir = FabricLoader.getInstance().getGameDir();
+		NativeState.get().start(gameDir);
 		startCapeAnimator();
+		startPresence(gameDir);
+	}
+
+	/** Discord Rich Presence + the launcher's Relay status (server, world, player count). */
+	private static void startPresence(java.nio.file.Path gameDir) {
+		try {
+			Handoff handoff = Handoff.read(gameDir);
+			PresenceService.start(gameDir, NativeState.get().api(), handoff == null ? null : handoff.ticket);
+		} catch (Throwable t) {
+			Log.warn("Presence is unavailable ({}).", t.toString());
+		}
 	}
 
 	/**
