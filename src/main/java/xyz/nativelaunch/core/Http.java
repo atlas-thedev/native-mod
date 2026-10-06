@@ -57,6 +57,35 @@ public final class Http {
 		}
 	}
 
+	/** POST a binary body, read a JSON reply. Throws on any non-2xx status. */
+	public static String postBytes(String url, String bearer, byte[] body, String contentType) throws IOException {
+		HttpURLConnection connection = open(url, bearer, 8000, 15000, "application/json");
+		connection.setRequestMethod("POST");
+		connection.setDoOutput(true);
+		connection.setRequestProperty("Content-Type", contentType);
+		connection.setFixedLengthStreamingMode(body.length);
+		try {
+			connection.getOutputStream().write(body);
+			int status = connection.getResponseCode();
+			if (status / 100 != 2) {
+				throw new IOException("HTTP " + status + " from " + url);
+			}
+			InputStream in = connection.getInputStream();
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			byte[] buffer = new byte[4096];
+			int read;
+			while ((read = in.read(buffer)) != -1) {
+				if (out.size() > 64 * 1024) {
+					throw new IOException("Response too large");
+				}
+				out.write(buffer, 0, read);
+			}
+			return new String(out.toByteArray(), StandardCharsets.UTF_8);
+		} finally {
+			connection.disconnect();
+		}
+	}
+
 	/** GET raw bytes (a texture). Throws on any non-2xx status or when the body exceeds maxBytes. */
 	public static byte[] getBytes(String url, int maxBytes) throws IOException {
 		HttpURLConnection connection = open(url, null, 8000, 20000, "image/png,*/*");
