@@ -19,6 +19,8 @@ public final class SkinDirectory {
 	private volatile String textureBase = "";
 	private volatile long epoch = -1;
 	private volatile long revision = -1;
+	/** The offline account's own look (launcher.json), shown on this PC only. */
+	private volatile SkinEntry local;
 	private final CopyOnWriteArrayList<Consumer<SkinEntry>> listeners = new CopyOnWriteArrayList<Consumer<SkinEntry>>();
 	private final CopyOnWriteArrayList<Runnable> resetListeners = new CopyOnWriteArrayList<Runnable>();
 
@@ -107,6 +109,11 @@ public final class SkinDirectory {
 		}
 	}
 
+	/** Sets the offline player's local-only look (null clears it). */
+	public void setLocal(SkinEntry entry) {
+		this.local = entry != null && !entry.isEmpty() ? entry : null;
+	}
+
 	public void setTextureBase(String base) {
 		if (base != null && !base.isEmpty()) {
 			this.textureBase = base;
@@ -139,6 +146,15 @@ public final class SkinDirectory {
 	public SkinOverride find(String name, UUID id, boolean premiumSession) {
 		if (name == null || name.isEmpty()) {
 			return null;
+		}
+		// Offline account: its own skin, for that offline name only (never a premium player).
+		SkinEntry mine = local;
+		if (mine != null && key(mine.name).equals(key(name)) && !premiumSession && (id == null || id.version() == 3)) {
+			String base = textureBase.isEmpty() ? NativeState.DEFAULT_API + "/csl/textures/" : textureBase;
+			return new SkinOverride(
+					mine.skinHash == null ? null : base + mine.skinHash,
+					mine.capeHash == null ? null : base + mine.capeHash,
+					mine.slim);
 		}
 		SkinEntry entry = entries.get(key(name));
 		if (entry == null) {

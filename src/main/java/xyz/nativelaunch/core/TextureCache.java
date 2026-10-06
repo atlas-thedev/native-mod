@@ -52,6 +52,46 @@ public final class TextureCache {
 		dir = chosen != null ? chosen : gameDir.resolve(".native").resolve("textures");
 	}
 
+	/**
+	 * The offline account's own look from {@code launcher.json} ({@code "local": {name, skin, cape, slim}}),
+	 * or null. It is shown on this PC only and never sent anywhere.
+	 */
+	static SkinEntry localLook(Path gameDir) {
+		try {
+			Path info = gameDir.resolve(".native").resolve("launcher.json");
+			if (!Files.isRegularFile(info)) {
+				info = gameDir.resolve(".noctra").resolve("launcher.json");
+			}
+			if (!Files.isRegularFile(info) || Files.size(info) >= 16 * 1024) {
+				return null;
+			}
+			JsonElement root = new JsonParser().parse(new String(Files.readAllBytes(info), StandardCharsets.UTF_8));
+			if (!root.isJsonObject() || !root.getAsJsonObject().has("local") || !root.getAsJsonObject().get("local").isJsonObject()) {
+				return null;
+			}
+			JsonObject local = root.getAsJsonObject().getAsJsonObject("local");
+			String name = text(local, "name");
+			if (name == null || !name.matches("^[A-Za-z0-9_]{1,16}$")) {
+				return null;
+			}
+			String skin = text(local, "skin");
+			String cape = text(local, "cape");
+			skin = skin != null && HASH.matcher(skin).matches() ? skin : null;
+			cape = cape != null && HASH.matcher(cape).matches() ? cape : null;
+			if (skin == null && cape == null) {
+				return null;
+			}
+			boolean slim = local.has("slim") && local.get("slim").isJsonPrimitive() && local.get("slim").getAsBoolean();
+			return new SkinEntry(name, slim, skin, cape, null, 0);
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
+	private static String text(JsonObject o, String key) {
+		return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsString() : null;
+	}
+
 	/** Cached bytes for a texture hash (verified), or null. */
 	public static byte[] read(String hash) {
 		Path base = dir;
