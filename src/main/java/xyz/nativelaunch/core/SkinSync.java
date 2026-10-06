@@ -211,7 +211,9 @@ public final class SkinSync {
 				}
 				String id = nullable(k, "i");
 				String slot = nullable(k, "s");
-				out.add(new xyz.nativelaunch.cosmetic.CosmeticRef(id == null ? model.substring(0, 12) : id, model, texture, slot));
+				String hand = nullable(k, "h");
+				int side = "l".equals(hand) ? 1 : "r".equals(hand) ? 2 : 0;
+				out.add(new xyz.nativelaunch.cosmetic.CosmeticRef(id == null ? model.substring(0, 12) : id, model, texture, slot, side));
 			}
 		} catch (RuntimeException ignored) {
 			// a malformed list wears nothing

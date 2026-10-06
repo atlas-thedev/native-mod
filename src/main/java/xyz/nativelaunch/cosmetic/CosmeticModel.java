@@ -27,8 +27,8 @@ import java.util.Locale;
  * </pre>
  */
 public final class CosmeticModel {
-	public static final int MAX_PARTS = 96;
-	public static final int MAX_CUBES = 512;
+	public static final int MAX_PARTS = 512;
+	public static final int MAX_CUBES = 2048;
 	public static final int MAX_DEPTH = 8;
 
 	public enum Attach { HEAD, BODY, RIGHT_ARM, LEFT_ARM, RIGHT_LEG, LEFT_LEG }
@@ -36,16 +36,16 @@ public final class CosmeticModel {
 	public enum Layer { CUTOUT, TRANSLUCENT, GLOW }
 
 	/** Armor slot a part reacts to. */
-	public enum Slot { NONE, HEAD, CHEST, LEGS, FEET }
+	public enum Slot { NONE, HEAD, CHEST, LEGS, FEET, LEFT_HAND, RIGHT_HAND }
 
 	public static final class Cube {
 		public final float x, y, z;
-		public final int w, h, d;
+		public final float w, h, d;
 		public final int u, v;
 		public final float inflate;
 		public final boolean mirror;
 
-		Cube(float x, float y, float z, int w, int h, int d, int u, int v, float inflate, boolean mirror) {
+		Cube(float x, float y, float z, float w, float h, float d, int u, int v, float inflate, boolean mirror) {
 			this.x = x;
 			this.y = y;
 			this.z = z;
@@ -100,9 +100,11 @@ public final class CosmeticModel {
 		public final float[] armorOffset;
 		/** Index in {@link CosmeticModel#flat}, handy for per-part caches in renderers. */
 		public final int index;
+		/** 0 = any, 1 = only when the player picked the left hand/side, 2 = right. */
+		public final int side;
 
 		Part(String id, Attach attach, float[] pivot, float[] rotation, List<Cube> cubes, List<Part> children, List<Anim> anims,
-				Layer layer, Slot armorSlot, boolean armorHide, float[] armorOffset, int index) {
+				Layer layer, Slot armorSlot, boolean armorHide, float[] armorOffset, int index, int side) {
 			this.id = id;
 			this.attach = attach;
 			this.px = pivot[0];
@@ -119,6 +121,7 @@ public final class CosmeticModel {
 			this.armorHide = armorHide;
 			this.armorOffset = armorOffset;
 			this.index = index;
+			this.side = side;
 		}
 
 		public boolean animated() {
@@ -139,6 +142,16 @@ public final class CosmeticModel {
 		this.flat = flat;
 	}
 
+	/** The side of the first side-flagged root (1 left, 2 right), or 0 when the model has none. */
+	public int defaultSide() {
+		for (Part root : roots) {
+			if (root.side != 0) {
+				return root.side;
+			}
+		}
+		return 0;
+	}
+
 	public static CosmeticModel parse(byte[] json) {
 		return parse(new String(json, StandardCharsets.UTF_8));
 	}
@@ -157,7 +170,7 @@ public final class CosmeticModel {
 		float[] texture = floats(root, "texture", 2, new float[] {64, 64});
 		int tw = (int) texture[0];
 		int th = (int) texture[1];
-		if (tw < 1 || th < 1 || tw > 1024 || th > 1024) {
+		if (tw < 1 || th < 1 || tw > 2048 || th > 2048) {
 			throw new IllegalArgumentException("bad texture size");
 		}
 		if (!root.has("parts") || !root.get("parts").isJsonArray()) {
@@ -229,7 +242,7 @@ public final class CosmeticModel {
 					clampAll(floats(o, "rotation", 3, new float[] {0, 0, 0}), 360),
 					Collections.unmodifiableList(cubes), children, Collections.unmodifiableList(anims),
 					layer(text(o, "layer", o.has("glow") && o.get("glow").getAsBoolean() ? "glow" : "cutout")),
-					armorSlot, armorHide, armorOffset, index);
+					armorSlot, armorHide, armorOffset, index, side(text(o, "side", "")));
 			flat.set(index, part);
 			out.add(part);
 		}
@@ -239,15 +252,15 @@ public final class CosmeticModel {
 	private static Cube cube(JsonObject o) {
 		float[] origin = clampAll(floats(o, "origin", 3, new float[] {0, 0, 0}), 64);
 		float[] size = floats(o, "size", 3, new float[] {1, 1, 1});
-		int[] s = new int[3];
+		float[] s = new float[3];
 		for (int i = 0; i < 3; i++) {
-			s[i] = Math.max(0, Math.min(64, Math.round(size[i])));
+			s[i] = Math.max(0f, Math.min(64f, size[i]));
 		}
 		float[] uv = floats(o, "uv", 2, new float[] {0, 0});
 		float inflate = o.has("inflate") ? Math.max(-2f, Math.min(4f, o.get("inflate").getAsFloat())) : 0f;
 		boolean mirror = o.has("mirror") && o.get("mirror").getAsBoolean();
 		return new Cube(origin[0], origin[1], origin[2], s[0], s[1], s[2],
-				Math.max(0, Math.min(1024, (int) uv[0])), Math.max(0, Math.min(1024, (int) uv[1])), inflate, mirror);
+				Math.max(0, Math.min(2048, (int) uv[0])), Math.max(0, Math.min(2048, (int) uv[1])), inflate, mirror);
 	}
 
 	private static Anim anim(JsonObject o) {
@@ -303,7 +316,17 @@ public final class CosmeticModel {
 		return Layer.CUTOUT;
 	}
 
+	private static int side(String name) {
+		return "left".equals(name) ? 1 : "right".equals(name) ? 2 : 0;
+	}
+
 	private static Slot slot(String name) {
+		if ("lefthand".equals(name)) {
+			return Slot.LEFT_HAND;
+		}
+		if ("righthand".equals(name)) {
+			return Slot.RIGHT_HAND;
+		}
 		if ("head".equals(name)) {
 			return Slot.HEAD;
 		}

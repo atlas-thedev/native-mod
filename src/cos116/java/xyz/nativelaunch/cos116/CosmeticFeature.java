@@ -66,6 +66,11 @@ public final class CosmeticFeature extends FeatureRenderer<AbstractClientPlayerE
 		if (!player.getEquippedStack(EquipmentSlot.CHEST).isEmpty()) armor |= CosmeticRenderer.ARMOR_CHEST;
 		if (!player.getEquippedStack(EquipmentSlot.LEGS).isEmpty()) armor |= CosmeticRenderer.ARMOR_LEGS;
 		if (!player.getEquippedStack(EquipmentSlot.FEET).isEmpty()) armor |= CosmeticRenderer.ARMOR_FEET;
+		boolean leftMain = player.getMainArm() == net.minecraft.util.Arm.LEFT;
+		boolean mainBusy = !player.getMainHandStack().isEmpty();
+		boolean offBusy = !player.getOffHandStack().isEmpty();
+		if (leftMain ? mainBusy : offBusy) armor |= CosmeticRenderer.ARMOR_LEFT_HAND;
+		if (leftMain ? offBusy : mainBusy) armor |= CosmeticRenderer.ARMOR_RIGHT_HAND;
 		this.matrices = matrices;
 		this.buffers = buffers;
 		this.light = light;
