@@ -16,6 +16,7 @@ public final class NativeMod implements ClientModInitializer {
 		java.nio.file.Path gameDir = FabricLoader.getInstance().getGameDir();
 		NativeState.get().start(gameDir);
 		startCapeAnimator();
+		startCosmetics();
 		startPresence(gameDir);
 	}
 
@@ -26,6 +27,24 @@ public final class NativeMod implements ClientModInitializer {
 			PresenceService.start(gameDir, NativeState.get().api(), handoff == null ? null : handoff.ticket);
 		} catch (Throwable t) {
 			Log.warn("Presence is unavailable ({}).", t.toString());
+		}
+	}
+
+	/** Hats, glasses, back items and shoes: a renderer per Minecraft era. */
+	private static void startCosmetics() {
+		try {
+			xyz.nativelaunch.cosmetic.CosmeticsBoot.start(minecraftVersion());
+		} catch (Throwable t) {
+			Log.warn("3D cosmetics are unavailable ({}).", t.toString());
+		}
+	}
+
+	private static String minecraftVersion() {
+		try {
+			ModContainer minecraft = FabricLoader.getInstance().getModContainer("minecraft").orElse(null);
+			return minecraft == null ? null : minecraft.getMetadata().getVersion().getFriendlyString();
+		} catch (Throwable ignored) {
+			return null;
 		}
 	}
 
