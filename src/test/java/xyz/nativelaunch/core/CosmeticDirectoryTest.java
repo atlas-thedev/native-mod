@@ -57,4 +57,36 @@ class CosmeticDirectoryTest {
 		SkinSync.applySnapshot(empty, snapshot("null"));
 		assertEquals(0, empty.size(), "no skin, no cape and no cosmetics: not in the directory");
 	}
+
+	static final String C = "cc".repeat(32);
+
+	static String withCape(String k) {
+		return "{\"epoch\":1,\"rev\":2,\"full\":true,\"textureBase\":\"https://x/t/\",\"entries\":["
+				+ "{\"n\":\"Alice\",\"m\":\"default\",\"s\":null,\"c\":\"" + C + "\",\"u\":null,\"r\":1,\"k\":" + k + "},"
+				+ "{\"n\":\"Prem\",\"m\":\"default\",\"s\":null,\"c\":null,\"u\":\"" + PREMIUM + "\",\"r\":2,\"hp\":true,\"k\":" + k + "}]}";
+	}
+
+	@Test
+	void backItemsHideTheCape() {
+		SkinDirectory d = new SkinDirectory();
+		SkinSync.applySnapshot(d, withCape("[{\"i\":\"angel-wings\",\"s\":\"back\",\"m\":\"" + M + "\",\"x\":\"" + X + "\"}]"));
+		assertTrue(d.cosmetics("Alice", offline("Alice")).get(0).isBackItem());
+		SkinOverride o = d.find("Alice", offline("Alice"));
+		assertNotNull(o);
+		assertTrue(o.hideCape);
+		assertNull(o.capeUrl, "the Native cloak is not shown under wings");
+		// Textures.pack drops a CAPE the profile already had (e.g. a Mojang cape)
+		String existing = java.util.Base64.getEncoder().encodeToString("{\"textures\":{\"CAPE\":{\"url\":\"https://textures.minecraft.net/texture/abc\"}}}".getBytes(StandardCharsets.UTF_8));
+		String packed = new String(java.util.Base64.getDecoder().decode(Textures.pack(existing, o, offline("Alice"), "Alice")), StandardCharsets.UTF_8);
+		assertFalse(packed.contains("CAPE"), packed);
+	}
+
+	@Test
+	void otherSlotsKeepTheCape() {
+		SkinDirectory d = new SkinDirectory();
+		SkinSync.applySnapshot(d, withCape("[{\"i\":\"top-hat\",\"s\":\"hats\",\"m\":\"" + M + "\",\"x\":\"" + X + "\"}]"));
+		SkinOverride o = d.find("Alice", offline("Alice"));
+		assertFalse(o.hideCape);
+		assertEquals("https://x/t/" + C, o.capeUrl);
+	}
 }

@@ -82,6 +82,16 @@ public final class SkinEntry {
 		return capeStripHash != null;
 	}
 
+	/** True when a back item (wings, jetpack, backpack) is worn: it replaces the cape. */
+	public boolean hidesCape() {
+		for (xyz.nativelaunch.cosmetic.CosmeticRef ref : cosmetics) {
+			if (ref.isBackItem()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public boolean isEmpty() {
 		return skinHash == null && capeHash == null && premiumCapeHash == null && cosmetics.isEmpty();
 	}

@@ -79,6 +79,9 @@ public abstract class LegacyTexturesMixin {
 			if (override.capeUrl != null) {
 				merged.put(Type.CAPE, new MinecraftProfileTexture(override.capeUrl, Collections.<String, String>emptyMap()));
 			}
+			if (override.hideCape) {
+				merged.remove(Type.CAPE); // a back cosmetic (wings, jetpack...) takes the cape's place
+			}
 			cir.setReturnValue(merged);
 		} catch (Throwable t) {
 			Log.warn("Skin hook failed: {}", t.toString());
