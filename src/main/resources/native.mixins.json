@@ -6,7 +6,11 @@
   "plugin": "xyz.nativelaunch.mixin.NativeMixinPlugin",
   "mixins": [
     "LegacyTexturesMixin",
-    "PackedTexturesMixin"
+    "PackedTexturesMixin",
+    "NameplateMixin",
+    "NameplateMixin26",
+    "TabListMixin",
+    "TabListMixin26"
   ],
   "injectors": {
     "defaultRequire": 0

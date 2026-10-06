@@ -209,6 +209,35 @@ public final class SkinDirectory {
 	}
 
 	/**
+	 * Whether this player plays from Native (has a published look, or is the connected account). Same identity
+	 * rule as {@link #find}: premium UUIDs only match the account linked to exactly that UUID, offline (version 3)
+	 * players match by name.
+	 */
+	public boolean has(String name, UUID id) {
+		if (name == null || name.isEmpty()) {
+			return false;
+		}
+		SkinEntry mine = local;
+		if (mine != null && key(mine.name).equals(key(name)) && (id == null || id.version() == 3)) {
+			return true;
+		}
+		AccountInfo account = NativeState.get().account();
+		if (account != null && account.name != null && key(account.name).equals(key(name))
+				&& (id == null || id.version() == 3 || (account.uuid != null && account.uuid.replace("-", "").equalsIgnoreCase(id.toString().replace("-", ""))))) {
+			return true;
+		}
+		SkinEntry entry = entries.get(key(name));
+		if (entry == null) {
+			return false;
+		}
+		if (id != null && id.version() != 3) {
+			String linked = entry.minecraftUuid;
+			return linked != null && linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT));
+		}
+		return true;
+	}
+
+	/**
 	 * The 3D cosmetics a player wears (never null). Same rule as {@link #find}: premium UUIDs only match the
 	 * account linked to exactly that UUID, offline (version 3) players match by name.
 	 */
