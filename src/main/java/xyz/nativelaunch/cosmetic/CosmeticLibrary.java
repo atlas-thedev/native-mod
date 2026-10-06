@@ -45,7 +45,7 @@ public final class CosmeticLibrary {
 	}
 
 	private static final Map<String, Slot> SLOTS = new ConcurrentHashMap<String, Slot>();
-	private static final ExecutorService WORKER = Executors.newSingleThreadExecutor(new ThreadFactory() {
+	private static final ExecutorService WORKER = Executors.newFixedThreadPool(3, new ThreadFactory() {
 		@Override
 		public Thread newThread(Runnable r) {
 			Thread t = new Thread(r, "Native cosmetics");
@@ -114,6 +114,19 @@ public final class CosmeticLibrary {
 			}
 		});
 		return null;
+	}
+
+	/**
+	 * Warms the cosmetics players wear (from the launcher's shared disk cache, or the network when it isn't
+	 * there yet) so they are ready the moment a player comes into view. Cheap: one request per distinct cosmetic.
+	 */
+	public static void preload(java.util.List<CosmeticRef> refs, String textureBase) {
+		if (refs == null || refs.isEmpty()) {
+			return;
+		}
+		for (CosmeticRef ref : refs) {
+			get(ref, textureBase);
+		}
 	}
 
 	/** Test hook: put a ready cosmetic in place. */

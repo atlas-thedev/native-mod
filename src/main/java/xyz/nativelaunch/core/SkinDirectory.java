@@ -76,6 +76,9 @@ public final class SkinDirectory {
 		}
 		this.textureBase = base == null ? "" : base;
 		this.entries = next;
+		for (SkinEntry entry : next.values()) {
+			warm(entry);
+		}
 		this.epoch = newEpoch;
 		this.revision = newRevision;
 		for (Runnable listener : resetListeners) {
@@ -96,6 +99,7 @@ public final class SkinDirectory {
 			entries.remove(key(entry.name));
 		} else {
 			entries.put(key(entry.name), entry);
+			warm(entry);
 		}
 		if (newRevision > revision) {
 			revision = newRevision;
@@ -106,6 +110,17 @@ public final class SkinDirectory {
 			} catch (RuntimeException ignored) {
 				// a listener must never break the sync
 			}
+		}
+	}
+
+	/** Starts loading a player's cosmetics in the background (shared launcher cache first). */
+	private void warm(SkinEntry entry) {
+		try {
+			if (entry != null && entry.cosmetics != null && !entry.cosmetics.isEmpty()) {
+				xyz.nativelaunch.cosmetic.CosmeticLibrary.preload(entry.cosmetics, textureBase);
+			}
+		} catch (Throwable ignored) {
+			// warming is best-effort and must never break the sync
 		}
 	}
 
