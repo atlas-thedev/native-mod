@@ -192,7 +192,7 @@ public final class SkinSync {
 
 	private static final java.util.regex.Pattern HASH = java.util.regex.Pattern.compile("^[a-f0-9]{64}$");
 
-	/** "k": [{"i": item id, "m": model hash, "x": texture hash}] - the 3D cosmetics a player wears. */
+	/** "k": [{"i": item id, "s": slot, "m": model hash, "x": texture hash}] - the 3D cosmetics a player wears. */
 	static List<xyz.nativelaunch.cosmetic.CosmeticRef> cosmetics(JsonObject o) {
 		List<xyz.nativelaunch.cosmetic.CosmeticRef> out = new ArrayList<xyz.nativelaunch.cosmetic.CosmeticRef>();
 		try {
@@ -210,7 +210,8 @@ public final class SkinSync {
 					continue;
 				}
 				String id = nullable(k, "i");
-				out.add(new xyz.nativelaunch.cosmetic.CosmeticRef(id == null ? model.substring(0, 12) : id, model, texture));
+				String slot = nullable(k, "s");
+				out.add(new xyz.nativelaunch.cosmetic.CosmeticRef(id == null ? model.substring(0, 12) : id, model, texture, slot));
 			}
 		} catch (RuntimeException ignored) {
 			// a malformed list wears nothing

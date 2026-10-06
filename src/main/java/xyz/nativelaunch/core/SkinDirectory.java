@@ -170,7 +170,12 @@ public final class SkinDirectory {
 		if (base.isEmpty()) {
 			return null;
 		}
+		boolean hideCape = entry.hidesCape();
 		if (premiumSession && entry.hasPremium && id != null && id.version() != 3) {
+			if (hideCape) {
+				// keep the Mojang skin, drop every cape (Native's and Mojang's) under the back item
+				return new SkinOverride(null, null, false, null, 0, 0, true);
+			}
 			if (entry.premiumCapeHash == null) {
 				return null;
 			}
@@ -184,7 +189,8 @@ public final class SkinDirectory {
 				entry.slim,
 				entry.capeStripHash == null ? null : base + entry.capeStripHash,
 				entry.capeFrames,
-				entry.capeFps);
+				entry.capeFps,
+				hideCape);
 	}
 
 	/**

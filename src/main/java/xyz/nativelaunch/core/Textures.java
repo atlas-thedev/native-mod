@@ -101,6 +101,9 @@ public final class Textures {
 			}
 			textures.add("CAPE", cape);
 		}
+		if (override.hideCape) {
+			textures.remove("CAPE");
+		}
 		root.addProperty("timestamp", override.stamp);
 		if (id != null) {
 			root.addProperty("profileId", id.toString().replace("-", ""));
