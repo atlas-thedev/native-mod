@@ -89,4 +89,15 @@ class CosmeticDirectoryTest {
 		assertFalse(o.hideCape);
 		assertEquals("https://x/t/" + C, o.capeUrl);
 	}
+
+	@Test
+	void backItemsHideTheCapeOnYourOwnOfflineLook() {
+		SkinDirectory d = new SkinDirectory();
+		SkinSync.applySnapshot(d, withCape("[{\"i\":\"explorer-backpack\",\"s\":\"back\",\"m\":\"" + M + "\",\"x\":\"" + X + "\"}]"));
+		d.setLocal(new SkinEntry("Alice", false, null, C, null, 1));
+		SkinOverride o = d.find("Alice", offline("Alice"));
+		assertNotNull(o);
+		assertTrue(o.hideCape, "your own cloak hides under a backpack too");
+		assertNull(o.capeUrl);
+	}
 }

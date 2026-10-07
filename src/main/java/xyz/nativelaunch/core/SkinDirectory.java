@@ -166,10 +166,15 @@ public final class SkinDirectory {
 		SkinEntry mine = local;
 		if (mine != null && key(mine.name).equals(key(name)) && !premiumSession && (id == null || id.version() == 3)) {
 			String base = textureBase.isEmpty() ? NativeState.DEFAULT_API + "/csl/textures/" : textureBase;
+			// wings / backpacks worn on this name (from the launcher's look or the directory) replace the cape here too
+			boolean hide = mine.hidesCape();
+			for (xyz.nativelaunch.cosmetic.CosmeticRef ref : cosmetics(name, id)) {
+				hide |= ref.isBackItem();
+			}
 			return new SkinOverride(
 					mine.skinHash == null ? null : base + mine.skinHash,
 					mine.capeHash == null ? null : base + mine.capeHash,
-					mine.slim);
+					mine.slim, null, 0, 0, hide);
 		}
 		SkinEntry entry = entries.get(key(name));
 		if (entry == null) {
