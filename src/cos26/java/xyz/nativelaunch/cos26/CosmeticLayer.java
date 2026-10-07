@@ -211,10 +211,12 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
 				}
 				baked.parts[part.index] = new ModelPart(cubes, Collections.<String, ModelPart>emptyMap());
 			}
+			// 26.x renamed the layers: entityCutout is the no-cull one (the culled one is entityCutoutCull)
 			baked.cutout = RenderTypes.entityCutout(id);
 			baked.translucent = RenderTypes.entityTranslucent(id);
 			baked.glow = RenderTypes.eyes(id);
 			cosmetic.baked = baked;
+			cosmetic.release();
 			return baked;
 		} catch (Throwable t) {
 			cosmetic.baked = Boolean.FALSE;
