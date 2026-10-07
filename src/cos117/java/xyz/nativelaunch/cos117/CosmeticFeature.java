@@ -142,7 +142,7 @@ public final class CosmeticFeature extends FeatureRenderer<AbstractClientPlayerE
 	}
 
 	private static Baked bake(CosmeticLibrary.Loaded cosmetic) {
-		Object existing = cosmetic.baked;
+		Object existing = cosmetic.baked();
 		if (existing instanceof Baked) {
 			return (Baked) existing;
 		}
@@ -151,7 +151,7 @@ public final class CosmeticFeature extends FeatureRenderer<AbstractClientPlayerE
 		}
 		try {
 			Identifier id = Identifier.tryParse("native:cosmetic/" + cosmetic.ref.textureHash);
-			NativeImage image = NativeImage.read(new ByteArrayInputStream(cosmetic.png));
+			NativeImage image = NativeImage.read(new ByteArrayInputStream(cosmetic.png()));
 			MinecraftClient.getInstance().getTextureManager().registerTexture(id, new NativeImageBackedTexture(image));
 			CosmeticModel model = cosmetic.model;
 			Baked baked = new Baked();
@@ -166,11 +166,11 @@ public final class CosmeticFeature extends FeatureRenderer<AbstractClientPlayerE
 			baked.cutout = RenderLayer.getEntityCutoutNoCull(id);
 			baked.translucent = RenderLayer.getEntityTranslucent(id);
 			baked.glow = RenderLayer.getEyes(id);
-			cosmetic.baked = baked;
+			cosmetic.setBaked(baked);
 			cosmetic.release();
 			return baked;
 		} catch (Throwable t) {
-			cosmetic.baked = Boolean.FALSE;
+			cosmetic.setBaked(Boolean.FALSE);
 			xyz.nativelaunch.core.Log.warn("Cosmetic {} could not be prepared ({}).", cosmetic.ref.id, t.toString());
 			return null;
 		}

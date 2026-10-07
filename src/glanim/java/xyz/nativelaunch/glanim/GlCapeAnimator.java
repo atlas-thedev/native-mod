@@ -65,6 +65,8 @@ public final class GlCapeAnimator {
 
 	/** Render thread only. */
 	private static final Map<String, Strip> STRIPS = new HashMap<String, Strip>();
+	/** Render thread only: the `wanted` map STRIPS was last pruned against. */
+	private static Map<String, Wanted> pruned;
 	private static final Map<Object, Boolean> MISMATCHED = new WeakHashMap<Object, Boolean>();
 
 	private static volatile boolean started;
@@ -197,6 +199,15 @@ public final class GlCapeAnimator {
 			}
 		}
 		wanted = next;
+		// strips of players who left (or changed cloaks) are dropped instead of piling up (each can be up to 16 MB)
+		java.util.Set<String> live = new java.util.HashSet<String>();
+		for (Wanted w : next.values()) {
+			live.add(w.stripHash);
+		}
+		for (SkinEntry entry : NativeState.get().directory().animated()) {
+			live.add(entry.capeStripHash);
+		}
+		BYTES.keySet().retainAll(live);
 	}
 
 	private static String textureHash(String url) {
@@ -255,6 +266,15 @@ public final class GlCapeAnimator {
 	/** Render thread: write the current frame of every animated cape that is loaded. */
 	private static void apply(Object minecraft) throws ReflectiveOperationException {
 		Map<String, Wanted> current = wanted;
+		if (current != pruned) {
+			// decoded strips are only kept for capes that still animate
+			pruned = current;
+			java.util.Set<String> live = new java.util.HashSet<String>();
+			for (Wanted w : current.values()) {
+				live.add(w.stripHash);
+			}
+			STRIPS.keySet().retainAll(live);
+		}
 		if (current.isEmpty()) {
 			return;
 		}

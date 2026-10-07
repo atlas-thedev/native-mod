@@ -75,6 +75,20 @@ class CosmeticModelTest {
 	}
 
 	@Test
+	void sharedCosmeticKeepsEachPlayersSide() {
+		CosmeticModel m = CosmeticModel.parse(CAP);
+		CosmeticLibrary.Loaded left = CosmeticLibrary.create(new CosmeticRef("balloon", "a", "b", "balloon", 1), m, new byte[] { 1 });
+		CosmeticLibrary.Loaded right = left.as(new CosmeticRef("balloon", "a", "b", "balloon", 2));
+		assertEquals(1, left.ref.side);
+		assertEquals(2, right.ref.side, "another player's side is kept");
+		assertSame(right, left.as(new CosmeticRef("balloon", "a", "b", "balloon", 2)), "views are reused");
+		right.setBaked("gpu");
+		assertEquals("gpu", left.baked(), "the baked asset is shared");
+		left.release();
+		assertNull(right.png(), "the texture is released for everyone");
+	}
+
+	@Test
 	void rendererHidesWithArmorAndWalksChildren() {
 		CosmeticModel m = CosmeticModel.parse(CAP);
 		CosmeticLibrary.Loaded loaded = CosmeticLibrary.create(new CosmeticRef("propeller", "a", "b"), m, new byte[0]);
