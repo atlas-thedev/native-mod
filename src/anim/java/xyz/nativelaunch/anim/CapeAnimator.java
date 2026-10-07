@@ -79,11 +79,15 @@ public final class CapeAnimator {
 			return;
 		}
 		List<Wanted> wanted = new ArrayList<>();
+		java.util.Set<String> live = new java.util.HashSet<>();
 		for (SkinEntry entry : NativeState.get().directory().animated()) {
+			live.add(entry.capeStripHash);
 			if (fetch(base, entry.capeStripHash)) {
 				wanted.add(new Wanted(textureId(base + entry.capeHash), entry.capeStripHash, entry.capeFrames, entry.capeFps));
 			}
 		}
+		// strips of players who left (or changed cloaks) are dropped instead of piling up (each can be up to 16 MB)
+		STRIPS.keySet().retainAll(live);
 		Minecraft minecraft = Minecraft.getInstance();
 		if (wanted.isEmpty() || minecraft == null || queued) {
 			return;

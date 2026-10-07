@@ -188,7 +188,7 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
 	}
 
 	private static Baked bake(CosmeticLibrary.Loaded cosmetic) {
-		Object existing = cosmetic.baked;
+		Object existing = cosmetic.baked();
 		if (existing instanceof Baked) {
 			return (Baked) existing;
 		}
@@ -197,7 +197,7 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
 		}
 		try {
 			final Identifier id = Identifier.tryParse("native:cosmetic/" + cosmetic.ref.textureHash);
-			NativeImage image = NativeImage.read(new ByteArrayInputStream(cosmetic.png));
+			NativeImage image = NativeImage.read(new ByteArrayInputStream(cosmetic.png()));
 			Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(id::toString, image));
 			CosmeticModel model = cosmetic.model;
 			Baked baked = new Baked();
@@ -215,11 +215,11 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
 			baked.cutout = RenderTypes.entityCutout(id);
 			baked.translucent = RenderTypes.entityTranslucent(id);
 			baked.glow = RenderTypes.eyes(id);
-			cosmetic.baked = baked;
+			cosmetic.setBaked(baked);
 			cosmetic.release();
 			return baked;
 		} catch (Throwable t) {
-			cosmetic.baked = Boolean.FALSE;
+			cosmetic.setBaked(Boolean.FALSE);
 			xyz.nativelaunch.core.Log.warn("Cosmetic {} could not be prepared ({}).", cosmetic.ref.id, t.toString());
 			return null;
 		}

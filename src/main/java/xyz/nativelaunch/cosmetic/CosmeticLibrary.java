@@ -24,23 +24,71 @@ public final class CosmeticLibrary {
 	static final int MAX_TEXTURE_BYTES = 2 * 1024 * 1024;
 	private static final long RETRY_MS = 60_000;
 
-	/** A cosmetic ready to draw. {@link #baked} belongs to the running version's renderer. */
+	/**
+	 * A cosmetic ready to draw, as one player wears it. The model, texture and baked render asset are shared by
+	 * everyone wearing the same files; {@link #ref} is this player's own (its id and the side they picked), so two
+	 * players can hold the same balloon in different hands.
+	 */
 	public static final class Loaded {
 		public final CosmeticRef ref;
 		public final CosmeticModel model;
-		/** The texture file; released (null) once the running renderer has uploaded it, see {@link #release()}. */
-		public volatile byte[] png;
-		public volatile Object baked;
+		private final Asset asset;
+
+		/** What every wearer shares: the texture until it is on the GPU, then the running renderer's baked asset. */
+		static final class Asset {
+			volatile byte[] png;
+			volatile Object baked;
+			/** Per-player views by ref (side / id), so worn() doesn't allocate every frame. */
+			final Map<CosmeticRef, Loaded> views = new ConcurrentHashMap<CosmeticRef, Loaded>();
+		}
 
 		Loaded(CosmeticRef ref, CosmeticModel model, byte[] png) {
 			this.ref = ref;
 			this.model = model;
-			this.png = png;
+			this.asset = new Asset();
+			this.asset.png = png;
+			this.asset.views.put(ref, this);
+		}
+
+		private Loaded(CosmeticRef ref, CosmeticModel model, Asset asset) {
+			this.ref = ref;
+			this.model = model;
+			this.asset = asset;
+		}
+
+		/** The texture file; null once the running renderer has uploaded it, see {@link #release()}. */
+		public byte[] png() {
+			return asset.png;
+		}
+
+		/** The running version's baked render asset (shared by every wearer), or null before it is baked. */
+		public Object baked() {
+			return asset.baked;
+		}
+
+		public void setBaked(Object baked) {
+			asset.baked = baked;
 		}
 
 		/** Called by a renderer once the texture lives on the GPU: the PNG bytes are no longer needed in memory. */
 		public void release() {
-			png = null;
+			asset.png = null;
+		}
+
+		/** This cosmetic as worn through `other` (same files, that player's id and side). */
+		public Loaded as(CosmeticRef other) {
+			if (other == null || other == ref) {
+				return this;
+			}
+			Loaded view = asset.views.get(other);
+			if (view == null) {
+				if (asset.views.size() > 64) {
+					asset.views.clear(); // ids/sides are few; never let this grow without bound
+				}
+				view = new Loaded(other, model, asset);
+				asset.views.put(other, view);
+			}
+			return view;
 		}
 	}
 
@@ -75,7 +123,7 @@ public final class CosmeticLibrary {
 		for (CosmeticRef ref : refs) {
 			Loaded loaded = get(ref, directory.textureBase());
 			if (loaded != null) {
-				out.add(loaded);
+				out.add(loaded.as(ref)); // the cache is shared by everyone wearing these files: draw with this player's side
 			}
 		}
 		return out;
