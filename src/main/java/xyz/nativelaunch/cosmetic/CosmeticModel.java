@@ -321,13 +321,14 @@ public final class CosmeticModel {
 	}
 
 	private static Slot slot(String name) {
-		if ("lefthand".equals(name)) {
+		name = name.toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
+		if ("lefthand".equals(name) || "offhand".equals(name)) {
 			return Slot.LEFT_HAND;
 		}
-		if ("righthand".equals(name)) {
+		if ("righthand".equals(name) || "mainhand".equals(name)) {
 			return Slot.RIGHT_HAND;
 		}
-		if ("head".equals(name)) {
+		if ("head".equals(name) || "helmet".equals(name)) {
 			return Slot.HEAD;
 		}
 		if ("chest".equals(name)) {
@@ -336,7 +337,7 @@ public final class CosmeticModel {
 		if ("legs".equals(name)) {
 			return Slot.LEGS;
 		}
-		if ("feet".equals(name)) {
+		if ("feet".equals(name) || "boots".equals(name)) {
 			return Slot.FEET;
 		}
 		return Slot.NONE;
@@ -365,7 +366,7 @@ public final class CosmeticModel {
 		float[] out = fallback.clone();
 		for (int i = 0; i < n && i < array.size(); i++) {
 			float value = array.get(i).getAsFloat();
-			out[i] = Float.isNaN(value) || Float.isInfinite(value) ? 0 : value;
+			out[i] = Float.isNaN(value) || Float.isInfinite(value) ? fallback[i] : value;
 		}
 		return out;
 	}

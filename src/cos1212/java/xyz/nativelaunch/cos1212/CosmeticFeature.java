@@ -180,6 +180,7 @@ public final class CosmeticFeature extends FeatureRenderer<PlayerEntityRenderSta
 			baked.translucent = RenderLayer.getEntityTranslucent(id);
 			baked.glow = RenderLayer.getEyes(id);
 			cosmetic.baked = baked;
+			cosmetic.release();
 			return baked;
 		} catch (Throwable t) {
 			cosmetic.baked = Boolean.FALSE;

@@ -28,13 +28,19 @@ public final class CosmeticLibrary {
 	public static final class Loaded {
 		public final CosmeticRef ref;
 		public final CosmeticModel model;
-		public final byte[] png;
+		/** The texture file; released (null) once the running renderer has uploaded it, see {@link #release()}. */
+		public volatile byte[] png;
 		public volatile Object baked;
 
 		Loaded(CosmeticRef ref, CosmeticModel model, byte[] png) {
 			this.ref = ref;
 			this.model = model;
 			this.png = png;
+		}
+
+		/** Called by a renderer once the texture lives on the GPU: the PNG bytes are no longer needed in memory. */
+		public void release() {
+			png = null;
 		}
 	}
 
@@ -94,7 +100,7 @@ public final class CosmeticLibrary {
 		}
 		slot.loading = true;
 		final Slot target = slot;
-		final String base = textureBase == null || textureBase.isEmpty() ? NativeState.DEFAULT_API + "/csl/textures/" : textureBase;
+		final String base = textureBase == null || textureBase.isEmpty() ? NativeState.get().api() + "/csl/textures/" : textureBase;
 		WORKER.execute(new Runnable() {
 			@Override
 			public void run() {

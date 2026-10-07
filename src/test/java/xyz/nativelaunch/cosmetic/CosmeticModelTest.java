@@ -128,4 +128,23 @@ class CosmeticModelTest {
 		assertEquals(CosmeticModel.Slot.LEFT_HAND, m.roots.get(0).armorSlot);
 		assertEquals(CosmeticModel.Slot.RIGHT_HAND, m.roots.get(1).armorSlot);
 	}
+
+	@Test
+	void armorSlotNamesAreNormalisedLikeAttachPoints() {
+		CosmeticModel m = CosmeticModel.parse("{\"parts\":[{\"armor\":{\"slot\":\"Left_Hand\"}},{\"armor\":{\"slot\":\"MAINHAND\"}},{\"armor\":{\"slot\":\"helmet\"}},{\"armor\":{\"slot\":\"boots\"}},{\"armor\":{\"slot\":\"hand\"}}]}");
+		assertEquals(CosmeticModel.Slot.LEFT_HAND, m.roots.get(0).armorSlot);
+		assertEquals(CosmeticModel.Slot.RIGHT_HAND, m.roots.get(1).armorSlot);
+		assertEquals(CosmeticModel.Slot.HEAD, m.roots.get(2).armorSlot);
+		assertEquals(CosmeticModel.Slot.FEET, m.roots.get(3).armorSlot);
+		assertEquals(CosmeticModel.Slot.NONE, m.roots.get(4).armorSlot);
+	}
+
+	@Test
+	void nonFiniteNumbersFallBackToDefaults() {
+		CosmeticModel m = CosmeticModel.parse("{\"parts\":[{\"cubes\":[{\"size\":[NaN,2,Infinity]}]}]}");
+		CosmeticModel.Cube c = m.roots.get(0).cubes.get(0);
+		assertEquals(1f, c.w);
+		assertEquals(2f, c.h);
+		assertEquals(1f, c.d);
+	}
 }
