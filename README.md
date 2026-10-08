@@ -3,7 +3,7 @@
 Shows every Native player's **skin and cape in real time** on Minecraft **1.16 → 26.3** (Fabric / Quilt).
 No Fabric API needed, one jar for every version.
 
-* Fetches the live skin directory from `https://api.nativelaunch.xyz` (snapshot + server-sent events), so skin and
+* Fetches the live skin directory from `https://api.playnative.fun` (snapshot + server-sent events), so skin and
   cape changes show up for everyone without a restart of the server or a file download per player.
 * Works by hooking the game's own authlib session service, so skins/capes appear everywhere the game normally
   shows them (tab list, nametag, player model, inventory).

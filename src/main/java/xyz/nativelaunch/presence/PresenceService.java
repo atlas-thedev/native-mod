@@ -30,7 +30,7 @@ import java.util.Map;
  */
 public final class PresenceService implements Runnable {
 	static final String CLIENT_ID = "1465139441457827972";
-	private static final String SITE = "https://nativelaunch.xyz";
+	private static final String SITE = "https://playnative.fun";
 	private static final long TICK_MS = 2000;
 	private static final long PING_MS = 60_000;
 	private static final long DISCORD_RETRY_MS = 15_000;

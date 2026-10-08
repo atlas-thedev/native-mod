@@ -61,7 +61,7 @@ class PresenceTest {
 
 	@Test
 	void buildsMultiplayerActivity(@TempDir Path game) {
-		PresenceService service = new PresenceService(game, "https://api.nativelaunch.xyz", null, true);
+		PresenceService service = new PresenceService(game, "https://api.playnative.fun", null, true);
 		GameProbe.Snapshot s = new GameProbe.Snapshot();
 		s.kind = GameProbe.Kind.MULTIPLAYER;
 		s.address = "mc.hypixel.net";
@@ -80,7 +80,7 @@ class PresenceTest {
 
 	@Test
 	void buildsSingleplayerActivity(@TempDir Path game) {
-		PresenceService service = new PresenceService(game, "https://api.nativelaunch.xyz", null, true);
+		PresenceService service = new PresenceService(game, "https://api.playnative.fun", null, true);
 		GameProbe.Snapshot s = new GameProbe.Snapshot();
 		s.kind = GameProbe.Kind.SINGLEPLAYER;
 		s.worldName = "Survival";
