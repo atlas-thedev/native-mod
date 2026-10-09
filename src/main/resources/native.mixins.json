@@ -10,7 +10,9 @@
     "NameplateMixin",
     "NameplateMixin26",
     "TabListMixin",
-    "TabListMixin26"
+    "TabListMixin26",
+    "UiFrameMixin",
+    "ScreenSwapMixin"
   ],
   "injectors": {
     "defaultRequire": 0

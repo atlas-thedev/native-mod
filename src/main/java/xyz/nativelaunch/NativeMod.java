@@ -18,6 +18,31 @@ public final class NativeMod implements ClientModInitializer {
 		startCapeAnimator();
 		startCosmetics();
 		startPresence(gameDir);
+		startUi(gameDir);
+	}
+
+	/** Custom title screen + in-game Relay chat (Minecraft 1.16 - 1.21.11 for now). */
+	private static void startUi(java.nio.file.Path gameDir) {
+		try {
+			Class.forName("net.minecraft.class_310", false, NativeMod.class.getClassLoader());
+		} catch (Throwable t) {
+			Log.info("Native UI is not available on this Minecraft version yet.");
+			return;
+		}
+		try {
+			String version = minecraftVersion();
+			Object bridge = Class.forName("xyz.nativelaunch.uimc.IntermediaryMc").getConstructor(String.class).newInstance(version);
+			xyz.nativelaunch.ui.UiRuntime.install((xyz.nativelaunch.ui.McBridge) bridge, gameDir, version);
+		} catch (Throwable t) {
+			Log.warn("Native UI is unavailable ({}).", t.toString());
+			return;
+		}
+		try {
+			Handoff handoff = Handoff.read(gameDir);
+			xyz.nativelaunch.relay.RelayClient.start(NativeState.get().api(), handoff == null ? null : handoff.ticket);
+		} catch (Throwable t) {
+			Log.warn("Relay chat is unavailable ({}).", t.toString());
+		}
 	}
 
 	/** Discord Rich Presence + the launcher's Relay status (server, world, player count). */

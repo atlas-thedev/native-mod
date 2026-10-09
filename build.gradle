@@ -38,6 +38,11 @@ dependencies {
 	compileOnly "net.fabricmc:sponge-mixin:${sponge_mixin_version}"
 	compileOnly "com.google.code.gson:gson:${gson_version}"
 	compileOnly "org.apache.logging.log4j:log4j-api:${log4j_version}"
+	// Native UI (title screen + in-game Relay chat): own OpenGL renderer, STB font rasterizer, GLFW input
+	compileOnly "org.lwjgl:lwjgl:${lwjgl_version}"
+	compileOnly "org.lwjgl:lwjgl-opengl:${lwjgl_version}"
+	compileOnly "org.lwjgl:lwjgl-stb:${lwjgl_version}"
+	compileOnly "org.lwjgl:lwjgl-glfw:${lwjgl_version}"
 
 	legacyCompileOnly "com.mojang:authlib:${authlib_legacy_version}@jar"
 	legacyCompileOnly "com.google.guava:guava:${guava_version}"
@@ -261,6 +266,19 @@ tasks.named('compileCos26Java') {
 	options.release = 25
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// Native UI bridge for Minecraft 1.16 - 1.21.11. Every member it touches has had the same intermediary name
+// and descriptor across all of those releases (checked with javap), so it is compiled against tiny stub
+// classes carrying those names (src/mcstub, never packaged) instead of a real Minecraft jar.
+// ---------------------------------------------------------------------------------------------------------
+sourceSets {
+	mcstub {
+	}
+	uimc {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + sourceSets.mcstub.output
+	}
+}
+
 // Tests run on the build JDK and use newer language features.
 tasks.named('compileTestJava') {
 	options.release = 17
@@ -285,6 +303,7 @@ jar {
 	from sourceSets.anim.output
 	from sourceSets.glanim.output
 	from sourceSets.cos26.output
+	from sourceSets.uimc.output
 	cosmeticEras.each { era ->
 		dependsOn "${era.name}Remap"
 		from(zipTree(layout.buildDirectory.file("cosmetics/${era.name}-intermediary.jar"))) {
@@ -308,4 +327,29 @@ tasks.register('releaseAssets') {
 	doLast {
 		println "Built ${jar.archiveFile.get().asFile.name}"
 	}
+}
+
+// Native UI artwork and fonts live in the repo as base64 text (src/main/uiassets/*.b64) and are decoded into
+// the jar's assets/native/ui/ at build time.
+def uiAssetsOut = layout.buildDirectory.dir('generated/uiassets').get().asFile
+tasks.register('decodeUiAssets') {
+	def src = file('src/main/uiassets')
+	inputs.dir(src)
+	outputs.dir(uiAssetsOut)
+	doLast {
+		def target = new File(uiAssetsOut, 'assets/native/ui')
+		target.deleteDir()
+		target.mkdirs()
+		src.eachFile { f ->
+			if (f.name.endsWith('.b64')) {
+				new File(target, f.name - '.b64').bytes = Base64.mimeDecoder.decode(f.text)
+			} else {
+				new File(target, f.name).bytes = f.bytes
+			}
+		}
+	}
+}
+processResources {
+	dependsOn 'decodeUiAssets'
+	from(uiAssetsOut)
 }
