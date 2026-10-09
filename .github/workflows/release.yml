@@ -11,7 +11,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+# This repo is private; builds are published to the public releases-only repo below, which is
+# where the launcher downloads the mod from. Needs the RELEASES_TOKEN secret (fine-grained token
+# with Contents: read and write on atlas-thedev/native-mod-releases).
+env:
+  RELEASES_REPO: atlas-thedev/native-mod-releases
 
 jobs:
   check:
@@ -31,7 +37,7 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match gradle.properties version $file"; exit 1
           fi
           echo "version=$file" >> "$GITHUB_OUTPUT"
-          if gh release view "v$file" >/dev/null 2>&1; then
+          if gh release view "v$file" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"; echo "Release v$file already exists - nothing to do."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -54,6 +60,8 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: native-client-jar
@@ -61,12 +69,15 @@ jobs:
       - name: Write manifest
         run: |
           python3 scripts/make-manifest.py "dist/native-client-${{ needs.check.outputs.version }}.jar" \
-            "${{ needs.check.outputs.version }}" "${{ github.repository }}" dist/manifest.json
+            "${{ needs.check.outputs.version }}" "$RELEASES_REPO" dist/manifest.json
       - name: Create release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           v="${{ needs.check.outputs.version }}"
-          if gh release view "v$v" >/dev/null 2>&1; then echo "v$v was published by a parallel run."; exit 0; fi
-          gh release create "v$v" "dist/native-client-$v.jar" dist/manifest.json \
-            --title "Native Client $v" --generate-notes --latest --target "$GITHUB_SHA"
+          if [ -z "$GH_TOKEN" ]; then echo "::error::RELEASES_TOKEN secret is not set"; exit 1; fi
+          if gh release view "v$v" --repo "$RELEASES_REPO" >/dev/null 2>&1; then echo "v$v was published by a parallel run."; exit 0; fi
+          prev="$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)"
+          { echo "## What's changed"; git log --no-merges --pretty='* %s' ${prev:+$prev..}HEAD | head -n 40; } > notes.md
+          gh release create "v$v" "dist/native-client-$v.jar" dist/manifest.json --repo "$RELEASES_REPO" \
+            --title "Native Client $v" --notes-file notes.md --latest
