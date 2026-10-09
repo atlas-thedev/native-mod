@@ -37,7 +37,7 @@ public final class RelayClient {
 
 	private final String api, ticket;
 	public volatile State state = State.CONNECTING;
-	public volatile String meId, meName;
+	public volatile String meId, meName, meSkin;
 	public volatile List<Model.Friend> friends = Collections.emptyList();
 	public volatile List<Model.Group> groups = Collections.emptyList();
 	public volatile int requests;
@@ -315,6 +315,7 @@ public final class RelayClient {
 			if (account != null) {
 				meId = str(account, "id");
 				meName = str(account, "name");
+				meSkin = skinRef(str(account, "skin"), str(account, "minecraftUuid"));
 			}
 			List<Model.Friend> list = new ArrayList<Model.Friend>();
 			JsonArray arr = o.getAsJsonArray("friends");
@@ -322,7 +323,7 @@ public final class RelayClient {
 				for (JsonElement e : arr) {
 					JsonObject f = e.getAsJsonObject();
 					list.add(new Model.Friend(str(f, "id"), str(f, "name"), str(f, "nickname"), str(f, "status"), str(f, "activity"),
-							str(f, "serverAddress"), str(f, "skin"), bool(f, "online"), num(f, "unread")));
+							str(f, "serverAddress"), skinRef(str(f, "skin"), str(f, "mcUuid")), bool(f, "online"), num(f, "unread")));
 				}
 			}
 			sortFriends(list);
@@ -733,6 +734,14 @@ public final class RelayClient {
 		} catch (Exception e) {
 			return 0;
 		}
+	}
+
+	/** Native skin hash, else "mj:&lt;uuid&gt;" for a linked Mojang account (see Avatars), else null. */
+	static String skinRef(String nativeSkin, String mojangUuid) {
+		if (nativeSkin != null && !nativeSkin.isEmpty()) {
+			return nativeSkin;
+		}
+		return mojangUuid == null || mojangUuid.isEmpty() ? null : "mj:" + mojangUuid.replace("-", "").toLowerCase(java.util.Locale.ROOT);
 	}
 
 	static long lng(JsonObject o, String k) {

@@ -40,10 +40,16 @@ public final class Avatars {
 		if (f != null) {
 			return f;
 		}
-		if (requested.putIfAbsent(skin, Boolean.TRUE) == null && skin.matches("[a-f0-9]{64}")) {
+		boolean mojang = skin.startsWith("mj:") && skin.substring(3).matches("[a-f0-9]{32}");
+		if (requested.putIfAbsent(skin, Boolean.TRUE) == null && (mojang || skin.matches("[a-f0-9]{64}"))) {
 			Thread t = new Thread(() -> {
 				try {
-					byte[] png = Http.getBytes(api + "/csl/textures/" + skin, 2 * 1024 * 1024);
+					String url = mojang ? mojangSkinUrl(skin.substring(3)) : api + "/csl/textures/" + skin;
+					if (url == null) {
+						faces.put(skin, NONE);
+						return;
+					}
+					byte[] png = Http.getBytes(url, 2 * 1024 * 1024);
 					Image img = Image.decode(png);
 					faces.put(skin, img == null || img.width < 64 ? NONE : crop(img));
 				} catch (Throwable e) {
@@ -52,6 +58,25 @@ public final class Avatars {
 			}, "Native-Avatar");
 			t.setDaemon(true);
 			t.start();
+		}
+		return null;
+	}
+
+	/** Skin URL of a Mojang account (session server profile, textures property). */
+	private static String mojangSkinUrl(String uuid) throws java.io.IOException {
+		byte[] body = Http.getBytes("https://sessionserver.mojang.com/session/minecraft/profile/" + uuid, 64 * 1024);
+		com.google.gson.JsonObject o = new com.google.gson.JsonParser().parse(new String(body, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+		for (com.google.gson.JsonElement e : o.getAsJsonArray("properties")) {
+			com.google.gson.JsonObject p = e.getAsJsonObject();
+			if (!"textures".equals(p.get("name").getAsString())) {
+				continue;
+			}
+			String json = new String(java.util.Base64.getDecoder().decode(p.get("value").getAsString()), java.nio.charset.StandardCharsets.UTF_8);
+			com.google.gson.JsonObject t = new com.google.gson.JsonParser().parse(json).getAsJsonObject().getAsJsonObject("textures");
+			if (t != null && t.has("SKIN")) {
+				String url = t.getAsJsonObject("SKIN").get("url").getAsString();
+				return url.startsWith("http://textures.minecraft.net/") ? "https://" + url.substring(7) : url;
+			}
 		}
 		return null;
 	}
