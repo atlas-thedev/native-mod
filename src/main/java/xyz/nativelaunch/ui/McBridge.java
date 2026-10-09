@@ -111,6 +111,21 @@ public interface McBridge {
 	}
 
 	/** The signed-in Minecraft name. */
+	/** Vanilla GUI size: {scaledWidth, scaledHeight, guiScale}; false when unknown. */
+	default boolean guiSize(float[] out) {
+		return false;
+	}
+
+	/** Reads the scoreboard sidebar; false when this version can't be read (the vanilla one then stays). */
+	default boolean sidebar(xyz.nativelaunch.ui.mod.Overlays.Sidebar out) {
+		return false;
+	}
+
+	/** Reads the boss bars; false when this version can't be read. */
+	default boolean bossBars(xyz.nativelaunch.ui.mod.Overlays.Bars out) {
+		return false;
+	}
+
 	default String username() {
 		return null;
 	}

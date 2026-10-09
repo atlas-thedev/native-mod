@@ -29,7 +29,7 @@ import java.util.Locale;
 public final class MenuView {
 	private static final String[] TABS = {"Mods", "Cosmetics", "Settings"};
 	private static final int[] TAB_ICONS = {Theme.I_PUZZLE, Theme.I_SHIRT, Theme.I_SETTINGS};
-	private static final String[] CHIPS = {"All", "Favorites", Module.HUD, Module.MECHANIC, Module.VISUAL};
+	private static final String[] CHIPS = {"All", "Favorites", Module.HUD, Module.MECHANIC, Module.VISUAL, Module.PERFORMANCE};
 	private static final int[] SLOT_ICONS = {Theme.I_LAYERS, Theme.I_HAT, Theme.I_GLASSES, Theme.I_BACKPACK, Theme.I_FOOTPRINTS, Theme.I_HAND};
 	private static final int PANEL_BG = 0xF205060A;
 	private static final int CARD = 0xB808090C, CARD_HOVER = 0xD80E1014;
@@ -201,6 +201,15 @@ public final class MenuView {
 			c.popAlpha();
 		}
 		c.popAlpha();
+	}
+
+	/** Top-down sheen inside a rounded box; the top corners follow the radius so nothing pokes out of the outline. */
+	private static void glow(Canvas c, float x, float y, float w, float gh, float r, int top) {
+		float cap = r + 1;
+		c.pushClip(x, y, w, cap);
+		c.round(x + 1, y + 1, w - 2, cap * 2 + 2, r - 1, top);
+		c.popClip();
+		c.gradientV(x + 1, y + cap, w - 2, gh - cap, Theme.alpha(top, 1 - cap / gh), 0x00FFFFFF);
 	}
 
 	private static void panel(Canvas c, float x, float y, float w, float h) {
@@ -397,7 +406,7 @@ public final class MenuView {
 		float on = ui.anim(id + "#on", m.enabled, 14f);
 		c.round(x, y, w, h, 14, Theme.mix(CARD, CARD_HOVER, hv));
 		if (on > 0.01f) {
-			c.gradientV(x + 1, y + 1, w - 2, (h - 40) * 0.9f, Theme.alpha(0x12FFFFFF, on), 0x00FFFFFF);
+			glow(c, x, y, w, (h - 40) * 0.9f, 14, Theme.alpha(0x12FFFFFF, on));
 		}
 		c.outline(x, y, w, h, 14, 1, Theme.mix(Theme.mix(Theme.HAIRLINE, Theme.HAIRLINE_STRONG, on), Theme.BORDER_HOVER, hv));
 		float iy = y + (h - 40) / 2 + 3;
@@ -547,7 +556,7 @@ public final class MenuView {
 		// preview
 		float px = x + w - pw;
 		c.round(px, y, pw, h, 14, 0x66000000);
-		c.gradientV(px + 1, y + 1, pw - 2, h * 0.5f, 0x0CFFFFFF, 0x00FFFFFF);
+		glow(c, px, y, pw, h * 0.5f, 14, 0x0CFFFFFF);
 		c.outline(px, y, pw, h, 14, 1, Theme.HAIRLINE);
 		c.text(Fonts.SEMIBOLD, 10.5f, "PREVIEW", px + 16, y + 16, Theme.TEXT_MUTED);
 		float wy = y + 40, wh = Math.min(h * 0.5f, 190);
@@ -600,7 +609,7 @@ public final class MenuView {
 
 		// stage
 		c.round(x, y, sw, h, 14, 0x66000000);
-		c.gradientV(x + 1, y + 1, sw - 2, h * 0.6f, 0x10FFFFFF, 0x00FFFFFF);
+		glow(c, x, y, sw, h * 0.6f, 14, 0x10FFFFFF);
 		c.outline(x, y, sw, h, 14, 1, Theme.HAIRLINE);
 		c.text(Fonts.SEMIBOLD, 10.5f, "PREVIEW", x + 16, y + 16, Theme.TEXT_MUTED);
 		String title = nothing ? "No " + singular(slot) : picked != null ? name(picked) : "Your look";

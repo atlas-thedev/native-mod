@@ -161,6 +161,16 @@ Verified stable names, 1.16 to 1.21.11 (runtime = intermediary):
 - [x] All enabled HUD modules shown with a dashed outline. Drag to move, with **snapping guides** to screen edges, the centre, and other modules.
 - [x] Scroll over a module to scale it, right-click to open its settings popover. Toolbar: Done / Mods / Reset positions.
 - [x] Dim the world behind it a little, and show a grid while dragging.
+- [x] Corner resize handle (drag the bottom-right dot). Toolbar sits at the bottom.
+
+### 4.5b Server overlays + performance (`ui/mod/Overlays.java`, `OverlayModules.java`, `PerformanceModules.java`)
+- [x] Server **scoreboard sidebar** and **boss bars** are HUD modules. Look "Vanilla" = the game draws them, `SidebarMixin`/`BossBarMixin`
+      (@Pseudo, intermediary names) push a pose translate+scale so they move/resize. Look "Native" = vanilla hidden, data read via
+      `McBridge.sidebar()/bossBars()` (`IntermediaryMc`, reflection, legacy § + Text style colours via `Rich`) and drawn in Poppins.
+      If reading fails it logs `[NativeSidebar]` once and vanilla stays.
+- [x] Background FPS (Performance category): caps FPS when unfocused (30) / minimized (5).
+- [x] Launcher: default RAM picked from total system memory, default JVM preset Aikar.
+- [ ] Idea: optional launcher "performance pack" (Sodium, Lithium, FerriteCore, EntityCulling, ImmediatelyFast) for Fabric.
 
 ### 4.6 Testing + release
 - [x] `./gradlew build --no-daemon -q`. The build is slow, so run it in the background and poll.

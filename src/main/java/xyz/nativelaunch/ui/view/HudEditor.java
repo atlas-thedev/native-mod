@@ -19,6 +19,8 @@ import java.util.List;
 public final class HudEditor {
 	private static final float SNAP = 6;
 	private HudModule drag, popover;
+	private HudModule sizing;
+	private float sizeStart, sizeDist;
 	private float grabX, grabY;
 	private float popX, popY, popW, popH;
 	private final List<HudModule> shown = new ArrayList<HudModule>();
@@ -81,12 +83,48 @@ public final class HudEditor {
 			rects.add(new float[] {HudModule.pos(m.fx, W, w), HudModule.pos(m.fy, H, h), w, h});
 		}
 		boolean overPop = popover != null && ui.hover(popX, popY, popW, popH);
-		boolean overBar = ui.hover(W / 2 - 190, 10, 380, 52);
+		boolean overBar = ui.hover(W / 2 - 190, H - 150, 380, 52);
 
 		// pick
 		HudModule hover = null;
 		int hoverIndex = -1;
-		if (!overPop && !overBar && drag == null) {
+		HudModule handle = null;
+		if (!overPop && !overBar && drag == null && sizing == null) {
+			for (int i = shown.size() - 1; i >= 0; i--) {
+				float[] r = rects.get(i);
+				float hx = r[0] + r[2] + 3, hy = r[1] + r[3] + 3;
+				if (ui.hover(hx - 9, hy - 9, 18, 18)) {
+					handle = shown.get(i);
+					hover = handle;
+					hoverIndex = i;
+					break;
+				}
+			}
+		}
+		if (handle != null && ui.pressed) {
+			float[] r = rects.get(hoverIndex);
+			sizing = handle;
+			sizeStart = handle.scale.value;
+			sizeDist = Math.max(8, (float) Math.hypot(ui.mx - (r[0] + r[2] / 2), ui.my - (r[1] + r[3] / 2)));
+			popover = null;
+			hover = null;
+		}
+		if (sizing != null) {
+			int si = shown.indexOf(sizing);
+			if (!ui.down || si < 0) {
+				sizing = null;
+				Modules.changed();
+			} else {
+				float[] r = rects.get(si);
+				float d = (float) Math.hypot(ui.mx - (r[0] + r[2] / 2), ui.my - (r[1] + r[3] / 2));
+				float v = Math.round(sizeStart * d / sizeDist / 0.05f) * 0.05f;
+				if (Math.abs(v - sizing.scale.value) > 0.001f) {
+					sizing.scale.set(v);
+				}
+				ui.cursorHand = true;
+			}
+		}
+		if (!overPop && !overBar && drag == null && sizing == null && hover == null) {
 			for (int i = shown.size() - 1; i >= 0; i--) {
 				float[] r = rects.get(i);
 				if (ui.hover(r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6)) {
@@ -146,7 +184,7 @@ public final class HudEditor {
 			HudModule m = shown.get(i);
 			float[] r = rects.get(i);
 			Game g = inWorld && live != null && m.visible(live) ? live : sample;
-			boolean active = m == hover || m == drag || m == popover;
+			boolean active = m == hover || m == drag || m == popover || m == sizing;
 			float a = ui.anim("hud:" + m.id + "#h", active, 16f);
 			c.round(r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, 6, Theme.alpha(0x14FFFFFF, a));
 			m.paint(ui, r[0], r[1], g);
@@ -157,6 +195,10 @@ public final class HudEditor {
 				float ly = r[1] - 24 < 0 ? r[1] + r[3] + 6 : r[1] - 24;
 				float lx = Math.max(2, Math.min(W - lw - 2, r[0] - 3));
 				c.round(lx, ly, lw, 18, 6, 0xF0141418);
+				// resize handle (bottom-right corner): drag it to make the module bigger or smaller
+				float hx = r[0] + r[2] + 3, hy = r[1] + r[3] + 3;
+				c.circle(hx, hy, 5.5f, Theme.alpha(0xFFFFFFFF, a));
+				c.circle(hx, hy, 3.5f, Theme.alpha(m == sizing ? Theme.ACCENT : 0xFF09090B, a));
 				c.text(Fonts.SEMIBOLD, 10.5f, label, lx + 6, ly + (18 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.TEXT_STRONG);
 			} else {
 				dashed(c, r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, 0x66FFFFFF);
@@ -188,7 +230,7 @@ public final class HudEditor {
 		}
 
 		// toolbar
-		float bw = 380, bh = 50, bx = (W - bw) / 2, by = 12 - (1 - in) * 20;
+		float bw = 380, bh = 50, bx = (W - bw) / 2, by = H - 150 + (1 - in) * 20; // above the hotbar, clear of the top HUD (boss bar)
 		c.shadow(bx, by + 2, bw, bh, 14, 16, 0x77000000);
 		c.round(bx, by, bw, bh, 14, 0xF008090C);
 		c.outline(bx, by, bw, bh, 14, 1, Theme.HAIRLINE_STRONG);
@@ -204,8 +246,8 @@ public final class HudEditor {
 		if (ui.button("hud:reset", bx + 224, by + 8, bw - 232, 34, "Reset positions", Theme.I_RESET, Ui.BTN_GHOST)) {
 			Modules.resetPositions();
 		}
-		String tip = "Drag to move  \u00B7  Scroll to resize  \u00B7  Right-click for settings";
-		c.text(Fonts.MEDIUM, 11, tip, (W - c.textWidth(Fonts.MEDIUM, 11, tip)) / 2, by + bh + 10, Theme.alpha(0xFFFFFFFF, 0.6f * in));
+		String tip = "Drag to move  \u00B7  Drag the corner or scroll to resize  \u00B7  Right-click for settings";
+		c.text(Fonts.MEDIUM, 11, tip, (W - c.textWidth(Fonts.MEDIUM, 11, tip)) / 2, by - 22, Theme.alpha(0xFFFFFFFF, 0.6f * in));
 	}
 
 	private void openMenu(Object screen) {
@@ -227,7 +269,7 @@ public final class HudEditor {
 		if (x < 8) {
 			x = Math.max(8, Math.min(W - w - 8, r[0]));
 		}
-		float y = Math.max(70, Math.min(H - h - 8, r[1]));
+		float y = Math.max(8, Math.min(H - h - 8, r[1]));
 		popX = x;
 		popY = y;
 		popW = w;
