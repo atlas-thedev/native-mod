@@ -11,6 +11,41 @@ FRIENDS = [
     {'id': 'f4', 'name': 'Steve', 'status': 'offline', 'online': False, 'unread': 0, 'skin': None},
 ]
 ids = itertools.count(1000)
+
+# ── store / textures (wardrobe) ──
+import hashlib, io
+def _png(w, h, paint):
+    from PIL import Image
+    im = Image.new('RGBA', (w, h), (0, 0, 0, 0)); px = im.load()
+    for y in range(h):
+        for x in range(w): px[x, y] = paint(x, y)
+    b = io.BytesIO(); im.save(b, 'PNG'); return b.getvalue()
+def _skin(x, y):
+    if 8 <= x < 16 and 8 <= y < 16:  # face: red stripe on the image-left = wearer's right
+        return (220, 60, 60, 255) if x < 10 else ((40, 40, 40, 255) if y == 12 and x in (10, 13) else (230, 190, 150, 255))
+    if y < 16 and x < 32: return (120, 80, 50, 255)      # head
+    if 16 <= y < 32 and 16 <= x < 40: return (40, 120, 200, 255)  # body
+    if 16 <= y < 32 and x >= 40: return (230, 190, 150, 255)       # right arm
+    if 16 <= y < 32 and x < 16: return (50, 50, 140, 255)          # right leg
+    if y >= 48 and 32 <= x < 48: return (200, 160, 130, 255)       # left arm
+    if y >= 48 and 16 <= x < 32: return (30, 30, 110, 255)         # left leg
+    return (0, 0, 0, 0)
+def _cape(x, y): return (180, 60 + y * 5, 200, 255) if x < 22 else (90, 30, 100, 255)
+def _hat(x, y): return (20, 20, 24, 255) if y < 16 else (200, 30, 30, 255)
+HAT_MODEL = json.dumps({"format": 1, "texture": [64, 32], "parts": [{"id": "hat", "attach": "head", "pivot": [0, 0, 0],
+    "cubes": [{"origin": [-5, -9, -5], "size": [10, 1, 10], "uv": [0, 0]}, {"origin": [-3.5, -15, -3.5], "size": [7, 6, 7], "uv": [0, 11]}]}]}).encode()
+TEX = {}
+def _put(b): h = hashlib.sha256(b).hexdigest(); TEX[h] = b; return h
+SKIN_H = _put(_png(64, 64, _skin)); CAPE_H = _put(_png(64, 32, _cape)); HAT_T = _put(_png(64, 32, _hat)); HAT_M = _put(HAT_MODEL)
+B = 'http://127.0.0.1:8099/csl/textures/'
+CATALOG = [
+    {'id': 'cape-lilac', 'name': 'Lilac Cloak', 'kind': 'cape', 'stillUrl': B + CAPE_H},
+    {'id': 'cape-two', 'name': 'Second Cape', 'kind': 'cape', 'stillUrl': B + CAPE_H},
+    {'id': 'tophat', 'name': 'Top Hat', 'kind': 'cosmetic', 'slot': 'hats', 'stillUrl': B + HAT_T, 'modelUrl': B + HAT_M, 'textureUrl': B + HAT_T},
+]
+LOCKER = {'equipped': 'cape-lilac', 'wearing': {'hats': 'tophat'}}
+ME['skin'] = SKIN_H
+
 def msg(sender, text, ago=0, **kw):
     n = next(ids); return dict({'id': f'm{n}', 'senderId': sender, 'senderName': {'me': 'TestAlice', 'f1': 'Dinal', 'f2': 'Kasun', 'f3': 'Nethmi'}.get(sender, sender), 'content': text, 'createdAt': NOW() - ago}, **kw)
 DM = {'f1': [msg('f1', 'machan server ekata enawada?', 86400000 * 2), msg('me', 'ow, poddak inna', 86400000 * 2 - 60000),
@@ -31,6 +66,12 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); p = u.path
         if p.startswith('/v1/skins/directory'): return self.j({'ok': True, 'epoch': 1, 'rev': 1, 'full': True, 'textureBase': 'http://127.0.0.1:8099/t/', 'entries': []})
+        if p.startswith('/t/') or p.startswith('/csl/textures/'):
+            b = TEX.get(p.rsplit('/', 1)[1])
+            if b is None: self.send_response(404); self.send_header('Content-Length', '0'); self.end_headers(); return
+            self.send_response(200); self.send_header('Content-Type', 'image/png'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b); return
+        if p == '/v1/store/catalog': return self.j({'ok': True, 'textureBase': B, 'items': CATALOG})
+        if p == '/v1/store/me': return self.j({'ok': True, 'equipped': LOCKER['equipped'], 'wearing': LOCKER['wearing'], 'sides': {}, 'owned': [{'id': i['id']} for i in CATALOG], 'dyes': {}})
         if p == '/v1/mod/me': return self.j({'ok': True, 'account': ME})
         if p == '/v1/mod/friends':
             g = GROUPS[0]; g['lastMessage'] = {'content': GM['g1'][-1]['content'], 'senderName': GM['g1'][-1]['senderName'], 'createdAt': GM['g1'][-1]['createdAt']}
@@ -69,5 +110,15 @@ class H(http.server.BaseHTTPRequestHandler):
             (GM if '/groups/' in p else DM).setdefault(p.split('/')[5], []).append(m)
             print('SENT', p, b.get('content'), flush=True)
             return self.j({'message': m})
+        if p == '/v1/store/equip':
+            b = self.body(); it = b.get('itemId')
+            if it is None and b.get('slot'): LOCKER['wearing'].pop(b['slot'], None)
+            elif it is None: LOCKER['equipped'] = None
+            else:
+                item = next(i for i in CATALOG if i['id'] == it)
+                if item['kind'] == 'cape': LOCKER['equipped'] = it
+                else: LOCKER['wearing'][item['slot']] = it
+            print('EQUIP', b, flush=True)
+            return self.j({'ok': True, 'equipped': LOCKER['equipped'], 'wearing': LOCKER['wearing'], 'sides': {}, 'owned': [{'id': i['id']} for i in CATALOG]})
         self.body(); return self.j({'ok': True})
 http.server.ThreadingHTTPServer(('127.0.0.1', 8099), H).serve_forever()

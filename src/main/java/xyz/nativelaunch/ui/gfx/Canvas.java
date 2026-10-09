@@ -19,6 +19,10 @@ public final class Canvas {
 	public float[] geo = new float[8 * 4096];
 	public int[] col = new int[4 * 4096];
 	public int quads;
+	/** Per quad: -1 for an axis-aligned quad, else the offset of 16 floats in {@link #freeGeo} (4 x/y, then 4 u/v). */
+	public int[] free = new int[4096];
+	public float[] freeGeo = new float[16 * 256];
+	private int freeUsed;
 	// batches: texture (null = atlas) + first quad + count
 	public Image[] batchTex = new Image[64];
 	public int[] batchStart = new int[64];
@@ -45,6 +49,7 @@ public final class Canvas {
 		this.fbH = fbH;
 		this.scale = scale;
 		quads = 0;
+		freeUsed = 0;
 		batches = 0;
 		clipDepth = 0;
 		clip[0] = 0;
@@ -376,6 +381,10 @@ public final class Canvas {
 			geo = java.util.Arrays.copyOf(geo, geo.length * 2);
 			col = java.util.Arrays.copyOf(col, col.length * 2);
 		}
+		if (quads >= free.length) {
+			free = java.util.Arrays.copyOf(free, free.length * 2);
+		}
+		free[quads] = -1;
 		int g = quads * 8;
 		geo[g] = x0;
 		geo[g + 1] = y0;
@@ -390,6 +399,58 @@ public final class Canvas {
 		col[k + 1] = c1;
 		col[k + 2] = c2;
 		col[k + 3] = c3;
+		quads++;
+	}
+
+	/**
+	 * A textured quad with four arbitrary corners (logical units, any order around the quad), used by the 3D
+	 * player preview. Not clipped per pixel: it is dropped when its bounds leave the clip rectangle.
+	 */
+	public void freeQuad(Image tex, float[] xy, float[] uv, int argb) {
+		float s = scale;
+		float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+		for (int i = 0; i < 4; i++) {
+			float x = xy[i * 2] * s, y = xy[i * 2 + 1] * s;
+			minX = Math.min(minX, x);
+			maxX = Math.max(maxX, x);
+			minY = Math.min(minY, y);
+			maxY = Math.max(maxY, y);
+		}
+		int b = clipDepth * 4;
+		if (maxX <= clip[b] || minX >= clip[b + 2] || maxY <= clip[b + 1] || minY >= clip[b + 3]) {
+			return;
+		}
+		int color = alpha < 1 ? mulAlpha(argb, alpha) : argb;
+		if (color >>> 24 == 0) {
+			return;
+		}
+		if (batches == 0 || batchTex[batches - 1] != tex) {
+			if (batches == batchTex.length) {
+				batchTex = java.util.Arrays.copyOf(batchTex, batches * 2);
+				batchStart = java.util.Arrays.copyOf(batchStart, batches * 2);
+			}
+			batchTex[batches] = tex;
+			batchStart[batches] = quads;
+			batches++;
+		}
+		if (quads * 8 + 8 > geo.length) {
+			geo = java.util.Arrays.copyOf(geo, geo.length * 2);
+			col = java.util.Arrays.copyOf(col, col.length * 2);
+		}
+		if (quads >= free.length) {
+			free = java.util.Arrays.copyOf(free, free.length * 2);
+		}
+		if (freeUsed + 16 > freeGeo.length) {
+			freeGeo = java.util.Arrays.copyOf(freeGeo, freeGeo.length * 2);
+		}
+		free[quads] = freeUsed;
+		for (int i = 0; i < 8; i++) {
+			freeGeo[freeUsed + i] = xy[i] * s;
+			freeGeo[freeUsed + 8 + i] = uv[i];
+		}
+		freeUsed += 16;
+		int k = quads * 4;
+		col[k] = col[k + 1] = col[k + 2] = col[k + 3] = color;
 		quads++;
 	}
 

@@ -28,7 +28,7 @@ public final class Http {
 	}
 
 	/** GET a JSON document. Throws on any non-2xx status. */
-	static String getJson(String url, String bearer) throws IOException {
+	public static String getJson(String url, String bearer) throws IOException {
 		HttpURLConnection connection = open(url, bearer, 8000, 15000, "application/json");
 		connection.setRequestProperty("Accept-Encoding", "gzip");
 		try {

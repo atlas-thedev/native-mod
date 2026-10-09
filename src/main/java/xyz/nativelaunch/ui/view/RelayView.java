@@ -379,6 +379,8 @@ public final class RelayView {
 					Model.Friend sf = m.senderId == null ? null : client.friend(m.senderId);
 					if (sf != null) {
 						skin = sf.skin;
+					} else if (eq(m.senderId, client.meId)) {
+						skin = client.meSkin;
 					}
 					Avatars.draw(c, client.api(), sf != null ? sf.name : who, skin, x + pad, cy + 1, 34, 10);
 					boolean mine = eq(m.senderId, client.meId);

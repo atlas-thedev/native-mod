@@ -77,9 +77,10 @@ public final class TitleView {
 				{"realms", mc.tr("menu.online", "Minecraft Realms")},
 				{"mods", "Mods"},
 				{"relay", "Relay"},
+				{"nativemods", "Native Mods"},
 				{"options", mc.tr("menu.options", "Options...").replace("...", "").replace("\u2026", "")},
 		};
-		int[] icons = {Theme.I_USER, Theme.I_GLOBE, Theme.I_CLOUD, Theme.I_PUZZLE, Theme.I_MESSAGE, Theme.I_SETTINGS};
+		int[] icons = {Theme.I_USER, Theme.I_GLOBE, Theme.I_CLOUD, Theme.I_PUZZLE, Theme.I_MESSAGE, Theme.I_SPARKLES, Theme.I_SETTINGS};
 		int index = 0;
 		for (int i = 0; i < items.length; i++) {
 			String id = items[i][0];
@@ -143,6 +144,8 @@ public final class TitleView {
 		McBridge mc = UiRuntime.mc();
 		if ("relay".equals(id)) {
 			UiRuntime.openRelay(screen);
+		} else if ("nativemods".equals(id)) {
+			UiRuntime.openMenu(screen);
 		} else {
 			mc.open(id, screen);
 		}

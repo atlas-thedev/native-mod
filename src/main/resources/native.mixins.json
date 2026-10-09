@@ -12,7 +12,8 @@
     "TabListMixin",
     "TabListMixin26",
     "UiFrameMixin",
-    "ScreenSwapMixin"
+    "ScreenSwapMixin",
+    "ZoomMixin"
   ],
   "injectors": {
     "defaultRequire": 0

@@ -263,6 +263,11 @@ public final class SkinDirectory {
 		return entry.cosmetics;
 	}
 
+	/** The directory row of a player by name (case-insensitive), or null. */
+	public SkinEntry entry(String name) {
+		return name == null || name.isEmpty() ? null : entries.get(key(name));
+	}
+
 	private static String key(String name) {
 		return name.toLowerCase(Locale.ROOT);
 	}

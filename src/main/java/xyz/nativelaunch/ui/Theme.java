@@ -34,6 +34,15 @@ public final class Theme {
 			I_SPARKLES = 0xE417, I_SMILE = 0xE168, I_WIFI_OFF = 0xE1AF, I_PUZZLE = 0xE29C, I_MONITOR = 0xE121, I_CLOUD = 0xE08C,
 			I_HOME = 0xE0F8, I_REFRESH = 0xE149, I_REPLY = 0xE22A, I_KEYBOARD = 0xE284, I_EYE = 0xE0BE, I_LOCK = 0xE10F,
 			I_LOG_IN = 0xE111, I_LOADER = 0xE10E, I_MSG_MORE = 0xE56A, I_ELLIPSIS = 0xE0BA, I_CROWN = 0xE1D6;
+	// added from lucide-static 1.54.0 by scripts/lucide-extra.py (0xF100 + index, same order as EXTRA there)
+	public static final int I_GAUGE = 0xF100, I_CLICK = 0xF101, I_COMPASS = 0xF102, I_MAP_PIN = 0xF103, I_CLOCK = 0xF104,
+			I_MEMORY = 0xF105, I_SIGNAL = 0xF106, I_ZAP = 0xF107, I_FOOTPRINTS = 0xF108, I_ZOOM = 0xF109, I_SUN = 0xF10A,
+			I_SHIRT = 0xF10B, I_MOVE = 0xF10C, I_RESET = 0xF10D, I_SLIDERS = 0xF10E, I_LAYOUT = 0xF10F, I_PALETTE = 0xF110,
+			I_CHECK = 0xF111, I_EYE_OFF = 0xF112, I_MOUSE = 0xF113, I_TIMER = 0xF114, I_WIFI = 0xF115, I_GLASSES = 0xF116,
+			I_BACKPACK = 0xF117, I_HAND = 0xF118, I_HAT = 0xF119, I_GRID = 0xF11A, I_MAGNET = 0xF11B, I_TYPE = 0xF11C,
+			I_PERSON = 0xF11D, I_ACTIVITY = 0xF11E, I_CROSSHAIR = 0xF11F, I_FEATHER = 0xF120, I_ARROWS_UP = 0xF121,
+			I_GRID_3 = 0xF122, I_BRUSH = 0xF123,
+			I_HEART = 0xF124, I_STAR = 0xF125, I_LIST = 0xF126, I_STORE = 0xF127, I_BAN = 0xF128;
 
 	public static int alpha(int argb, float a) {
 		return xyz.nativelaunch.ui.gfx.Canvas.mulAlpha(argb, a);

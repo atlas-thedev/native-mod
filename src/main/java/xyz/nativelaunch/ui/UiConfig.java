@@ -17,6 +17,8 @@ public final class UiConfig {
 	/** GLFW key that opens the chat in game (default Y). */
 	public int relayKey = 89;
 	public float scale = 1f;
+	/** GLFW key that opens the Native menu (mods, cosmetics, settings) in game (default Right Shift). */
+	public int menuKey = 344;
 
 	private transient Path file;
 
