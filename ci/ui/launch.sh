@@ -14,6 +14,7 @@ CP=$(python3 -c "import json;print(':'.join(json.load(open('$R/launch.json'))['c
 AI=$(python3 -c "import json;print(json.load(open('$R/launch.json'))['assetIndex'])")
 MAIN=$(python3 -c "import json;print(json.load(open('$R/launch.json'))['main'])")
 cd "$G"
+[ -f options.txt ] || printf 'onboardAccessibility:false\nskipMultiplayerWarning:true\ntutorialStep:none\n' > options.txt
 DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 nohup "$JH/bin/java" -Xmx2G -Djava.library.path="$R/natives" -Dorg.lwjgl.librarypath="$R/natives" \
   -Dnative.api=http://127.0.0.1:8099 -cp "$CP" "$MAIN" --username TestAlice --version "$MC" --gameDir "$G" \
   --assetsDir "$R/assets" --assetIndex "$AI" --accessToken 0 --uuid 00000000000000000000000000000001 \
