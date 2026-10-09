@@ -209,6 +209,18 @@ public final class GlRenderer {
 		int p = 0;
 		for (int q = 0; q < c.quads; q++) {
 			int g = q * 8, k = q * 4;
+			int fq = c.free[q];
+			if (fq >= 0) {
+				float[] f = c.freeGeo;
+				int cc = abgr(c.col[k]);
+				p = vertex(fv, iv, p, f[fq], f[fq + 1], f[fq + 8], f[fq + 9], cc);
+				p = vertex(fv, iv, p, f[fq + 2], f[fq + 3], f[fq + 10], f[fq + 11], cc);
+				p = vertex(fv, iv, p, f[fq + 4], f[fq + 5], f[fq + 12], f[fq + 13], cc);
+				p = vertex(fv, iv, p, f[fq], f[fq + 1], f[fq + 8], f[fq + 9], cc);
+				p = vertex(fv, iv, p, f[fq + 4], f[fq + 5], f[fq + 12], f[fq + 13], cc);
+				p = vertex(fv, iv, p, f[fq + 6], f[fq + 7], f[fq + 14], f[fq + 15], cc);
+				continue;
+			}
 			float x0 = c.geo[g], y0 = c.geo[g + 1], x1 = c.geo[g + 2], y1 = c.geo[g + 3];
 			float u0 = c.geo[g + 4], v0 = c.geo[g + 5], u1 = c.geo[g + 6], v1 = c.geo[g + 7];
 			int c0 = abgr(c.col[k]), c1 = abgr(c.col[k + 1]), c2 = abgr(c.col[k + 2]), c3 = abgr(c.col[k + 3]);

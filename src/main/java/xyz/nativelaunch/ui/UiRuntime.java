@@ -6,6 +6,12 @@ import xyz.nativelaunch.ui.gfx.Atlas;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Fonts;
 import xyz.nativelaunch.ui.gfx.GlRenderer;
+import xyz.nativelaunch.ui.mod.Game;
+import xyz.nativelaunch.ui.mod.Module;
+import xyz.nativelaunch.ui.mod.Modules;
+import xyz.nativelaunch.ui.view.HudEditor;
+import xyz.nativelaunch.ui.view.HudOverlay;
+import xyz.nativelaunch.ui.view.MenuView;
 import xyz.nativelaunch.ui.view.RelayView;
 import xyz.nativelaunch.ui.view.TitleView;
 import xyz.nativelaunch.ui.view.Toasts;
@@ -29,6 +35,10 @@ public final class UiRuntime {
 	private static TitleView title;
 	private static RelayView relay;
 	private static Toasts toasts;
+	private static MenuView menu;
+	private static HudEditor editor;
+	private static final Game game = new Game();
+	private static volatile boolean playing;
 	private static int frames;
 	/** Player chose the vanilla title screen for this session. */
 	public static boolean classic;
@@ -45,11 +55,20 @@ public final class UiRuntime {
 		mc = bridge;
 		config = UiConfig.load(gameDir);
 		version = minecraftVersion == null ? "" : minecraftVersion;
+		try {
+			Modules.init(gameDir);
+		} catch (Throwable t) {
+			Log.warn("Native mods unavailable: {}", t.toString());
+		}
 		Log.info("Native UI ready (custom title screen {}, chat key {}).", config.customTitle ? "on" : "off", keyName(config.relayKey));
 	}
 
 	public static McBridge mc() {
 		return mc;
+	}
+
+	public static Game game() {
+		return game;
 	}
 
 	public static UiConfig config() {
@@ -114,6 +133,7 @@ public final class UiRuntime {
 		} else if (++frames % 120 == 0) {
 			input.install();
 		}
+		Game.countFrame();
 		Object screen = mc.screen();
 		if (config.customTitle && !classic && mc.isVanillaTitle(screen)) {
 			mc.setScreen(mc.newHost(McBridge.TITLE, null));
@@ -121,6 +141,20 @@ public final class UiRuntime {
 		}
 		int kind = mc.hostKind(screen);
 		relayHostOpen = kind;
+		boolean inWorld = mc.inWorld();
+		boolean hud = false;
+		if (inWorld) {
+			game.update(mc, window);
+		} else {
+			game.inWorld = false;
+		}
+		game.playing = inWorld && screen == null;
+		playing = game.playing;
+		modulesFrame();
+		Modules.tick();
+		if (kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !mc.hudHidden() && !mc.debugOpen()) {
+			hud = HudOverlay.any(game);
+		}
 		boolean overlay = mc.overlay();
 		boolean classicTitle = classic && mc.isVanillaTitle(screen);
 		RelayClient client = RelayClient.get();
@@ -130,7 +164,7 @@ public final class UiRuntime {
 		boolean wantToasts = kind == 0 && config.notifications && client != null && (toasts != null && toasts.active() || !client.notices.isEmpty());
 		capturing = kind != 0 && !overlay;
 		pillVisible = classicTitle && !overlay;
-		if ((kind == 0 && !classicTitle && !wantToasts) || overlay) {
+		if ((kind == 0 && !classicTitle && !wantToasts && !hud) || overlay) {
 			if (kind == 0 && client != null && relay != null) {
 				client.viewing = null;
 			}
@@ -155,9 +189,22 @@ public final class UiRuntime {
 				title.background(ui); // nothing is drawn behind us outside a world
 			}
 			relay.draw(ui, screen, false);
+		} else if (kind == McBridge.MENU) {
+			if (!inWorld) {
+				title.background(ui);
+			}
+			menu.draw(ui, screen, inWorld);
+		} else if (kind == McBridge.HUD) {
+			if (!inWorld) {
+				title.background(ui);
+			}
+			editor.draw(ui, screen, inWorld, inWorld ? game : null);
 		} else if (classicTitle) {
 			drawPill(ui);
 		} else {
+			if (hud) {
+				HudOverlay.draw(ui, game);
+			}
 			if (toasts != null) {
 				toasts.draw(ui);
 			}
@@ -190,6 +237,34 @@ public final class UiRuntime {
 		title = new TitleView();
 		relay = new RelayView();
 		toasts = new Toasts();
+		menu = new MenuView();
+		editor = new HudEditor();
+	}
+
+	/** Runs every enabled module; one that throws is switched off instead of taking the UI down. */
+	private static void modulesFrame() {
+		java.util.List<Module> all = Modules.all();
+		for (int i = 0; i < all.size(); i++) {
+			Module m = all.get(i);
+			if (!m.enabled) {
+				continue;
+			}
+			try {
+				m.frame(game);
+			} catch (Throwable t) {
+				Log.warn("Module {} failed and was switched off: {}", m.id, t.toString());
+				try {
+					m.setEnabled(false);
+				} catch (Throwable ignored) {
+					m.enabled = false;
+				}
+			}
+		}
+	}
+
+	/** Opens the Native menu (mods, cosmetics, settings). */
+	public static void openMenu(Object parent) {
+		mc.setScreen(mc.newHost(McBridge.MENU, parent));
 	}
 
 	private static void drawPill(Ui ui) {
@@ -260,6 +335,9 @@ public final class UiRuntime {
 			Input.button(button, action == 0 ? 0 : 1, mods);
 			return true;
 		}
+		if (action == 1 && playing) {
+			Game.click(button);
+		}
 		if (pillVisible && action == 1 && button == 0) {
 			double x = Input.mouseX, y = Input.mouseY;
 			if (x >= pillX && x < pillX + pillW && y >= pillY && y < pillY + pillH) {
@@ -278,6 +356,19 @@ public final class UiRuntime {
 		if (capturing) {
 			Input.scroll(dx, dy);
 			return true;
+		}
+		if (playing && !failed) {
+			try {
+				java.util.List<Module> all = Modules.all();
+				for (int i = 0; i < all.size(); i++) {
+					Module m = all.get(i);
+					if (m.enabled && m.onScroll(dy, game)) {
+						return true;
+					}
+				}
+			} catch (Throwable t) {
+				Log.warn("Module scroll failed: {}", t.toString());
+			}
 		}
 		return false;
 	}
@@ -306,6 +397,11 @@ public final class UiRuntime {
 						closeHost(s);
 					} else if (mc.hostKind(s) == McBridge.TITLE && title != null) {
 						title.escape();
+					} else if (mc.hostKind(s) == McBridge.MENU && (menu == null || !menu.escape(ui))) {
+						closeHost(s);
+					} else if (mc.hostKind(s) == McBridge.HUD && (editor == null || !editor.escape())) {
+						Modules.save();
+						closeHost(s);
 					}
 				} catch (Throwable t) {
 					fail(t);
@@ -314,6 +410,29 @@ public final class UiRuntime {
 			}
 			Input.key(key, action, mods);
 			return true;
+		}
+		if (action == 1 && key == config.menuKey && (mods & (Ui.MOD_CONTROL | Ui.MOD_ALT | Ui.MOD_SUPER)) == 0) {
+			try {
+				if (mc.screen() == null && mc.inWorld()) {
+					openMenu(null);
+					return true;
+				}
+			} catch (Throwable t) {
+				fail(t);
+			}
+		}
+		if (playing && !failed) {
+			try {
+				java.util.List<Module> all = Modules.all();
+				for (int i = 0; i < all.size(); i++) {
+					Module m = all.get(i);
+					if (m.enabled && m.onKey(key, action, game)) {
+						return true;
+					}
+				}
+			} catch (Throwable t) {
+				Log.warn("Module key failed: {}", t.toString());
+			}
 		}
 		if (action == 1 && key == config.relayKey && mods == 0) {
 			try {
@@ -333,20 +452,7 @@ public final class UiRuntime {
 	}
 
 	public static String keyName(int key) {
-		if (key >= 65 && key <= 90) {
-			return String.valueOf((char) key);
-		}
-		if (key >= 48 && key <= 57) {
-			return String.valueOf((char) key);
-		}
-		switch (key) {
-			case 96: return "`";
-			case 258: return "Tab";
-			case 280: return "Caps Lock";
-			case 342: return "Left Alt";
-			case 346: return "Right Alt";
-			default: return "Key " + key;
-		}
+		return xyz.nativelaunch.ui.mod.Keys.name(key);
 	}
 
 	/** Key for the chat setting: next press becomes the binding. */

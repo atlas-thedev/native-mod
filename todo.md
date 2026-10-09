@@ -4,8 +4,13 @@ Next feature for `atlas-thedev/native-mod`: **Lunar / Feather-style client featu
 modules, a HUD editor, and a cosmetics wardrobe with a full 3D player preview. It must work on Minecraft **1.16 to 1.21.11**
 (intermediary names). 26.x (official names) comes later.
 
-Status: the Native UI 1.6.0 (custom title screen + in-game Relay chat) is on `main`. **It has not been released yet**: no tag, and `release.bat` has not been run.
-The work-in-progress code for this feature is on branch **`wip/client-mods`**. See "What already exists" below.
+Status: **1.7.0 client mods are done and on `main`** (built, unit tests pass, tested on real 1.21.4 and 1.16.5 clients under Xvfb).
+Not released yet: no tag, `release.bat` has not been run (only when the owner asks). Left: the 26.x port, and 1.20.1 / 1.21.11 smoke tests.
+
+Menu design (final): floating icon rail (logo, Mods / Cosmetics / Settings, Edit HUD, Close), a small toolbar pill (Edit HUD, grid / list),
+one big panel. Mods = Feather-style tiles (big icon, name + switch, heart = favourite, saved as `favorite` in native-modules.json), click a tile
+for its own page (settings left, live preview right). Cosmetics = launcher Locker layout (preview stage + Equip / Take off button on the left,
+slot tabs + "Your locker" grid with a "Nothing" card on the right; selecting a card tries it on).
 
 ---
 
@@ -81,7 +86,7 @@ the same as the Native launcher.
 
 ---
 
-## 3. What already exists (branch `wip/client-mods`, not built/tested yet)
+## 3. Building blocks
 
 - `ui/gfx/Boxes.java`: CPU orthographic box renderer for previews. `begin(cx,cy,scale,yaw,pitch)`, `push/pop/translate`,
   `rotate(pitch,yaw,roll)` (vanilla Rz·Ry·Rx), and `cube(tex,texW,texH,x,y,z,w,h,d,u,v,inflate,mirror,tint)` with box UV. It also does back-face cull,
@@ -100,9 +105,9 @@ the same as the Native launcher.
 ## 4. TODO
 
 ### 4.1 Game snapshot (`ui/mod/Game.java`)
-- [ ] fps (count frames in onFrame, 1 s window), x/y/z, yaw/pitch, speed (blocks/s from position delta), ping, server address,
+- [x] fps (count frames in onFrame, 1 s window), x/y/z, yaw/pitch, speed (blocks/s from position delta), ping, server address,
       key states, lmb/rmb, **CPS** (count presses in `onButton` when not capturing, 1 s sliding window), memory used/max.
-- [ ] `Game.sample()` with fake values for previews when not in a world.
+- [x] `Game.sample()` with fake values for previews when not in a world.
 
 ### 4.2 McBridge additions (default methods) + IntermediaryMc via reflection
 Verified stable names, 1.16 to 1.21.11 (runtime = intermediary):
@@ -117,26 +122,26 @@ Verified stable names, 1.16 to 1.21.11 (runtime = intermediary):
 - chat screen class `class_408`. Show the HUD when screen == null or the screen is chat.
 
 ### 4.3 Modules (`ui/mod/HudModule.java`, `ui/mod/Modules.java`)
-- [ ] `HudModule`: anchor as a fraction of the screen (x,y in 0..1), `scale` Num, text colour, background on/off + opacity, shadow,
+- [x] `HudModule`: anchor as a fraction of the screen (x,y in 0..1), `scale` Num, text colour, background on/off + opacity, shadow,
       style Choice (Card / Text / Brackets), `size()` and `paint(ui, x, y, Game)`.
-- [ ] HUD modules: **FPS, CPS, Keystrokes** (WASD + LMB/RMB + Space, using the bound keys, pressed state animated), **Coordinates** (+ facing),
+- [x] HUD modules: **FPS, CPS, Keystrokes** (WASD + LMB/RMB + Space, using the bound keys, pressed state animated), **Coordinates** (+ facing),
       **Direction** compass strip, **Clock** (12/24 h), **Memory**, **Ping**, **Server IP**, **Speed**, **Toggle Sprint** (status label).
-- [ ] Mechanic/Visual: **Toggle Sprint** (keeps sprint pressed through `method_23481`), **Zoom** (hold C=67, scroll to change, smooth,
+- [x] Mechanic/Visual: **Toggle Sprint** (keeps sprint pressed through `method_23481`), **Zoom** (hold C=67, scroll to change, smooth,
       consume scroll while zooming), **Fullbright** (gamma 16, restore old value).
-- [ ] Zoom mixin (uimc): `@Pseudo @Mixin(targets="net.minecraft.class_757", remap=false)`, method `method_3196` (getFov)
+- [x] Zoom mixin (uimc): `@Pseudo @Mixin(targets="net.minecraft.class_757", remap=false)`, method `method_3196` (getFov)
       `@At("RETURN")`, `require=0`, `CallbackInfoReturnable<Object>`. It returns **double ≤1.21.1** and **float 1.21.4+**, so set the matching
       boxed type. Add it to `native.mixins.json`.
-- [ ] `Modules` registry, load/save `config/native-modules.json` (Gson: `{id: {enabled, settings{...}, x, y}}`).
-- [ ] Per-frame HUD drawing in `UiRuntime.frame()` while in a world (not when F1/F3 is on or a non-chat screen is open). Keep it cheap:
+- [x] `Modules` registry, load/save `config/native-modules.json` (Gson: `{id: {enabled, settings{...}, x, y}}`).
+- [x] Per-frame HUD drawing in `UiRuntime.frame()` while in a world (not when F1/F3 is on or a non-chat screen is open). Keep it cheap:
       no allocation per frame where possible.
 
 ### 4.4 Native menu (host kind MENU)
-- [ ] Opened with **Right Shift** in a world, and from the title screen (new menu item "Native Mods", `I_SPARKLES`).
-- [ ] Layout: a centred glass window (~920×600) with a left tab rail: **Mods**, **Cosmetics**, **Settings**. Header with a search field.
-- [ ] **Mods tab**: category chips (All / HUD / Mechanic / Visual), a grid of cards (icon tile, name, one-line description, toggle, gear),
+- [x] Opened with **Right Shift** in a world, and from the title screen (new menu item "Native Mods", `I_SPARKLES`).
+- [x] Layout: a centred glass window (~920×600) with a left tab rail: **Mods**, **Cosmetics**, **Settings**. Header with a search field.
+- [x] **Mods tab**: category chips (All / HUD / Mechanic / Visual), a grid of cards (icon tile, name, one-line description, toggle, gear),
       and a detail panel with the setting widgets, a **live preview** of the HUD module (`Game.sample()`), a "Reset" button, and an
       "Edit HUD layout" button.
-- [ ] **Cosmetics tab** (wardrobe):
+- [x] **Cosmetics tab** (wardrobe):
   - 3D `PlayerPreview` using Boxes. Skin is 64×64 (or legacy 64×32: mirror the arms/legs), slim arms when the account model is slim.
     Drag to rotate, plus a slow idle sway.
   - Cape: 64×32 texture, cube (-5,0,-1, 10×16×1) at body `translate(0,0,2)`, Rx (slight tilt) then Ry π.
@@ -150,19 +155,19 @@ Verified stable names, 1.16 to 1.21.11 (runtime = intermediary):
     kind: cosmetic|cape, slot, stillUrl, modelUrl, textureUrl}]`. Equip: `POST /v1/store/equip {itemId}`. Unequip: `{slot}`
     (cape: `{itemId:null}`). Header: `Authorization: Bearer <ticket>` (same ticket as RelayClient). Run the calls off-thread.
   - After an equip, refresh the player's own in-game cosmetics (SkinRefresh / skin directory) so the change shows in the world too.
-- [ ] **Settings tab**: Native title screen on/off, notifications, chat key, menu key, UI size slider.
+- [x] **Settings tab**: Native title screen on/off, notifications, chat key, menu key, UI size slider.
 
 ### 4.5 HUD editor (host kind HUD)
-- [ ] All enabled HUD modules shown with a dashed outline. Drag to move, with **snapping guides** to screen edges, the centre, and other modules.
-- [ ] Scroll over a module to scale it, right-click to open its settings popover. Toolbar: Done / Mods / Reset positions.
-- [ ] Dim the world behind it a little, and show a grid while dragging.
+- [x] All enabled HUD modules shown with a dashed outline. Drag to move, with **snapping guides** to screen edges, the centre, and other modules.
+- [x] Scroll over a module to scale it, right-click to open its settings popover. Toolbar: Done / Mods / Reset positions.
+- [x] Dim the world behind it a little, and show a grid while dragging.
 
 ### 4.6 Testing + release
-- [ ] `./gradlew build --no-daemon -q`. The build is slow, so run it in the background and poll.
-- [ ] Run real clients under Xvfb with `ci/ui` (see its README). Extend `mock.py` with `/v1/store/me`, `/v1/store/catalog`, `/v1/store/equip`
-      and the account `skin`. Test **1.21.4** and **1.16.5** at least, ideally also 1.20.1 and 1.21.11. Take screenshots of the menu, cosmetics
+- [x] `./gradlew build --no-daemon -q`. The build is slow, so run it in the background and poll.
+- [x] Run real clients under Xvfb with `ci/ui` (see its README). Extend `mock.py` with `/v1/store/me`, `/v1/store/catalog`, `/v1/store/equip`
+      and the account `skin`. Test **1.21.4** and **1.16.5** at least (done), ideally also 1.20.1 and 1.21.11 (not yet). Take screenshots of the menu, cosmetics
       preview, HUD in world, and HUD editor.
-- [ ] Bump the version to **1.7.0**. Tag/release with `release.bat` only when the owner asks.
+- [x] Bump the version to **1.7.0**. Tag/release with `release.bat` only when the owner asks.
 - [ ] Later: 26.x port (official names) of the UI + modules.
 
 ## 5. Gotchas
