@@ -12,7 +12,7 @@ import java.util.UUID;
  * on the render thread.
  */
 public final class NativeState {
-	public static final String DEFAULT_API = "https://api.nativelaunch.xyz";
+	public static final String DEFAULT_API = "https://api.playnative.fun";
 
 	private static final NativeState INSTANCE = new NativeState();
 
