@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $file = Join-Path $PSScriptRoot '..\gradle.properties'
 $text = [IO.File]::ReadAllText($file)
-if ($text -notmatch '(?m)^version=(\d+)\.(\d+)\.(\d+)[^\r\n]*') {
+if ($text -notmatch '(?m)^version\s*=\s*(\d+)\.(\d+)\.(\d+)[^\r\n]*') {
     Write-Error 'No version=x.y.z line found in gradle.properties'
     exit 1
 }
@@ -21,7 +21,7 @@ switch ($Part) {
 }
 $next = "$major.$minor.$patch"
 if (-not $DryRun -and $Part -ne 'none') {
-    $text = [regex]::Replace($text, '(?m)^version=\d+\.\d+\.\d+', "version=$next")
+    $text = [regex]::Replace($text, '(?m)^version\s*=\s*\d+\.\d+\.\d+', "version=$next")
     [IO.File]::WriteAllText($file, $text)
 }
 Write-Output $next

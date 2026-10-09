@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          file="$(grep -E '^version=' gradle.properties | head -n1 | cut -d= -f2 | tr -d '\r ')"
+          file="$(grep -E '^version *=' gradle.properties | head -n1 | cut -d= -f2 | tr -d '\r ')"
           if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$file" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match gradle.properties version $file"; exit 1
           fi
