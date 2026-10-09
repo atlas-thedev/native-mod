@@ -21,17 +21,20 @@ public final class NativeMod implements ClientModInitializer {
 		startUi(gameDir);
 	}
 
-	/** Custom title screen + in-game Relay chat (Minecraft 1.16 - 1.21.11 for now). */
+	/** Custom title screen + in-game Relay chat (Minecraft 1.16 - 1.21.11 through intermediary names, 26.x through official names). */
 	private static void startUi(java.nio.file.Path gameDir) {
-		try {
-			Class.forName("net.minecraft.class_310", false, NativeMod.class.getClassLoader());
-		} catch (Throwable t) {
+		String bridgeClass;
+		if (present("net.minecraft.class_310")) {
+			bridgeClass = "xyz.nativelaunch.uimc.IntermediaryMc";
+		} else if (present("net.minecraft.client.Minecraft") && present("net.minecraft.client.gui.GuiGraphicsExtractor")) {
+			bridgeClass = "xyz.nativelaunch.ui26.MojangMc"; // 26.x: unobfuscated
+		} else {
 			Log.info("Native UI is not available on this Minecraft version yet.");
 			return;
 		}
 		try {
 			String version = minecraftVersion();
-			Object bridge = Class.forName("xyz.nativelaunch.uimc.IntermediaryMc").getConstructor(String.class).newInstance(version);
+			Object bridge = Class.forName(bridgeClass).getConstructor(String.class).newInstance(version);
 			xyz.nativelaunch.ui.UiRuntime.install((xyz.nativelaunch.ui.McBridge) bridge, gameDir, version);
 		} catch (Throwable t) {
 			Log.warn("Native UI is unavailable ({}).", t.toString());
@@ -42,6 +45,15 @@ public final class NativeMod implements ClientModInitializer {
 			xyz.nativelaunch.relay.RelayClient.start(NativeState.get().api(), handoff == null ? null : handoff.ticket);
 		} catch (Throwable t) {
 			Log.warn("Relay chat is unavailable ({}).", t.toString());
+		}
+	}
+
+	private static boolean present(String name) {
+		try {
+			Class.forName(name, false, NativeMod.class.getClassLoader());
+			return true;
+		} catch (Throwable t) {
+			return false;
 		}
 	}
 

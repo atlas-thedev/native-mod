@@ -24,7 +24,7 @@ import java.util.List;
  * first and restored exactly afterwards, so Minecraft's own state cache never notices. Works on the GL 2.1
  * compatibility context of 1.16 and the 3.2 core context of 1.17+.
  */
-public final class GlRenderer {
+public final class GlRenderer implements Renderer {
 	private static final int FLOATS_PER_VERTEX = 5; // x, y, u, v, packed colour
 	private boolean ready, failed, detected, core, vaoCapable, samplers, fbo;
 	private int program, vao, vbo, atlasTex, uScreen, uTex;
@@ -124,6 +124,7 @@ public final class GlRenderer {
 	}
 
 	/** Renders the canvas over whatever Minecraft drew this frame. */
+	@Override
 	public void render(Canvas c) {
 		if (failed || c.quads == 0) {
 			return;

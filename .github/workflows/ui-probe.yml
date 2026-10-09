@@ -1,0 +1,63 @@
+name: ui-probe
+
+# Boots a real client per version, screenshots the Native title screen, opens Relay, and uploads shots + log.
+on:
+  push:
+    branches: ['ui-probe/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  probe:
+    name: Native UI on ${{ matrix.mc }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mc: "1.21.11", java: 21 }
+          - { mc: "26.1.2",  java: 25 }
+          - { mc: "26.2",    java: 25 }
+          - { mc: "26.3",    java: 25 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-client-jar
+          path: dist
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Install Xvfb + Mesa
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb imagemagick python3-xlib python3-pil libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libgles2 libxrandr2 libxcursor1 libxi6 libxxf86vm1 zip > /dev/null
+      - name: Boot + screenshots
+        run: |
+          mkdir -p shots
+          Xvfb :99 -screen 0 1280x720x24 +extension GLX +extension COMPOSITE -pixdepths 24 32 > xvfb.log 2>&1 &
+          python3 ci/ui/mock.py > mock.log 2>&1 &
+          sleep 2
+          export SDL_VIDEO_FORCE_EGL=1 SDL_VIDEO_X11_FORCE_EGL=1
+          chmod +x ci/ui/launch.sh
+          ci/ui/launch.sh "${{ matrix.mc }}" "$JAVA_HOME" "$(ls dist/native-client-*.jar | head -n1)"
+          export DISPLAY=:99
+          for i in $(seq 1 24); do sleep 5; grep -q "Sound engine started\|Created:.*atlas" /tmp/native-client/mc-${{ matrix.mc }}/game/out.log && break; done
+          sleep 25
+          python3 ci/ui/x.py shot shots/1-title.png
+          python3 ci/ui/x.py move 640 360 sleep 1 shot shots/2-hover.png
+          python3 ci/ui/x.py click 1035 519 sleep 3 shot shots/3-click.png
+          python3 ci/ui/x.py key Escape sleep 2 shot shots/4-esc.png
+          cp /tmp/native-client/mc-${{ matrix.mc }}/game/out.log shots/out.log || true
+          grep -nE "Native|Exception|Error" shots/out.log | head -80 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-${{ matrix.mc }}
+          path: shots

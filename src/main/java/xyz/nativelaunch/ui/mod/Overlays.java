@@ -20,10 +20,11 @@ public final class Overlays {
 	public static boolean push(Object ctx, float x, float y, float s) {
 		try {
 			Object m = ctx;
-			if (ctx.getClass().getName().equals("net.minecraft.class_332") || graphicsClass != null && graphicsClass.isInstance(ctx)) {
+			String cn = ctx.getClass().getName();
+			if (cn.equals("net.minecraft.class_332") || cn.equals("net.minecraft.client.gui.GuiGraphicsExtractor") || graphicsClass != null && graphicsClass.isInstance(ctx)) {
 				if (pose == null) {
 					graphicsClass = ctx.getClass();
-					pose = graphicsClass.getMethod("method_51448");
+					pose = graphicsClass.getMethod(cn.startsWith("net.minecraft.class_") ? "method_51448" : "pose"); // 26.x: official names
 				}
 				m = pose.invoke(ctx);
 			}
