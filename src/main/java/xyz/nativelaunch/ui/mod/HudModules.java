@@ -26,9 +26,12 @@ public final class HudModules {
 		Modules.register(new Ping());
 		Modules.register(new ServerIp());
 		Modules.register(new Speed());
+		Modules.register(new OverlayModules.Scoreboard());
+		Modules.register(new OverlayModules.BossBars());
 		Modules.register(new ToggleSprint());
 		Modules.register(new ZoomModule());
 		Modules.register(new Fullbright());
+		Modules.register(new PerformanceModules.BackgroundFps());
 	}
 
 	static McBridge mc() {

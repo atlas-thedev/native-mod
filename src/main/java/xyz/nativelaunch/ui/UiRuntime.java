@@ -71,6 +71,12 @@ public final class UiRuntime {
 		return game;
 	}
 
+	/** Logical px per framebuffer px used by the Native UI right now (same formula as the frame). */
+	public static float uiScale() {
+		int fbW = mc.fbWidth(), fbH = mc.fbHeight();
+		return Math.max(0.75f, Math.min(fbW / 1280f, fbH / 760f)) * (config == null ? 1f : config.scale);
+	}
+
 	public static UiConfig config() {
 		return config;
 	}

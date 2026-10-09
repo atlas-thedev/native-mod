@@ -449,4 +449,271 @@ public final class IntermediaryMc implements McBridge {
 		Object name = call(call(client(), "method_1548"), "method_1676");
 		return name instanceof String ? (String) name : null;
 	}
+	// ── scoreboard sidebar + boss bars (names checked against Mojang + intermediary mappings, 1.16.5 - 1.21.11) ──
+
+	private static final int RED_NUMBER = 0xFFFF5555;
+	private Object styledVisitor;
+	private xyz.nativelaunch.ui.mod.Rich visitTarget;
+	private Object emptyStyle;
+	private Method visitMethod;
+
+	private Method named(Class<?> owner, String name, int params) {
+		String key = owner.getName() + "~" + name + params;
+		Object m = members.get(key);
+		if (m == null) {
+			m = MISSING;
+			for (Method x : owner.getMethods()) {
+				if (x.getName().equals(name) && x.getParameterCount() == params) {
+					x.setAccessible(true);
+					m = x;
+					break;
+				}
+			}
+			if (m == MISSING) {
+				for (Class<?> c = owner; c != null && m == MISSING; c = c.getSuperclass()) {
+					for (Method x : c.getDeclaredMethods()) {
+						if (x.getName().equals(name) && x.getParameterCount() == params) {
+							x.setAccessible(true);
+							m = x;
+							break;
+						}
+					}
+				}
+			}
+			members.put(key, m);
+		}
+		return m == MISSING ? null : (Method) m;
+	}
+
+	/** Text component -> colour runs (Style colour, then legacy codes inside the strings). */
+	private void rich(Object component, xyz.nativelaunch.ui.mod.Rich out, int base) throws Exception {
+		out.clear();
+		if (component == null) {
+			return;
+		}
+		if (styledVisitor == null) {
+			final Class<?> consumer = Class.forName("net.minecraft.class_5348$class_5246");
+			emptyStyle = Class.forName("net.minecraft.class_2583").getField("field_24360").get(null);
+			styledVisitor = java.lang.reflect.Proxy.newProxyInstance(consumer.getClassLoader(), new Class<?>[] {consumer}, (proxy, m, args) -> {
+				if (m.getDeclaringClass() == Object.class) {
+					switch (m.getName()) {
+						case "hashCode":
+							return System.identityHashCode(proxy);
+						case "equals":
+							return proxy == args[0];
+						default:
+							return "NativeStyledVisitor";
+					}
+				}
+				if (args != null && args.length == 2 && args[1] instanceof String && visitTarget != null) {
+					int col = visitBase;
+					Object tc = call(args[0], "method_10973");
+					Object rgb = call(tc, "method_27716");
+					if (rgb instanceof Integer) {
+						col = 0xFF000000 | (Integer) rgb;
+					}
+					visitTarget.addLegacy((String) args[1], col);
+				}
+				return java.util.Optional.empty();
+			});
+		}
+		if (visitMethod == null || !visitMethod.getDeclaringClass().isInstance(component)) {
+			visitMethod = named(component.getClass(), "method_27658", 2);
+		}
+		visitTarget = out;
+		visitBase = base;
+		try {
+			visitMethod.invoke(component, styledVisitor, emptyStyle);
+		} finally {
+			visitTarget = null;
+		}
+	}
+
+	private int visitBase = 0xFFFFFFFF;
+
+	private Object literal(String s) throws Exception {
+		Class<?> text = Class.forName("net.minecraft.class_2561");
+		Method lit = named(text, "method_43470", 1);
+		if (lit != null) {
+			return lit.invoke(null, s); // 1.19+
+		}
+		return Class.forName("net.minecraft.class_2585").getConstructor(String.class).newInstance(s); // 1.16 - 1.18
+	}
+
+	private Object sidebarSlot;
+	private boolean sidebarWarned;
+
+	@Override
+	public boolean guiSize(float[] out) {
+		try {
+			class_1041 w = win();
+			Object sw = call(w, "method_4486"), sh = call(w, "method_4502"), gs = call(w, "method_4495");
+			if (!(sw instanceof Integer) || !(sh instanceof Integer) || !(gs instanceof Number)) {
+				return false;
+			}
+			out[0] = (Integer) sw;
+			out[1] = (Integer) sh;
+			out[2] = ((Number) gs).floatValue();
+			return true;
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	private Method fontWidth;
+
+	/** Width in GUI px of a text component, measured by the game's own font (so custom server fonts count). */
+	private float width(Object component) {
+		try {
+			Object font = get(client(), "field_1772");
+			if (font == null || component == null) {
+				return 0;
+			}
+			if (fontWidth == null) {
+				for (Method m : font.getClass().getMethods()) {
+					if (m.getName().equals("method_27525") && m.getParameterCount() == 1) {
+						fontWidth = m;
+					}
+				}
+			}
+			Object w = fontWidth == null ? null : fontWidth.invoke(font, component);
+			return w instanceof Integer ? (Integer) w : 0;
+		} catch (Throwable t) {
+			return 0;
+		}
+	}
+
+	@Override
+	public boolean sidebar(xyz.nativelaunch.ui.mod.Overlays.Sidebar out) {
+		out.has = false;
+		out.count = 0;
+		try {
+			Object level = get(client(), "field_1687");
+			Object board = call(level, "method_8428");
+			if (board == null) {
+				return true;
+			}
+			Object objective;
+			Method slotLookup = named(board.getClass(), "method_1189", 1);
+			if (slotLookup == null) {
+				return false;
+			}
+			if (slotLookup.getParameterTypes()[0] == int.class) {
+				objective = slotLookup.invoke(board, 1); // up to 1.20.1: slot 1 = sidebar
+			} else {
+				if (sidebarSlot == null) {
+					sidebarSlot = Class.forName("net.minecraft.class_8646").getField("field_45157").get(null);
+				}
+				objective = slotLookup.invoke(board, sidebarSlot);
+			}
+			if (objective == null) {
+				return true;
+			}
+			Object titleText = call(objective, "method_1114");
+			rich(titleText, out.title, 0xFFFFFFFF);
+			float widest = width(titleText), colon = width(literal(": "));
+			Object all = method(board.getClass(), "method_1184", objective.getClass()).invoke(board, objective);
+			if (!(all instanceof java.util.Collection)) {
+				return false;
+			}
+			java.util.List<Object> rows = new java.util.ArrayList<Object>();
+			final java.util.Map<Object, Integer> value = new java.util.IdentityHashMap<Object, Integer>();
+			final java.util.Map<Object, String> owner = new java.util.IdentityHashMap<Object, String>();
+			for (Object e : (java.util.Collection<?>) all) {
+				Object o = call(e, "method_1129"); // old Score
+				Object v;
+				if (o instanceof String) {
+					v = call(e, "method_1126");
+				} else {
+					o = call(e, "comp_2127"); // 1.20.3+ PlayerScoreEntry
+					v = call(e, "comp_2128");
+					if (Boolean.TRUE.equals(call(e, "method_55385"))) {
+						continue;
+					}
+				}
+				if (!(o instanceof String) || ((String) o).startsWith("#")) {
+					continue;
+				}
+				rows.add(e);
+				owner.put(e, (String) o);
+				value.put(e, v instanceof Integer ? (Integer) v : 0);
+			}
+			rows.sort((a, b) -> {
+				int d = Integer.compare(value.get(b), value.get(a));
+				return d != 0 ? d : String.CASE_INSENSITIVE_ORDER.compare(owner.get(a), owner.get(b));
+			});
+			Method team = method(board.getClass(), "method_1164", String.class);
+			Method decorate = named(Class.forName("net.minecraft.class_268"), "method_1142", 2);
+			Object format = call(objective, "method_55384");
+			int n = Math.min(15, rows.size());
+			for (int i = 0; i < n; i++) {
+				Object e = rows.get(i);
+				String who = owner.get(e);
+				Object name = call(e, "method_55387");
+				if (name == null) {
+					name = literal(who);
+				}
+				Object t = team == null ? null : team.invoke(board, who);
+				Object shown = decorate == null ? name : decorate.invoke(null, t, name);
+				rich(shown, out.names[i], 0xFFFFFFFF);
+				Method fv = format == null ? null : named(e.getClass(), "method_55386", 1);
+				float sw;
+				if (fv != null) {
+					Object num = fv.invoke(e, format);
+					rich(num, out.scores[i], RED_NUMBER);
+					sw = width(num);
+				} else {
+					String num = String.valueOf(value.get(e));
+					out.scores[i].set(num, RED_NUMBER);
+					sw = width(literal(num));
+				}
+				widest = Math.max(widest, width(shown) + (sw > 0 ? colon + sw : 0));
+			}
+			out.count = n;
+			out.vanillaW = widest;
+			out.has = true;
+			return true;
+		} catch (Throwable t) {
+			out.has = false;
+			out.count = 0;
+			if (!sidebarWarned) {
+				sidebarWarned = true;
+				System.err.println("[NativeSidebar] can't read the scoreboard: " + t);
+				t.printStackTrace();
+			}
+			return false;
+		}
+	}
+
+	@Override
+	public boolean bossBars(xyz.nativelaunch.ui.mod.Overlays.Bars out) {
+		out.count = 0;
+		try {
+			Object hud = get(client(), "field_1705");
+			Object overlay = call(hud, "method_1740");
+			Object map = get(overlay, "field_2060");
+			if (!(map instanceof Map)) {
+				return hud == null; // no HUD yet: fine; HUD without the map: unsupported
+			}
+			for (Object bar : ((Map<?, ?>) map).values()) {
+				if (out.count >= out.names.length) {
+					break;
+				}
+				int i = out.count;
+				Object name = call(bar, "method_5414");
+				rich(name, out.names[i], 0xFFFFFFFF);
+				out.nameW[i] = width(name);
+				Object p = call(bar, "method_5412");
+				out.progress[i] = p instanceof Float ? (Float) p : 0f;
+				Object c = call(bar, "method_5420");
+				out.color[i] = c instanceof Enum ? ((Enum<?>) c).ordinal() : 0;
+				out.ids[i] = bar;
+				out.count++;
+			}
+			return true;
+		} catch (Throwable t) {
+			out.count = 0;
+			return false;
+		}
+	}
 }

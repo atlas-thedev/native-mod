@@ -5,7 +5,7 @@ import java.util.List;
 
 /** A Native client feature the player can switch on and tune (Lunar / Feather style). */
 public abstract class Module {
-	public static final String HUD = "HUD", MECHANIC = "Mechanic", VISUAL = "Visual";
+	public static final String HUD = "HUD", MECHANIC = "Mechanic", VISUAL = "Visual", PERFORMANCE = "Performance";
 
 	public final String id, name, description, category;
 	public final int icon;
