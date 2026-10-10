@@ -90,7 +90,7 @@ Every GLFW touch now sits behind the version bridge:
   never linked on 26.3.
 - New `ui/SdlKeys.java` translates SDL scancodes and mouse buttons to the GLFW numbering
   the UI and the keybind settings use (detected at runtime by probing for
-  `org.lwjgl.glfw.GLFW`), so keyboard and mouse input work on 26.1/26.2.
+  `org.lwjgl.glfw.GLFW`), so keyboard and mouse input work on 26.3 and are untouched on 26.1/26.2.
 
 ### 3. Avatar in the username pill — done
 The toolbar pill in `MenuView` draws the player head (`Avatars.self`, directory skin hash →
