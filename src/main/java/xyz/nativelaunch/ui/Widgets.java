@@ -60,21 +60,39 @@ public final class Widgets {
 		Canvas c = ui.c;
 		c.round(x, y, w, h, h / 2, Theme.SUBTLE);
 		c.outline(x, y, w, h, h / 2, 1, Theme.HAIRLINE);
-		float seg = (w - 4) / options.length;
+		float fs = 11.5f;
+		// segments are sized to their text, so a long option is never cut off
+		float[] seg = new float[options.length];
+		float total = 0;
+		for (int i = 0; i < options.length; i++) {
+			seg[i] = c.textWidth(Fonts.SEMIBOLD, fs, options[i]) + 20;
+			total += seg[i];
+		}
+		float inner = w - 4, k = total > 0 ? inner / total : 1;
+		float[] sx = new float[options.length + 1];
+		sx[0] = x + 2;
+		for (int i = 0; i < options.length; i++) {
+			seg[i] *= k;
+			sx[i + 1] = sx[i] + seg[i];
+		}
 		float sel = ui.anim(id + "#s", value, 18f);
-		c.round(x + 2 + sel * seg, y + 2, seg, h - 4, (h - 4) / 2, 0xFFF4F4F5);
+		int lo = Math.max(0, Math.min(options.length - 1, (int) Math.floor(sel)));
+		int hi = Math.max(0, Math.min(options.length - 1, lo + 1));
+		float t = sel - lo;
+		float px = sx[lo] + (sx[hi] - sx[lo]) * t;
+		float pw = seg[lo] + (seg[hi] - seg[lo]) * t;
+		c.round(px, y + 2, pw, h - 4, (h - 4) / 2, 0xFFF4F4F5);
 		int out = value;
 		for (int i = 0; i < options.length; i++) {
-			float sx = x + 2 + i * seg;
-			boolean over = ui.hover(sx, y, seg, h);
-			if (ui.clicked(id + ":" + i, sx, y, seg, h)) {
+			boolean over = ui.hover(sx[i], y, seg[i], h);
+			if (ui.clicked(id + ":" + i, sx[i], y, seg[i], h)) {
 				out = i;
 			}
 			float on = Math.max(0, 1 - Math.abs(sel - i));
 			int fg = Theme.mix(over ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY, Theme.SOLID_FG, on);
-			float fs = 11.5f;
-			String t = c.ellipsize(Fonts.SEMIBOLD, fs, options[i], seg - 6);
-			c.text(Fonts.SEMIBOLD, fs, t, sx + (seg - c.textWidth(Fonts.SEMIBOLD, fs, t)) / 2, y + (h - c.lineHeight(Fonts.SEMIBOLD, fs)) / 2, fg);
+			String label = c.ellipsize(Fonts.SEMIBOLD, fs, options[i], seg[i] - 4);
+			c.text(Fonts.SEMIBOLD, fs, label, sx[i] + (seg[i] - c.textWidth(Fonts.SEMIBOLD, fs, label)) / 2,
+					y + (h - c.lineHeight(Fonts.SEMIBOLD, fs)) / 2, fg);
 		}
 		return out;
 	}
@@ -173,9 +191,9 @@ public final class Widgets {
 			Setting.Choice ch = (Setting.Choice) s;
 			float sw = 0;
 			for (String o : ch.options) {
-				sw += c.textWidth(Fonts.SEMIBOLD, 11.5f, o) + 22;
+				sw += c.textWidth(Fonts.SEMIBOLD, 11.5f, o) + 24;
 			}
-			sw = Math.min(Math.max(sw, 90), w * 0.68f);
+			sw = Math.min(Math.max(sw, 90), Math.max(w * 0.68f, w - c.textWidth(Fonts.MEDIUM, fs, s.label) - 16));
 			int v = segmented(ui, id, x + w - sw, y + (h - 26) / 2, sw, 26, ch.options, ch.value);
 			if (v != ch.value) {
 				ch.value = v;

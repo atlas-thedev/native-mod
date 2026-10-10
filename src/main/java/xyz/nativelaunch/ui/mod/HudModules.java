@@ -273,8 +273,9 @@ public final class HudModules {
 			ry += k + gap;
 			if (mouse.value) {
 				float half = (3 * k + gap) / 2;
-				key(c, s, x, ry, half, k, "LMB", cps.value ? g.cpsLeft + " CPS" : null, anim[Game.ATTACK]);
-				key(c, s, x + half + gap, ry, half, k, "RMB", cps.value ? g.cpsRight + " CPS" : null, anim[Game.USE]);
+				String unit = labels.value ? " CPS" : "";
+				key(c, s, x, ry, half, k, "LMB", cps.value ? g.cpsLeft + unit : null, anim[Game.ATTACK]);
+				key(c, s, x + half + gap, ry, half, k, "RMB", cps.value ? g.cpsRight + unit : null, anim[Game.USE]);
 				ry += k + gap;
 			}
 			if (space.value) {

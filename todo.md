@@ -1,12 +1,17 @@
 # Native mod — todo
 
-Current release: **1.8.1** (Minecraft 1.16 – 26.3).
+Current release: **1.8.2** (Minecraft 1.16 – 26.3).
 
 Everything on the 1.8.1 list is done; see `Shipped in 1.8.1` below for what changed and
 how it was verified. Add new items under `Next`.
 
 ## Next
-- Nothing open.
+- More for the right-shift menu — players keep asking for extra modules and settings there.
+
+## Shipped in 1.8.2
+- HUD text modules have a **Show labels** switch (Appearance). Off shows the bare number,
+  so FPS reads `144` and CPS `9 | 2`; the keystroke overlay drops the `CPS` unit as well.
+- Bigger, clearer icons in the menu rail.
 
 ## Shipped in 1.8.1
 

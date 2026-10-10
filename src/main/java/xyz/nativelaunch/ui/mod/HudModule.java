@@ -26,6 +26,8 @@ public abstract class HudModule extends Module {
 	public final Setting.Color color;
 	public final Setting.Num opacity;
 	public final Setting.Bool shadow;
+	/** Off shows the bare number ("144" instead of "144 FPS"). */
+	public final Setting.Bool labels;
 	private final List<Setting> every = new ArrayList<Setting>();
 
 	protected HudModule(String id, String name, String description, int icon, boolean enabled, float x, float y) {
@@ -41,6 +43,7 @@ public abstract class HudModule extends Module {
 		color = look(new Setting.Color("color", "Text colour", 0xFFFFFFFF));
 		opacity = look(new Setting.Num("opacity", "Background", 55, 0, 100, 5, "%"));
 		shadow = look(new Setting.Bool("shadow", "Text shadow", true));
+		labels = look(new Setting.Bool("labels", "Show labels", true));
 	}
 
 	private <T extends Setting> T look(T s) {
@@ -94,14 +97,20 @@ public abstract class HudModule extends Module {
 		return false;
 	}
 
-	private final String[] labels = new String[6], values = new String[6];
+	private final String[] lineLabels = new String[6], lineValues = new String[6];
 	private final float[] size = new float[2];
 
 	private static final float FONT = 12f;
 
 	private String join(int i) {
-		String l = labels[i], v = values[i];
+		String l = lineLabels[i], v = lineValues[i];
 		if (l == null || l.isEmpty()) {
+			return v;
+		}
+		if (v == null || v.isEmpty()) {
+			return l;
+		}
+		if (!labels.value) {
 			return v;
 		}
 		return valueFirst() ? v + " " + l : l + (style.value == STYLE_BRACKETS ? ": " : " ") + v;
@@ -110,7 +119,7 @@ public abstract class HudModule extends Module {
 	/** Size in logical px at the module's scale. */
 	public float[] measure(Canvas c, Game g) {
 		float s = scale.value;
-		int n = lines(g, labels, values);
+		int n = lines(g, lineLabels, lineValues);
 		float w = 0;
 		for (int i = 0; i < n; i++) {
 			String t = join(i);
@@ -130,7 +139,7 @@ public abstract class HudModule extends Module {
 		Canvas c = ui.c;
 		float s = scale.value;
 		float[] sz = measure(c, g);
-		int n = lines(g, labels, values);
+		int n = lines(g, lineLabels, lineValues);
 		boolean card = style.value == STYLE_CARD;
 		if (card) {
 			background(c, x, y, sz[0], sz[1], s);
@@ -143,14 +152,15 @@ public abstract class HudModule extends Module {
 			float tx = x + (card ? 8 * s : s);
 			if (style.value == STYLE_BRACKETS) {
 				text(c, s, "[" + join(i) + "]", tx, ty, col);
-			} else if (labels[i] == null || labels[i].isEmpty()) {
-				text(c, s, values[i], tx, ty, col);
+			} else if (!labels.value || lineLabels[i] == null || lineLabels[i].isEmpty()
+					|| lineValues[i] == null || lineValues[i].isEmpty()) {
+				text(c, s, join(i), tx, ty, col);
 			} else if (valueFirst()) {
-				tx = text(c, s, values[i] + " ", tx, ty, col);
-				text(c, s, labels[i], tx, ty, muted);
+				tx = text(c, s, lineValues[i] + " ", tx, ty, col);
+				text(c, s, lineLabels[i], tx, ty, muted);
 			} else {
-				tx = text(c, s, labels[i] + " ", tx, ty, muted);
-				text(c, s, values[i], tx, ty, col);
+				tx = text(c, s, lineLabels[i] + " ", tx, ty, muted);
+				text(c, s, lineValues[i], tx, ty, col);
 			}
 			ty += lh + 2 * s;
 		}

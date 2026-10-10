@@ -29,7 +29,7 @@ import java.util.Locale;
  */
 public final class MenuView {
 	private static final String[] TABS = {"Mods", "Cosmetics", "Settings"};
-	private static final float RAIL = 52;
+	private static final float RAIL = 54;
 	/** Corner radius of the floating top bars — squared off a little so square avatars sit well. */
 	private static final float PILL_R = 13;
 	private static final int[] TAB_ICONS = {Theme.I_PUZZLE, Theme.I_SHIRT, Theme.I_SETTINGS};
@@ -136,7 +136,7 @@ public final class MenuView {
 		float rw = 72;
 		panel(c, x0, y0, rw, wh);
 		if (logo != null) {
-			c.stamp("menu:logo", logo, x0 + (rw - 30) / 2, y0 + 18, 30, 30, true, 0xFFFFFFFF);
+			c.stamp("menu:logo", logo, x0 + (rw - 32) / 2, y0 + 16, 32, 32, true, 0xFFFFFFFF);
 		}
 		c.fill(x0 + 16, y0 + 60, rw - 32, 1, Theme.HAIRLINE);
 		float rx = x0 + (rw - RAIL) / 2;
@@ -248,7 +248,7 @@ public final class MenuView {
 			c.round(x - 5, y + (s - bh) / 2, 3, bh, 1.5f, Theme.alpha(Theme.WHITE, sel));
 		}
 		int fg = Theme.mix(Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_SECONDARY, hv), Theme.TEXT_STRONG, sel);
-		c.icon(icon, 20, x + s / 2, y + s / 2, fg);
+		c.icon(icon, 24, x + s / 2, y + s / 2, fg);
 		if (over) {
 			ui.tip(label);
 		}
