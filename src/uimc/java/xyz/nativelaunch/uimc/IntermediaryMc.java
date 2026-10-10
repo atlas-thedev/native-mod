@@ -201,6 +201,53 @@ public final class IntermediaryMc implements McBridge {
 		return win().method_4490();
 	}
 
+	// ── keyboard / window state: 1.16 - 1.21.11 all run on GLFW ──────────
+
+	@Override
+	public int keyState(int code) {
+		try {
+			long w = window();
+			if (w == 0 || code < 0) {
+				return -1;
+			}
+			if (code <= 7) {
+				return org.lwjgl.glfw.GLFW.glfwGetMouseButton(w, code) == org.lwjgl.glfw.GLFW.GLFW_PRESS ? 1 : 0;
+			}
+			return org.lwjgl.glfw.GLFW.glfwGetKey(w, code) == org.lwjgl.glfw.GLFW.GLFW_PRESS ? 1 : 0;
+		} catch (Throwable t) {
+			return -1;
+		}
+	}
+
+	@Override
+	public String keyLabel(int code) {
+		try {
+			return org.lwjgl.glfw.GLFW.glfwGetKeyName(code, 0);
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	@Override
+	public boolean windowFocused() {
+		try {
+			long w = window();
+			return w == 0 || org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(w, org.lwjgl.glfw.GLFW.GLFW_FOCUSED) == org.lwjgl.glfw.GLFW.GLFW_TRUE;
+		} catch (Throwable t) {
+			return true;
+		}
+	}
+
+	@Override
+	public boolean windowMinimized() {
+		try {
+			long w = window();
+			return w != 0 && org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(w, org.lwjgl.glfw.GLFW.GLFW_ICONIFIED) == org.lwjgl.glfw.GLFW.GLFW_TRUE;
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
 	@Override
 	public int fbWidth() {
 		return win().method_4489();

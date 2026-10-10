@@ -136,6 +136,7 @@ public final class Wardrobe {
 				loadedAt = System.currentTimeMillis();
 				error = null;
 				state = State.READY;
+				warm();
 			} catch (Throwable t) {
 				Log.warn("Wardrobe unavailable: {}", t.toString());
 				error = "Could not load your locker.";
@@ -144,6 +145,44 @@ public final class Wardrobe {
 				}
 			}
 		});
+	}
+
+	/**
+	 * Warms what the player is about to look at: the models and textures of the cosmetics they wear (so the
+	 * pause-screen model and the Locker draw them straight away instead of popping in mid-render) and the
+	 * thumbnails of everything they own. Everything goes through TextureCache / the image cache on disk, so
+	 * this is one request per file, once.
+	 */
+	private static void warm() {
+		try {
+			List<xyz.nativelaunch.cosmetic.CosmeticRef> refs = new ArrayList<xyz.nativelaunch.cosmetic.CosmeticRef>();
+			for (Map.Entry<String, String> e : wearing.entrySet()) {
+				Item i = item(e.getValue());
+				if (i == null || i.isCape() || i.modelHash() == null || i.textureHash() == null) {
+					continue;
+				}
+				Integer side = sides.get(i.group());
+				refs.add(new xyz.nativelaunch.cosmetic.CosmeticRef(i.id, i.modelHash(), i.textureHash(), i.group(), side == null ? 0 : side));
+				cosmeticTexture(i); // the dyed texture the preview actually draws
+			}
+			xyz.nativelaunch.cosmetic.CosmeticLibrary.preload(refs, base());
+			Item cape = item(equipped);
+			if (cape != null) {
+				url(cape.stillUrl, true, 0);
+			}
+			int thumbs = 0;
+			for (Item i : catalog) {
+				if (i.stillUrl == null || !owned.contains(i.id)) {
+					continue;
+				}
+				url(i.stillUrl, true, 0);
+				if (++thumbs >= 64) {
+					break; // a locker is small; never queue a whole store
+				}
+			}
+		} catch (Throwable ignored) {
+			// warming is best-effort
+		}
 	}
 
 	private static void apply(JsonObject me) {

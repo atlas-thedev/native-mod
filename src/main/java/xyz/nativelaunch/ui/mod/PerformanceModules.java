@@ -1,7 +1,7 @@
 package xyz.nativelaunch.ui.mod;
 
-import org.lwjgl.glfw.GLFW;
 import xyz.nativelaunch.ui.Theme;
+import xyz.nativelaunch.ui.McBridge;
 import xyz.nativelaunch.ui.UiRuntime;
 
 /** Modules that make the game lighter to run. */
@@ -30,10 +30,10 @@ final class PerformanceModules {
 			long now = System.nanoTime();
 			if (now - checkAt > 200_000_000L) {
 				checkAt = now;
-				long w = UiRuntime.mc().window();
-				if (w != 0) {
-					focused = GLFW.glfwGetWindowAttrib(w, GLFW.GLFW_FOCUSED) == GLFW.GLFW_TRUE;
-					iconified = GLFW.glfwGetWindowAttrib(w, GLFW.GLFW_ICONIFIED) == GLFW.GLFW_TRUE;
+				McBridge mc = UiRuntime.mc();
+				if (mc != null) {
+					focused = mc.windowFocused();
+					iconified = mc.windowMinimized();
 				}
 			}
 			int cap = iconified ? Math.round(minimized.value) : !focused ? Math.round(unfocused.value) : 0;

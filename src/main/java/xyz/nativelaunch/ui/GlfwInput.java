@@ -11,8 +11,11 @@ import org.lwjgl.glfw.GLFWScrollCallback;
 /**
  * Sits in front of Minecraft's own GLFW callbacks: while a Native screen is open its input goes to the Native UI,
  * everything else is passed straight through to the game. Re-checked periodically in case the game re-registers.
+ *
+ * Only loaded through {@link RawInput#open(long)}, so Minecraft 26.3 (SDL, no {@code org.lwjgl.glfw.GLFW})
+ * never links against it.
  */
-final class GlfwInput {
+final class GlfwInput implements RawInput {
 	private final long window;
 	private GLFWKeyCallback mcKey;
 	private GLFWCharCallback mcChar;
@@ -64,7 +67,8 @@ final class GlfwInput {
 	}
 
 	/** (Re)installs our callbacks, adopting whatever the game registered in between. */
-	void install() {
+	@Override
+	public void install() {
 		GLFWKeyCallback k = GLFW.glfwSetKeyCallback(window, key);
 		if (k != null && k.address() != key.address()) {
 			mcKey = k;
@@ -95,11 +99,13 @@ final class GlfwInput {
 		}
 	}
 
-	String clipboard() {
+	@Override
+	public String clipboard() {
 		return GLFW.glfwGetClipboardString(window);
 	}
 
-	void clipboard(String text) {
+	@Override
+	public void clipboard(String text) {
 		GLFW.glfwSetClipboardString(window, text);
 	}
 }

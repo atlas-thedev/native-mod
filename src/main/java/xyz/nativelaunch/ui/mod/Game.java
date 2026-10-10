@@ -125,8 +125,11 @@ public final class Game {
 				}
 			}
 		}
+		if (!mc.windowFocused()) {
+			Keys.clearTracked(); // nothing can still be held down once the window is in the background
+		}
 		for (int i = 0; i < CONTROLS.length; i++) {
-			down[i] = window != 0 && Keys.isDown(window, keys[i]);
+			down[i] = Keys.isDown(window, keys[i]);
 		}
 	}
 

@@ -1,5 +1,6 @@
 package xyz.nativelaunch.ui.view;
 
+import xyz.nativelaunch.ui.Avatars;
 import xyz.nativelaunch.ui.McBridge;
 import xyz.nativelaunch.ui.Scroll;
 import xyz.nativelaunch.ui.TextField;
@@ -28,6 +29,9 @@ import java.util.Locale;
  */
 public final class MenuView {
 	private static final String[] TABS = {"Mods", "Cosmetics", "Settings"};
+	private static final float RAIL = 52;
+	/** Corner radius of the floating top bars — squared off a little so square avatars sit well. */
+	private static final float PILL_R = 13;
 	private static final int[] TAB_ICONS = {Theme.I_PUZZLE, Theme.I_SHIRT, Theme.I_SETTINGS};
 	private static final String[] CHIPS = {"All", "Favorites", Module.HUD, Module.MECHANIC, Module.VISUAL, Module.PERFORMANCE};
 	private static final int[] SLOT_ICONS = {Theme.I_LAYERS, Theme.I_HAT, Theme.I_GLASSES, Theme.I_BACKPACK, Theme.I_FOOTPRINTS, Theme.I_HAND};
@@ -86,6 +90,9 @@ public final class MenuView {
 
 	public void openTab(int t) {
 		setTab(t);
+		if (t == 1) {
+			Wardrobe.refresh(false); // also when the tab was already open
+		}
 	}
 
 	private void setTab(int t) {
@@ -126,23 +133,21 @@ public final class MenuView {
 		c.pushAlpha(e);
 
 		// ── icon rail
-		float rw = 80;
+		float rw = 72;
 		panel(c, x0, y0, rw, wh);
 		if (logo != null) {
-			c.stamp("menu:logo", logo, x0 + 24, y0 + 16, 32, 32, true, 0xFFFFFFFF);
+			c.stamp("menu:logo", logo, x0 + (rw - 30) / 2, y0 + 18, 30, 30, true, 0xFFFFFFFF);
 		}
-		c.fill(x0 + 16, y0 + 62, rw - 32, 1, Theme.HAIRLINE);
+		c.fill(x0 + 16, y0 + 60, rw - 32, 1, Theme.HAIRLINE);
+		float rx = x0 + (rw - RAIL) / 2;
 		float ty = y0 + 74;
 		for (int i = 0; i < TABS.length; i++) {
-			if (railTile(ui, "menu:tab:" + i, x0 + 8, ty, TAB_ICONS[i], TABS[i], tab == i)) {
+			if (railTile(ui, "menu:tab:" + i, rx, ty, TAB_ICONS[i], TABS[i], tab == i)) {
 				setTab(i);
 			}
-			ty += 66;
+			ty += RAIL + 8;
 		}
-		if (railTile(ui, "menu:rail:hud", x0 + 8, y0 + wh - 132, Theme.I_MOVE, "Edit HUD", false)) {
-			openEditor(screen);
-		}
-		if (railTile(ui, "menu:rail:close", x0 + 8, y0 + wh - 68, Theme.I_X, "Close", false)) {
+		if (railTile(ui, "menu:rail:close", rx, y0 + wh - RAIL - 16, Theme.I_X, "Close", false)) {
 			UiRuntime.closeHost(screen);
 			c.popAlpha();
 			return;
@@ -154,15 +159,19 @@ public final class MenuView {
 		float tbW = toolbar(ui, mx, y0, tbH, screen);
 		String who = UiRuntime.mc().username();
 		if (who != null) {
-			String hint = who;
-			float hw = c.textWidth(Fonts.SEMIBOLD, 12, hint);
-			float pw = hw + 40, px = mx + mw - pw;
+			float hw = c.textWidth(Fonts.SEMIBOLD, 12, who);
+			float av = tbH - 14;
+			float pw = hw + av + 30, px = mx + mw - pw;
 			if (px > mx + tbW + 20) {
-				c.shadow(px, y0 + 3, pw, tbH, tbH / 2, 18, 0x66000000);
-				c.round(px, y0, pw, tbH, tbH / 2, PANEL_BG);
-				c.outline(px, y0, pw, tbH, tbH / 2, 1, Theme.HAIRLINE_STRONG);
-				c.circle(px + 18, y0 + tbH / 2, 3.5f, Theme.ONLINE);
-				c.text(Fonts.SEMIBOLD, 12, hint, px + 28, y0 + (tbH - c.lineHeight(Fonts.SEMIBOLD, 12)) / 2, Theme.TEXT);
+				c.shadow(px, y0 + 3, pw, tbH, PILL_R, 18, 0x66000000);
+				c.round(px, y0, pw, tbH, PILL_R, PANEL_BG);
+				c.outline(px, y0, pw, tbH, PILL_R, 1, Theme.HAIRLINE_STRONG);
+				float ax = px + 7, ay = y0 + (tbH - av) / 2;
+				Avatars.draw(c, Avatars.api(), who, Avatars.self(who), ax, ay, av, 7f);
+				// online dot, bottom-right of the head
+				c.circle(ax + av - 3, ay + av - 3, 5f, 0xFF05060A);
+				c.circle(ax + av - 3, ay + av - 3, 3.5f, Theme.ONLINE);
+				c.text(Fonts.SEMIBOLD, 12, who, ax + av + 11, y0 + (tbH - c.lineHeight(Fonts.SEMIBOLD, 12)) / 2, Theme.TEXT);
 			}
 		}
 
@@ -224,19 +233,25 @@ public final class MenuView {
 	}
 
 	/** One square tab on the rail: icon with a tiny caption, a white tile when selected. */
+	/** Square icon tile with an active marker; the label shows up as a tooltip. */
 	private boolean railTile(Ui ui, String id, float x, float y, int icon, String label, boolean on) {
 		Canvas c = ui.c;
-		float w = 64, h = 58;
-		boolean over = ui.hover(x, y, w, h);
-		boolean click = ui.clicked(id, x, y, w, h);
+		float s = RAIL;
+		boolean over = ui.hover(x, y, s, s);
+		boolean click = ui.clicked(id, x, y, s, s);
 		float hv = ui.anim(id + "#h", over, 14f);
 		float sel = ui.anim(id + "#on", on, 16f);
-		c.round(x, y, w, h, 12, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv), 0xFFF4F4F5, sel));
-		int fg = Theme.mix(Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_STRONG, hv), Theme.SOLID_FG, sel);
-		c.icon(icon, 18, x + w / 2, y + 22, fg);
-		String text = c.ellipsize(Fonts.SEMIBOLD, 10, label, w - 6);
-		float lw = c.textWidth(Fonts.SEMIBOLD, 10, text);
-		c.text(Fonts.SEMIBOLD, 10, text, x + (w - lw) / 2, y + 37, fg);
+		c.round(x, y, s, s, 15, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv * 0.85f), 0x16FFFFFF, sel));
+		if (sel > 0.01f) {
+			c.outline(x, y, s, s, 15, 1, Theme.alpha(Theme.HAIRLINE_STRONG, sel));
+			float bh = 18 * sel;
+			c.round(x - 5, y + (s - bh) / 2, 3, bh, 1.5f, Theme.alpha(Theme.WHITE, sel));
+		}
+		int fg = Theme.mix(Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_SECONDARY, hv), Theme.TEXT_STRONG, sel);
+		c.icon(icon, 20, x + s / 2, y + s / 2, fg);
+		if (over) {
+			ui.tip(label);
+		}
 		return click;
 	}
 
@@ -244,9 +259,9 @@ public final class MenuView {
 	private float toolbar(Ui ui, float x, float y, float h, Object screen) {
 		Canvas c = ui.c;
 		float w = tab == 0 && selected == null ? 206 : 120;
-		c.shadow(x, y + 3, w, h, h / 2, 18, 0x66000000);
-		c.round(x, y, w, h, h / 2, PANEL_BG);
-		c.outline(x, y, w, h, h / 2, 1, Theme.HAIRLINE_STRONG);
+		c.shadow(x, y + 3, w, h, PILL_R, 18, 0x66000000);
+		c.round(x, y, w, h, PILL_R, PANEL_BG);
+		c.outline(x, y, w, h, PILL_R, 1, Theme.HAIRLINE_STRONG);
 		if (ui.button("menu:tb:hud", x + 4, y + 4, 112, h - 8, "Edit HUD", Theme.I_MOVE, Ui.BTN_GHOST)) {
 			openEditor(screen);
 		}
@@ -268,7 +283,7 @@ public final class MenuView {
 		boolean click = ui.clicked(id, x, y, s, s);
 		float hv = ui.anim(id + "#h", over, 14f);
 		float sel = ui.anim(id + "#on", on, 16f);
-		c.round(x, y, s, s, s / 2, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv), 0xFFF4F4F5, sel));
+		c.round(x, y, s, s, 9, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv), 0xFFF4F4F5, sel));
 		c.icon(icon, 14, x + s / 2, y + s / 2, Theme.mix(Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_STRONG, hv), Theme.SOLID_FG, sel));
 		return click;
 	}

@@ -1,21 +1,69 @@
 package xyz.nativelaunch.ui.mod;
 
-import org.lwjgl.glfw.GLFW;
+import xyz.nativelaunch.ui.McBridge;
+import xyz.nativelaunch.ui.UiRuntime;
 
-/** GLFW key helpers: live state and short names for bound keys (codes 0 - 7 are mouse buttons). */
+/**
+ * Key helpers: live state and short names for bound keys (codes 0 - 7 are mouse buttons).
+ *
+ * The codes themselves are the GLFW ones Minecraft still uses in its key bindings, but nothing here touches
+ * {@code org.lwjgl.glfw.GLFW}: 26.3 replaced GLFW with SDL and the class is gone there. The live state comes
+ * from the version bridge when it can poll the window, otherwise from the key events the UI already sees.
+ */
 public final class Keys {
+	/** Fallback key state, fed by the input events (works on every version, including SDL). */
+	private static final java.util.BitSet DOWN = new java.util.BitSet();
+	private static final int MAX_CODE = 1024;
+
 	private Keys() {
 	}
 
+	/** Called for every key / mouse event the UI sees: keeps the fallback state in step. action: 1 press, 2 repeat, 0 release. */
+	public static void track(int code, int action) {
+		if (code < 0 || code >= MAX_CODE) {
+			return;
+		}
+		synchronized (DOWN) {
+			DOWN.set(code, action != 0);
+		}
+	}
+
+	/** Window lost focus: nothing can be held down any more. */
+	public static void clearTracked() {
+		synchronized (DOWN) {
+			DOWN.clear();
+		}
+	}
+
+	private static boolean tracked(int code) {
+		if (code < 0 || code >= MAX_CODE) {
+			return false;
+		}
+		synchronized (DOWN) {
+			return DOWN.get(code);
+		}
+	}
+
+	private static McBridge bridge() {
+		try {
+			return UiRuntime.mc();
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	/** The window argument is kept for callers; the bridge owns the window now. */
 	public static boolean isDown(long window, int code) {
 		try {
 			if (code < 0) {
 				return false;
 			}
-			if (code <= 7) {
-				return GLFW.glfwGetMouseButton(window, code) == GLFW.GLFW_PRESS;
+			McBridge mc = bridge();
+			int state = mc == null ? -1 : mc.keyState(code);
+			if (state >= 0) {
+				return state == 1;
 			}
-			return GLFW.glfwGetKey(window, code) == GLFW.GLFW_PRESS;
+			return tracked(code);
 		} catch (Throwable t) {
 			return false;
 		}
@@ -59,7 +107,8 @@ public final class Keys {
 			return String.valueOf((char) code);
 		}
 		try {
-			String n = GLFW.glfwGetKeyName(code, 0);
+			McBridge mc = bridge();
+			String n = mc == null ? null : mc.keyLabel(code);
 			if (n != null && !n.isEmpty()) {
 				return n.toUpperCase(java.util.Locale.ROOT);
 			}

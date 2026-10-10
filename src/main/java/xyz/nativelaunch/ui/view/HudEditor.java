@@ -7,6 +7,7 @@ import xyz.nativelaunch.ui.UiRuntime;
 import xyz.nativelaunch.ui.Widgets;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Fonts;
+import xyz.nativelaunch.ui.gfx.Image;
 import xyz.nativelaunch.ui.mod.Game;
 import xyz.nativelaunch.ui.mod.HudModule;
 import xyz.nativelaunch.ui.mod.Modules;
@@ -30,6 +31,9 @@ public final class HudEditor {
 	private long sampleAt;
 	private Object lastScreen;
 	private long shownAt;
+	/** Real in-game shot, used as the backdrop when the editor is opened from the menus. */
+	private Image backdrop;
+	private boolean backdropLoaded;
 
 	public boolean escape() {
 		if (Widgets.escape()) {
@@ -56,7 +60,16 @@ public final class HudEditor {
 		}
 		float W = c.width(), H = c.height();
 		float in = MenuView.clamp01((ui.now - shownAt) / 220f);
-		c.fill(0, 0, W, H, Theme.alpha(inWorld ? 0x66000000 : 0x55000000, in));
+		if (!inWorld) {
+			if (!backdropLoaded) {
+				backdropLoaded = true;
+				backdrop = Image.resource("/assets/native/ui/hudbg.jpg");
+			}
+			if (backdrop != null) {
+				c.imageCover(backdrop, 0, 0, W, H, 1.02f, 0.5f, 0.5f, Theme.alpha(0xFFFFFFFF, in));
+			}
+		}
+		c.fill(0, 0, W, H, Theme.alpha(inWorld ? 0x66000000 : 0x4D000000, in));
 		if (drag != null) {
 			float step = 20;
 			for (float gx = step; gx < W; gx += step) {

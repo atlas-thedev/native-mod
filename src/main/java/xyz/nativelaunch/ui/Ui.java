@@ -250,6 +250,13 @@ public final class Ui {
 
 	private String pendingTooltip;
 
+	/** Requests a tooltip under the cursor for this frame. */
+	public void tip(String text) {
+		if (text != null && !text.isEmpty()) {
+			pendingTooltip = text;
+		}
+	}
+
 	/** Draws the tooltip requested this frame, if any (call last). */
 	public void tooltips() {
 		if (pendingTooltip == null) {

@@ -31,9 +31,22 @@ final class OverlayModules {
 		return w;
 	}
 
+	/** A spacer row: servers pad their sidebar with blank lines. */
+	static boolean blank(Rich r) {
+		for (int i = 0; i < r.n; i++) {
+			if (r.text[i] != null && !r.text[i].trim().isEmpty()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	// ── scoreboard ───────────────────────────────────────────────────────
 
 	static final class Scoreboard extends HudModule {
+		/** Native look: card padding, extra leading per row, the height of a blank server row, title-to-rows gap. */
+		private static final float PAD = 9f, ROW_AIR = 3.5f, GAP_ROW = 7f, TITLE_GAP = 5f;
+
 		final Setting.Choice look = add(new Setting.Choice("look", "Look", 0, LOOKS));
 		final Setting.Bool numbers = add(new Setting.Bool("numbers", "Show score numbers", true));
 		final Setting.Bool title = add(new Setting.Bool("title", "Show title", true));
@@ -122,17 +135,24 @@ final class OverlayModules {
 				return size;
 			}
 			Overlays.Sidebar d = data(g);
-			float s = scale.value, fs = 11.5f * s, lh = c.lineHeight(Fonts.MEDIUM, fs) + 1.5f * s;
-			float w = title.value ? richWidth(c, Fonts.SEMIBOLD, fs, d.title) : 0;
+			float s = scale.value, fs = 11.5f * s;
+			float lh = c.lineHeight(Fonts.MEDIUM, fs) + ROW_AIR * s;
+			float w = title.value ? richWidth(c, Fonts.SEMIBOLD, fs, d.title) + 8 * s : 0;
+			float body = 0;
 			for (int i = 0; i < d.count; i++) {
+				if (blank(d.names[i])) {
+					body += GAP_ROW * s;
+					continue;
+				}
 				float row = richWidth(c, Fonts.MEDIUM, fs, d.names[i]);
 				if (numbers.value) {
-					row += 12 * s + richWidth(c, Fonts.MEDIUM, fs, d.scores[i]);
+					row += 14 * s + chipWidth(c, fs, d.scores[i], s);
 				}
 				w = Math.max(w, row);
+				body += lh;
 			}
-			size[0] = w + 16 * s;
-			size[1] = d.count * lh + 10 * s + (title.value ? lh + 4 * s : 0);
+			size[0] = w + 2 * PAD * s;
+			size[1] = body + PAD * s + (title.value ? titleHeight(c, fs, s) + TITLE_GAP * s : PAD * s);
 			return size;
 		}
 
@@ -144,27 +164,57 @@ final class OverlayModules {
 			Canvas c = ui.c;
 			Overlays.Sidebar d = data(g);
 			float[] sz = measure(c, g);
-			float s = scale.value, fs = 11.5f * s, lh = c.lineHeight(Fonts.MEDIUM, fs) + 1.5f * s;
-			if (style.value != STYLE_TEXT) {
+			float s = scale.value, fs = 11.5f * s;
+			float lh = c.lineHeight(Fonts.MEDIUM, fs) + ROW_AIR * s;
+			boolean card = style.value != STYLE_TEXT;
+			float a = opacity.value / 100f;
+			if (card) {
 				background(c, x, y, sz[0], sz[1], s);
 			}
-			float ty = y + 5 * s;
+			float pad = PAD * s;
+			float ty = y + pad;
 			if (title.value) {
-				if (style.value != STYLE_TEXT && opacity.value > 0) {
-					c.round(x, y, sz[0], lh + 6 * s, 6 * s, Theme.alpha(0xFF000000, opacity.value / 100f * 0.5f));
+				float th = titleHeight(c, fs, s);
+				if (card && a > 0.01f) {
+					// a slightly brighter cap behind the title, with the card's own corner radius
+					c.pushClip(x, y, sz[0], th);
+					c.round(x, y, sz[0], th + 6 * s, 6 * s, Theme.alpha(0xFFFFFFFF, 0.05f * Math.min(1f, a * 1.6f)));
+					c.popClip();
 				}
 				float tw = richWidth(c, Fonts.SEMIBOLD, fs, d.title);
-				draw(c, Fonts.SEMIBOLD, fs, d.title, x + (sz[0] - tw) / 2, ty);
-				ty += lh + 4 * s;
+				draw(c, Fonts.SEMIBOLD, fs, d.title, x + (sz[0] - tw) / 2, y + pad);
+				c.fill(x + pad, y + th - 1, sz[0] - 2 * pad, 1, Theme.alpha(color.value, 0.14f));
+				ty = y + th + TITLE_GAP * s;
 			}
 			for (int i = 0; i < d.count; i++) {
-				draw(c, Fonts.MEDIUM, fs, d.names[i], x + 8 * s, ty);
+				if (blank(d.names[i])) {
+					// blank server padding becomes a hairline, so the sidebar keeps its grouping without the holes
+					c.fill(x + pad, ty + GAP_ROW * s / 2, sz[0] - 2 * pad, 1, Theme.alpha(color.value, 0.10f));
+					ty += GAP_ROW * s;
+					continue;
+				}
+				draw(c, Fonts.MEDIUM, fs, d.names[i], x + pad, ty);
 				if (numbers.value) {
+					float cw = chipWidth(c, fs, d.scores[i], s);
 					float nw = richWidth(c, Fonts.MEDIUM, fs, d.scores[i]);
-					draw(c, Fonts.MEDIUM, fs, d.scores[i], x + sz[0] - 8 * s - nw, ty);
+					float cx = x + sz[0] - pad - cw, cy = ty - 1 * s;
+					float chH = c.lineHeight(Fonts.MEDIUM, fs) + 2 * s;
+					if (card && a > 0.01f) {
+						c.round(cx, cy, cw, chH, chH / 2, Theme.alpha(0xFFFFFFFF, 0.07f));
+					}
+					draw(c, Fonts.MEDIUM, fs, d.scores[i], cx + (cw - nw) / 2, ty);
 				}
 				ty += lh;
 			}
+		}
+
+		/** Score chip: the number plus its padding, never narrower than a two-digit one. */
+		private float chipWidth(Canvas c, float fs, Rich score, float s) {
+			return Math.max(c.textWidth(Fonts.MEDIUM, fs, "00") + 12 * s, richWidth(c, Fonts.MEDIUM, fs, score) + 12 * s);
+		}
+
+		private float titleHeight(Canvas c, float fs, float s) {
+			return c.lineHeight(Fonts.SEMIBOLD, fs) + 2 * PAD * s;
 		}
 
 		private void draw(Canvas c, int face, float fs, Rich r, float x, float y) {

@@ -160,7 +160,9 @@ public final class GuiRenderer26 implements Renderer {
 				int fq = c.free[q];
 				if (fq >= 0) {
 					float[] f = c.freeGeo;
-					for (int i = 0; i < 4; i++) {
+					// counter-clockwise (0, 3, 2, 1): 26.3 culls back faces, vanilla emits CCW quads
+					for (int j = 0; j < 4; j++) {
+						int i = j == 0 ? 0 : 4 - j;
 						v[p++] = f[fq + i * 2] * k;
 						v[p++] = f[fq + i * 2 + 1] * k;
 						v[p++] = f[fq + 8 + i * 2];
@@ -171,10 +173,11 @@ public final class GuiRenderer26 implements Renderer {
 				}
 				float x0 = c.geo[g8] * k, y0 = c.geo[g8 + 1] * k, x1 = c.geo[g8 + 2] * k, y1 = c.geo[g8 + 3] * k;
 				float u0 = c.geo[g8 + 4], v0 = c.geo[g8 + 5], u1 = c.geo[g8 + 6], v1 = c.geo[g8 + 7];
+				// x0y0 -> x0y1 -> x1y1 -> x1y0, the same winding vanilla's ColoredRectangleRenderState uses
 				v[p++] = x0; v[p++] = y0; v[p++] = u0; v[p++] = v0; col[q4++] = c.col[k4];
-				v[p++] = x1; v[p++] = y0; v[p++] = u1; v[p++] = v0; col[q4++] = c.col[k4 + 1];
-				v[p++] = x1; v[p++] = y1; v[p++] = u1; v[p++] = v1; col[q4++] = c.col[k4 + 2];
 				v[p++] = x0; v[p++] = y1; v[p++] = u0; v[p++] = v1; col[q4++] = c.col[k4 + 3];
+				v[p++] = x1; v[p++] = y1; v[p++] = u1; v[p++] = v1; col[q4++] = c.col[k4 + 2];
+				v[p++] = x1; v[p++] = y0; v[p++] = u1; v[p++] = v0; col[q4++] = c.col[k4 + 1];
 			}
 			if (b > 0) {
 				state.up();

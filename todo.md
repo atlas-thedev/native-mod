@@ -1,97 +1,56 @@
 # Native mod — todo
 
-Current release: **1.8.0** (Minecraft 1.16 – 26.3).
+Current release: **1.8.1** (Minecraft 1.16 – 26.3).
 
-## 1. Fix the black title screen on 26.3 — blocking
+Everything on the 1.8.1 list is done; see `Shipped in 1.8.1` below for what changed and
+how it was verified. Add new items under `Next`.
 
-On 26.3 the Native UI renders a pure black window. No errors; the log shows
-`[Native] Native UI ready` and `[Native] Native UI renderer ready (Minecraft GUI pipeline…)`.
-Reproduced in a headless 26.3 Fabric instance (Vulkan/lavapipe).
+## Next
+- Nothing open.
 
-### What was ruled out
-Every 26.3 API the renderer touches still matches 26.2:
-`ToastManager.extractRenderState`, `Gui.setScreen`, `Screen.extractRenderState` /
-`extractBackground`, `GuiElementRenderState` (4 abstract methods + `bounds()` from
-`ScreenArea`), `TextureSetup.singleTexture`, `SamplerCache.getClampToEdge`,
-`RenderPipelines.GUI_TEXTURED`, `GuiRenderState.addGuiElement`, `NativeImage.getPointer`,
-`DynamicTexture.upload`, `nextStratum`, vertex format `POSITION_TEX_COLOR`.
-The only rename is `com.mojang.blaze3d.pipeline` → `com.mojang.renderpearl.api.pipeline`,
-which is already handled reflectively. Not a mod conflict either — black with only
-Fabric API + Native installed.
+## Shipped in 1.8.1
 
-Diagnostics proved the elements *are* submitted and the vertices *are* built:
-`batches=4 quads=110 guiScale=3 gui=427x240 atlas=1024`, full-screen coordinates,
-`buildVertices called, count=4` — yet every pixel is `#000000`.
+### 1. Black title screen on 26.3 — fixed
+26.3 culls back faces in the GUI pipeline, so our clockwise quads were dropped.
+`ui26/GuiRenderer26.java` now emits counter-clockwise quads
+(`x0y0 → x0y1 → x1y1 → x1y0`, colours `k4, k4+3, k4+2, k4+1`) and the free-geometry path
+iterates `0, 3, 2, 1`. Verified on a real 26.3 Fabric instance: the full Native UI draws.
 
-### Leading hypothesis: quad winding / face culling
-Vanilla `ColoredRectangleRenderState.buildVertices` emits
-`x0y0 → x0y1 → x1y1 → x1y0` (counter-clockwise).
-`ui26/.../GuiRenderer26.java` emits `x0y0 → x1y0 → x1y1 → x0y1` (clockwise).
-26.3 also swapped the GUI pipeline's bind group layout from
-`MATRICES_PROJECTION` to `BindGroupLayouts.DYNAMIC_TRANSFORMS`. If 26.3 turned on
-back-face culling, our clockwise quads are culled — invisible, no error.
+### 2. GLFW → SDL on 26.3 — fixed
+Every GLFW touch now sits behind the version bridge:
+- `McBridge` gained `keyState`, `keyLabel`, `windowFocused`, `windowMinimized`
+  (implemented with GLFW in `IntermediaryMc`, reflectively via `InputConstants` /
+  `Minecraft.isWindowActive` in `MojangMc`).
+- `ui/mod/Keys.java` and `ui/mod/PerformanceModules.java` no longer import GLFW;
+  `Keys` falls back to a bitset fed by `Keys.track(code, action)` and is cleared when the
+  window loses focus.
+- `GlfwInput` is loaded reflectively through the new `RawInput` interface, so the class is
+  never linked on 26.3.
+- New `ui/SdlKeys.java` translates SDL scancodes and mouse buttons to the GLFW numbering
+  the UI and the keybind settings use (detected at runtime by probing for
+  `org.lwjgl.glfw.GLFW`), so keyboard and mouse input work on 26.3 and are untouched on 26.1/26.2.
 
-**Fix to apply in `src/ui26/java/xyz/nativelaunch/ui26/GuiRenderer26.java`:**
-- Standard quad path: write
-  `(x0,y0,u0,v0,col[k4])` → `(x0,y1,u0,v1,col[k4+3])` → `(x1,y1,u1,v1,col[k4+2])` → `(x1,y0,u1,v0,col[k4+1])`.
-- Free-geometry path: iterate `for (int j = 0; j < 4; j++) { int i = j == 0 ? 0 : 4 - j; … }`
-  (order 0, 3, 2, 1).
+### 3. Avatar in the username pill — done
+The toolbar pill in `MenuView` draws the player head (`Avatars.self`, directory skin hash →
+Relay `meSkin` → Mojang UUID) with an online dot.
 
-**Still to do:** build, run on a real 26.3 instance and confirm the UI draws.
-If it is still black, bisect further — submit a vanilla `ColoredRectangleRenderState`
-red rectangle as a control, and check whether `withCull` is set on the 26.3
-`GLOBALS_SNIPPET`. Remove any temporary `DIAG` logging before release.
+### 4. Scoreboard sidebar redesign — done
+`OverlayModules.Scoreboard` was re-spaced (padding, row air, title cap plus hairline divider)
+and scores are drawn as chips; blank rows render as hairlines.
 
-## 2. 26.3 replaced GLFW with SDL — confirmed broken
+### 5. Essentials-style pause screen — done
+`PauseView` is a two-column layout: `PlayerPreview` card with an **Open locker** button
+(`UiRuntime.openMenu(screen, 1)`) on the left, menu on the right. Falls back to the old
+one-column panel on small windows.
 
-26.3 logs `Created window using SDL video driver: …`; `org.lwjgl.glfw.GLFW` no longer
-exists. Current fallout: `[Native] Module bgfps failed and was switched off:
-NoClassDefFoundError: org/lwjgl/glfw/GLFW`.
+### 6. Prefetch cosmetic assets — done
+`Wardrobe.warm()` preloads worn models/textures, dyes, the equipped cape and up to 64 owned
+thumbnails after every successful refresh; `UiRuntime` refreshes at startup and whenever the
+logged-in Relay account changes.
 
-Hard references to clean up:
-- `src/main/java/xyz/nativelaunch/ui/GlfwInput.java` — the whole file. Only used when
-  `mc.handlesInput()` is false, i.e. never on 26.x, but it still has to load.
-- `src/main/java/xyz/nativelaunch/ui/mod/Keys.java` lines 16, 18, 62 — wrapped in
-  try/catch, so it degrades silently: keybind polling is dead on 26.3.
-- `src/main/java/xyz/nativelaunch/ui/mod/PerformanceModules.java` lines 35–36 —
-  **not guarded**, this is what kills the Background FPS module.
-
-Plan: move every GLFW touch behind the version bridge (`MojangMc` / `IntermediaryMc`)
-so 26.3 uses SDL (or the vanilla key mapping API) and older versions keep GLFW.
-
-## 3. Avatar in the username pill
-
-`MenuView.java` (~lines 153–166) draws a pill with a green dot and
-`UiRuntime.mc().username()`. Show the player's head next to the name.
-`Avatars.draw(c, api, name, skinHash, x, y, size, radius)` already renders faces and
-`Avatars.mojangSkinUrl(uuid)` resolves the texture, so this is mostly layout work.
-Worth doing the same for `NameTags`, which today only prefixes a U+E000 glyph.
-
-## 4. Redesign the scoreboard sidebar
-
-`ui/mod/OverlayModules.Scoreboard.paint` / `measure` is the "Native look" renderer
-(settings: look, numbers, title, colours). Rework the visual design — spacing,
-background, number alignment, title treatment — in the same style as the rest of the
-Native UI.
-
-## 5. Essentials-style pause screen
-
-`PauseView.draw` is currently one centred 340px panel (Back to game / Relay chat /
-Mods and cosmetics / Options / Quit). Replace it with a two-column layout:
-- the player model with its cosmetics on one side, via
-  `PlayerPreview.draw(ui, id, x, y, w, h, hoverItem)`;
-- a button under the model that opens the Locker, i.e. `UiRuntime.openMenu(parent)`
-  followed by `MenuView.openTab(1)` (which already triggers `Wardrobe.refresh(false)`).
-
-## 6. Prefetch cosmetic assets
-
-Today cosmetic textures are fetched while rendering, so the model pops in. Warm the
-cache at startup (and right after login) with `CosmeticLibrary.preload(refs, base)`,
-backed by the existing `TextureCache` on disk, so `PlayerPreview` and the Locker open
-instantly.
-
-## Release checklist
-- Remove temporary `DIAG` logging from `GuiRenderer26`.
-- Bump to **1.8.1** in `gradle.properties`.
-- Build and smoke-test on 1.16, 1.21.x and 26.3.
-- Publish the jar to `atlas-thedev/native-mod-releases`.
+### 7. Menu polish
+- Only one **Edit HUD** entry (the toolbar), the icon rail is icon-only with an active marker
+  and tooltips.
+- Toolbar and username pills use a 13px radius so the square avatar fits.
+- Opening the HUD editor outside a world uses a real in-game screenshot
+  (`uiassets/hudbg.jpg`) as the backdrop instead of the menu artwork.

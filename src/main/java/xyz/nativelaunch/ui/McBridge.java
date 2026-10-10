@@ -167,4 +167,29 @@ public interface McBridge {
 
 	default void setClipboard(String text) {
 	}
+
+	// ── keyboard / window state (GLFW on 1.16 - 26.2, the game's own API on 26.3+) ──
+
+	/**
+	 * Live state of a key (codes 0 - 7 are mouse buttons): 1 down, 0 up, -1 when this version cannot be polled.
+	 * On -1 the caller falls back to the key state tracked from the input events.
+	 */
+	default int keyState(int code) {
+		return -1;
+	}
+
+	/** The platform's own label for a key, null when unknown. */
+	default String keyLabel(int code) {
+		return null;
+	}
+
+	/** False while the game window is in the background. */
+	default boolean windowFocused() {
+		return true;
+	}
+
+	/** True while the game window is minimised / iconified. */
+	default boolean windowMinimized() {
+		return false;
+	}
 }

@@ -36,7 +36,8 @@ public final class UiRuntime {
 	private static final double[] cursorPos = new double[2];
 	private static Canvas canvas;
 	private static Ui ui;
-	private static GlfwInput input;
+	private static RawInput input;
+	private static boolean inputTried;
 	private static TitleView title;
 	private static RelayView relay;
 	private static Toasts toasts;
@@ -65,6 +66,11 @@ public final class UiRuntime {
 			Modules.init(gameDir);
 		} catch (Throwable t) {
 			Log.warn("Native mods unavailable: {}", t.toString());
+		}
+		try {
+			xyz.nativelaunch.ui.mod.Wardrobe.refresh(false); // warms the store catalogue and the cached cosmetics at startup
+		} catch (Throwable t) {
+			Log.warn("Locker prefetch skipped: {}", t.toString());
 		}
 		Log.info("Native UI ready (custom title screen {}, chat key {}).", config.customTitle ? "on" : "off", keyName(config.relayKey));
 	}
@@ -180,7 +186,10 @@ public final class UiRuntime {
 				onMove(cursorPos[0], cursorPos[1]);
 			}
 		} else if (input == null) {
-			input = new GlfwInput(window);
+			if (!inputTried) {
+				inputTried = true;
+				input = RawInput.open(window);
+			}
 		} else if (++frames % 120 == 0) {
 			input.install();
 		}
@@ -203,6 +212,7 @@ public final class UiRuntime {
 		playing = game.playing;
 		modulesFrame();
 		Modules.tick();
+		watchLogin();
 		if (kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !mc.hudHidden() && !mc.debugOpen()) {
 			hud = HudOverlay.any(game);
 		}
@@ -300,6 +310,23 @@ public final class UiRuntime {
 		editor = new HudEditor();
 	}
 
+	/** The account the locker was warmed for; a new one means the player just signed in. */
+	private static String warmedFor;
+
+	/** Right after login: reload the locker, which prefetches the cosmetics the player wears and owns. */
+	private static void watchLogin() {
+		try {
+			RelayClient client = RelayClient.get();
+			String me = client == null ? null : client.meId;
+			if (me != null && !me.equals(warmedFor)) {
+				warmedFor = me;
+				xyz.nativelaunch.ui.mod.Wardrobe.refresh(true);
+			}
+		} catch (Throwable ignored) {
+			// prefetching is best-effort
+		}
+	}
+
 	/** Runs every enabled module; one that throws is switched off instead of taking the UI down. */
 	private static void modulesFrame() {
 		java.util.List<Module> all = Modules.all();
@@ -324,6 +351,14 @@ public final class UiRuntime {
 	/** Opens the Native menu (mods, cosmetics, settings). */
 	public static void openMenu(Object parent) {
 		mc.setScreen(mc.newHost(McBridge.MENU, parent));
+	}
+
+	/** Opens the Native menu straight on a tab: 0 mods, 1 cosmetics (the locker), 2 settings. */
+	public static void openMenu(Object parent, int tab) {
+		openMenu(parent);
+		if (menu != null) {
+			menu.openTab(tab);
+		}
 	}
 
 	private static void drawPill(Ui ui) {
@@ -390,6 +425,7 @@ public final class UiRuntime {
 	}
 
 	public static boolean onButton(int button, int action, int mods) {
+		xyz.nativelaunch.ui.mod.Keys.track(button, action);
 		if (capturing) {
 			Input.button(button, action == 0 ? 0 : 1, mods);
 			return true;
@@ -441,6 +477,7 @@ public final class UiRuntime {
 	}
 
 	public static boolean onKey(int key, int action, int mods) {
+		xyz.nativelaunch.ui.mod.Keys.track(key, action);
 		if (mc == null || failed) {
 			return false;
 		}

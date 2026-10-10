@@ -1,6 +1,7 @@
 package xyz.nativelaunch.ui.view;
 
 import xyz.nativelaunch.relay.RelayClient;
+import xyz.nativelaunch.ui.Avatars;
 import xyz.nativelaunch.ui.McBridge;
 import xyz.nativelaunch.ui.Theme;
 import xyz.nativelaunch.ui.Ui;
@@ -8,12 +9,19 @@ import xyz.nativelaunch.ui.UiRuntime;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Fonts;
 import xyz.nativelaunch.ui.gfx.Image;
+import xyz.nativelaunch.ui.mod.Wardrobe;
 
-/** The Native pause menu (Esc in a world): resume, Relay, mods menu, options, leave. */
+/**
+ * The Native pause menu (Esc in a world): the player with their cosmetics on the left, the game menu on the
+ * right (resume, Relay, mods and cosmetics, options, leave).
+ */
 public final class PauseView {
+	private static final int PANEL_BG = 0xF508090C, CARD = 0xB808090C;
+
 	private Image logo;
 	private Object lastScreen;
 	private boolean confirmLeave;
+	private final PlayerPreview preview = new PlayerPreview();
 
 	public boolean escape() {
 		if (confirmLeave) {
@@ -32,6 +40,8 @@ public final class PauseView {
 		if (screen != lastScreen) {
 			lastScreen = screen;
 			confirmLeave = false;
+			preview.resetView();
+			Wardrobe.refresh(false); // so the model wears what the locker says
 			ui.setAnim("pause#in", 0);
 		}
 		float W = c.width(), H = c.height();
@@ -39,18 +49,42 @@ public final class PauseView {
 		c.fill(0, 0, W, H, Theme.alpha(0xB0000000, in));
 		c.gradientV(0, 0, W, H * 0.45f, Theme.alpha(0x40000000, in), 0);
 
-		float pw = 340, bh = 46, gap = 10;
+		float bh = 46, gap = 10;
 		String where = mc.server();
 		boolean single = where == null || "Singleplayer".equals(where);
-		int rows = 5;
-		float ph = 118 + rows * (bh + gap) + 34;
+
+		float headH = 82, rows = 5;
+		float menuH = rows * bh + (rows - 1) * gap;
+		float modelW = 224;
+		boolean wide = W >= 700 && H >= 480; // tiny windows keep the one-column menu
+		float pw = wide ? 624 : 340;
+		float ph = headH + 18 + menuH + 34;
 		float px = (W - pw) / 2, py = Math.max(24, (H - ph) / 2) + (1 - in) * 14;
 		c.pushAlpha(in);
 		c.shadow(px, py + 10, pw, ph, 20, 44, 0xAA000000);
-		c.round(px, py, pw, ph, 20, 0xF508090C);
+		c.round(px, py, pw, ph, 20, PANEL_BG);
 		c.outline(px, py, pw, ph, 20, 1, Theme.HAIRLINE_STRONG);
 
-		// header
+		header(c, mc, px, py, pw, headH, single, where);
+
+		float cy = py + headH + 18;
+		float mx = px + 24, mw = pw - 48;
+		if (wide) {
+			playerCard(ui, screen, mx, cy, modelW, menuH);
+			mx += modelW + 20;
+			mw -= modelW + 20;
+		}
+		if (confirmLeave) {
+			confirm(ui, mc, mx, cy, mw, bh, gap, single);
+		} else {
+			menu(ui, screen, mc, mx, cy, mw, bh, gap, single);
+		}
+		String hint = "Esc to resume";
+		c.text(Fonts.MEDIUM, 10.5f, hint, px + (pw - c.textWidth(Fonts.MEDIUM, 10.5f, hint)) / 2, py + ph - 26, Theme.TEXT_MUTED);
+		c.popAlpha();
+	}
+
+	private void header(Canvas c, McBridge mc, float px, float py, float pw, float headH, boolean single, String where) {
 		float hx = px + 24, hy = py + 22;
 		if (logo != null) {
 			c.stamp("logo", logo, hx, hy, 44, 44, true, 0xFFFFFFFF);
@@ -69,23 +103,42 @@ public final class PauseView {
 			c.circle(bx + 11, by + 11, 3.5f, col);
 			c.text(Fonts.SEMIBOLD, 11, t, bx + 20, by + (22 - c.lineHeight(Fonts.SEMIBOLD, 11)) / 2, Theme.TEXT_SECONDARY);
 		}
-		c.fill(px + 24, py + 82, pw - 48, 1, Theme.HAIRLINE);
+		c.fill(px + 24, py + headH, pw - 48, 1, Theme.HAIRLINE);
+	}
 
-		float by = py + 100;
-		float bw = pw - 48, bx = px + 24;
-		if (confirmLeave) {
-			c.text(Fonts.SEMIBOLD, 14, single ? "Save and quit to title?" : "Disconnect from the server?", bx, by + 4, Theme.TEXT_STRONG);
-			c.text(Fonts.REGULAR, 12, single ? "Your world is saved automatically." : "You can rejoin from the server list.", bx, by + 26, Theme.TEXT_MUTED);
-			if (ui.button("pause:leave:yes", bx, by + 60, bw, bh, single ? "Save and quit" : "Disconnect", Theme.I_LOG_OUT, Ui.BTN_DANGER)) {
-				confirmLeave = false;
-				mc.exitWorld();
-			}
-			if (ui.button("pause:leave:no", bx, by + 60 + bh + gap, bw, bh, "Stay in game", 0, Ui.BTN_GLASS)) {
-				confirmLeave = false;
-			}
-			c.popAlpha();
-			return;
+	/** The player model with the cosmetics they wear, and the button that opens the locker. */
+	private void playerCard(Ui ui, Object screen, float x, float y, float w, float h) {
+		Canvas c = ui.c;
+		float bh = 42;
+		float ch = h - bh - 10;
+		c.round(x, y, w, ch, 14, CARD);
+		c.outline(x, y, w, ch, 14, 1, Theme.HAIRLINE);
+		String who = UiRuntime.mc().username();
+		if (who != null) {
+			c.text(Fonts.SEMIBOLD, 12, c.ellipsize(Fonts.SEMIBOLD, 12, who, w - 24), x + 12, y + 10, Theme.TEXT_SECONDARY);
 		}
+		float top = y + (who == null ? 10 : 32);
+		c.pushClip(x + 1, top, w - 2, ch - (top - y) - 10);
+		try {
+			preview.draw(ui, "pause:model", x + 1, top, w - 2, ch - (top - y) - 10, null);
+		} catch (Throwable t) {
+			// a broken model must never take the pause menu down
+			if (who != null) {
+				Avatars.draw(c, Avatars.api(), who, Avatars.self(who), x + (w - 64) / 2, top + 20, 64, 16);
+			}
+		}
+		c.popClip();
+		if (ui.button("pause:locker", x, y + ch + 10, w, bh, "Open locker", Theme.I_SHIRT, Ui.BTN_GLASS)) {
+			openLocker(screen);
+		}
+	}
+
+	private static void openLocker(Object screen) {
+		UiRuntime.openMenu(screen, 1); // the Cosmetics tab, which also refreshes the wardrobe
+	}
+
+	private void menu(Ui ui, Object screen, McBridge mc, float bx, float by, float bw, float bh, float gap, boolean single) {
+		Canvas c = ui.c;
 		if (ui.button("pause:resume", bx, by, bw, bh, "Back to game", Theme.I_PLAY, Ui.BTN_PRIMARY)) {
 			UiRuntime.closeHost(screen);
 		}
@@ -110,7 +163,19 @@ public final class PauseView {
 		if (ui.button("pause:leave", bx, by, bw, bh, single ? "Save and quit to title" : "Disconnect", Theme.I_LOG_OUT, Ui.BTN_DANGER)) {
 			confirmLeave = true;
 		}
-		c.text(Fonts.MEDIUM, 10.5f, "Esc to resume", px + (pw - c.textWidth(Fonts.MEDIUM, 10.5f, "Esc to resume")) / 2, py + ph - 26, Theme.TEXT_MUTED);
-		c.popAlpha();
+	}
+
+	private void confirm(Ui ui, McBridge mc, float bx, float by, float bw, float bh, float gap, boolean single) {
+		Canvas c = ui.c;
+		c.text(Fonts.SEMIBOLD, 14, single ? "Save and quit to title?" : "Disconnect from the server?", bx, by + 4, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 12, single ? "Your world is saved automatically." : "You can rejoin from the server list.", bx, by + 26,
+				Theme.TEXT_MUTED);
+		if (ui.button("pause:leave:yes", bx, by + 60, bw, bh, single ? "Save and quit" : "Disconnect", Theme.I_LOG_OUT, Ui.BTN_DANGER)) {
+			confirmLeave = false;
+			mc.exitWorld();
+		}
+		if (ui.button("pause:leave:no", bx, by + 60 + bh + gap, bw, bh, "Stay in game", 0, Ui.BTN_GLASS)) {
+			confirmLeave = false;
+		}
 	}
 }

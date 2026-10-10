@@ -358,6 +358,100 @@ public final class MojangMc implements McBridge {
 		return win().handle();
 	}
 
+	// ── keyboard / window state ──────────────────────────────────────────
+	// 26.1 / 26.2 still run on GLFW and InputConstants can poll the window; 26.3 switched to SDL, the GLFW
+	// classes are gone and InputConstants.isKeyDown with them. There we report "unknown" (-1) and the UI falls
+	// back to the key state it tracks from the game's own key events, which works on either backend.
+
+	private boolean inputLooked;
+	private Method isKeyDown, getKeyByCode, displayName, textString;
+
+	private void lookUpInput() {
+		if (inputLooked) {
+			return;
+		}
+		inputLooked = true;
+		try {
+			Class<?> input = Class.forName("com.mojang.blaze3d.platform.InputConstants");
+			for (Method m : input.getMethods()) {
+				if (m.getName().equals("isKeyDown") && m.getParameterCount() == 2) {
+					isKeyDown = m;
+				} else if (m.getName().equals("getKey") && m.getParameterCount() == 2) {
+					getKeyByCode = m;
+				}
+			}
+			if (getKeyByCode != null) {
+				displayName = getKeyByCode.getReturnType().getMethod("getDisplayName");
+				textString = displayName.getReturnType().getMethod("getString");
+			}
+		} catch (Throwable ignored) {
+			// 26.3: SDL, no InputConstants to poll
+		}
+	}
+
+	@Override
+	public int keyState(int code) {
+		if (code < 0 || code <= 7) {
+			return -1; // mouse buttons: tracked from the game's own events
+		}
+		lookUpInput();
+		if (isKeyDown == null) {
+			return -1;
+		}
+		try {
+			Object down = isKeyDown.invoke(null, Long.valueOf(window()), Integer.valueOf(xyz.nativelaunch.ui.SdlKeys.toGame(code)));
+			return Boolean.TRUE.equals(down) ? 1 : 0;
+		} catch (Throwable t) {
+			isKeyDown = null; // SDL build: never ask again
+			return -1;
+		}
+	}
+
+	@Override
+	public String keyLabel(int code) {
+		lookUpInput();
+		if (getKeyByCode == null || displayName == null || textString == null) {
+			return null;
+		}
+		try {
+			Object key = getKeyByCode.invoke(null, Integer.valueOf(xyz.nativelaunch.ui.SdlKeys.toGame(code)), Integer.valueOf(0));
+			Object text = displayName.invoke(key);
+			Object label = textString.invoke(text);
+			return label instanceof String ? (String) label : null;
+		} catch (Throwable t) {
+			getKeyByCode = null;
+			return null;
+		}
+	}
+
+	@Override
+	public boolean windowFocused() {
+		try {
+			return client().isWindowActive();
+		} catch (Throwable t) {
+			return true;
+		}
+	}
+
+	@Override
+	public boolean windowMinimized() {
+		Window w;
+		try {
+			w = win();
+		} catch (Throwable t) {
+			return false;
+		}
+		Object value = call(w, "isIconified");
+		if (!(value instanceof Boolean)) {
+			value = call(w, "isMinimized");
+		}
+		if (!(value instanceof Boolean)) {
+			// no flag on this release: a zero-sized framebuffer means the window is not being drawn
+			return w.getWidth() <= 0 || w.getHeight() <= 0;
+		}
+		return (Boolean) value;
+	}
+
 	@Override
 	public int fbWidth() {
 		return win().getWidth();
@@ -475,7 +569,17 @@ public final class MojangMc implements McBridge {
 		KeyMapping b = binding(control);
 		Object key = get(b, "key");
 		Object code = call(key, "getValue");
-		return code instanceof Integer ? (Integer) code : -1;
+		if (!(code instanceof Integer)) {
+			return -1;
+		}
+		int value = (Integer) code;
+		if (!xyz.nativelaunch.ui.SdlKeys.active()) {
+			return value;
+		}
+		// 26.3 stores its bindings as SDL scancodes / SDL mouse buttons; the UI works in GLFW codes
+		Object type = call(key, "getType");
+		String name = type == null ? "" : String.valueOf(type).toUpperCase(java.util.Locale.ROOT);
+		return name.contains("MOUSE") ? xyz.nativelaunch.ui.SdlKeys.mouseToGlfw(value) : xyz.nativelaunch.ui.SdlKeys.toGlfw(value);
 	}
 
 	@Override

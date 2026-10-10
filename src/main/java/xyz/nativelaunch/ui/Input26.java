@@ -2,9 +2,15 @@ package xyz.nativelaunch.ui;
 
 import java.lang.reflect.Method;
 
-/** Minecraft 26.x: unpacks the game's input event records (KeyEvent, CharacterEvent, MouseButtonInfo) for UiRuntime. */
+/**
+ * Minecraft 26.x: unpacks the game's input event records (KeyEvent, CharacterEvent, MouseButtonInfo) for UiRuntime.
+ *
+ * 26.1 / 26.2 are built on GLFW, 26.3 on SDL, which numbers both the mouse buttons and the keys differently.
+ * The whole Native UI speaks GLFW, so every code is translated through {@link SdlKeys} on the way in.
+ */
 public final class Input26 {
 	private static Method keyM, keyMods, charM, buttonM, buttonMods;
+
 
 	private Input26() {
 	}
@@ -20,7 +26,7 @@ public final class Input26 {
 				keyM = event.getClass().getMethod("key");
 				keyMods = event.getClass().getMethod("modifiers");
 			}
-			return UiRuntime.onKey(read(event, keyM), action, read(event, keyMods));
+			return UiRuntime.onKey(SdlKeys.toGlfw(read(event, keyM)), action, read(event, keyMods));
 		} catch (Throwable t) {
 			return false;
 		}
@@ -43,7 +49,7 @@ public final class Input26 {
 				buttonM = info.getClass().getMethod("button");
 				buttonMods = info.getClass().getMethod("modifiers");
 			}
-			return UiRuntime.onButton(read(info, buttonM), action, read(info, buttonMods));
+			return UiRuntime.onButton(SdlKeys.mouseToGlfw(read(info, buttonM)), action, read(info, buttonMods));
 		} catch (Throwable t) {
 			return false;
 		}

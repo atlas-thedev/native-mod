@@ -17,6 +17,40 @@ public final class Avatars {
 	private Avatars() {
 	}
 
+	/** Texture host faces are fetched from. */
+	public static String api() {
+		try {
+			xyz.nativelaunch.relay.RelayClient r = xyz.nativelaunch.relay.RelayClient.get();
+			String api = r == null ? null : r.api();
+			return api == null || api.isEmpty() ? xyz.nativelaunch.core.NativeState.get().api() : api;
+		} catch (Throwable t) {
+			return xyz.nativelaunch.core.NativeState.get().api();
+		}
+	}
+
+	/** The signed-in player's own skin reference (store hash or "mj:uuid"), null when it is not known yet. */
+	public static String self(String name) {
+		try {
+			if (name != null) {
+				xyz.nativelaunch.core.SkinEntry e = xyz.nativelaunch.core.NativeState.get().directory().entry(name);
+				if (e != null && e.skinHash != null) {
+					return e.skinHash;
+				}
+			}
+			xyz.nativelaunch.relay.RelayClient r = xyz.nativelaunch.relay.RelayClient.get();
+			if (r != null && r.meSkin != null) {
+				return r.meSkin;
+			}
+			xyz.nativelaunch.core.AccountInfo a = xyz.nativelaunch.core.NativeState.get().account();
+			if (a != null && a.uuid != null) {
+				return "mj:" + a.uuid.replace("-", "").toLowerCase(java.util.Locale.ROOT);
+			}
+		} catch (Throwable ignored) {
+			// no face: the lettered fallback is drawn
+		}
+		return null;
+	}
+
 	/** Draws a rounded avatar for a player. skin = texture hash (may be null). */
 	public static void draw(Canvas c, String api, String name, String skin, float x, float y, float size, float radius) {
 		Image face = skin == null ? null : face(api, skin);
