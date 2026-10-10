@@ -297,8 +297,13 @@ public final class PlayerPreview implements CosmeticSink {
 			return;
 		}
 		CosmeticModel m = cosmetic.model;
-		for (CosmeticModel.Cube c : part.cubes) {
-			b.cube(tex, m.textureWidth, m.textureHeight, c.x, c.y, c.z, c.w, c.h, c.d, c.u, c.v, c.inflate, c.mirror, 0xFFFFFFFF);
+		b.twoSided = true; // like vanilla's no-cull cosmetic layers
+		try {
+			for (CosmeticModel.Cube c : part.cubes) {
+				b.cube(tex, m.textureWidth, m.textureHeight, c.x, c.y, c.z, c.w, c.h, c.d, c.u, c.v, c.inflate, c.mirror, 0xFFFFFFFF);
+			}
+		} finally {
+			b.twoSided = false;
 		}
 	}
 

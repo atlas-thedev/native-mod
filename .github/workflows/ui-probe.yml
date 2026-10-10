@@ -22,6 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - { mc: "1.16.5",  java: 8,  loader: "0.16.14" }
+          - { mc: "1.20.1",  java: 17, loader: "0.16.14" }
+          - { mc: "1.21.4",  java: 21, loader: "0.16.14" }
+          - { mc: "1.21.8",  java: 21, loader: "0.16.14" }
           - { mc: "1.21.11", java: 21 }
           - { mc: "26.1.2",  java: 25 }
           - { mc: "26.2",    java: 25 }
@@ -46,14 +50,23 @@ jobs:
           sleep 2
           export SDL_VIDEO_FORCE_EGL=1 SDL_VIDEO_X11_FORCE_EGL=1
           chmod +x ci/ui/launch.sh
-          ci/ui/launch.sh "${{ matrix.mc }}" "$JAVA_HOME" "$(ls dist/native-client-*.jar | head -n1)"
+          ci/ui/launch.sh "${{ matrix.mc }}" "$JAVA_HOME" "$(ls dist/native-client-*.jar | head -n1)" "${{ matrix.loader || '0.19.5' }}"
           export DISPLAY=:99
           for i in $(seq 1 24); do sleep 5; grep -q "Sound engine started\|Created:.*atlas" /tmp/native-client/mc-${{ matrix.mc }}/game/out.log && break; done
           sleep 25
-          python3 ci/ui/x.py shot shots/1-title.png
-          python3 ci/ui/x.py move 640 360 sleep 1 shot shots/2-hover.png
-          python3 ci/ui/x.py click 1035 519 sleep 3 shot shots/3-click.png
-          python3 ci/ui/x.py key Escape sleep 2 shot shots/4-esc.png
+          X="python3 ci/ui/x.py"
+          # 1280x720 -> UI scale 0.947; title buttons at x=225, y = 216 / 268 / 319 / 370 / 421
+          $X shot shots/01-title.png
+          $X move 225 216 sleep 1 shot shots/02-hover.png
+          $X click 225 216 sleep 3 shot shots/03-singleplayer.png key Escape sleep 2 shot shots/04-back.png
+          $X click 225 268 sleep 3 shot shots/05-multiplayer.png key Escape sleep 2
+          $X click 225 421 sleep 3 shot shots/06-options.png key Escape sleep 2
+          $X click 225 370 sleep 3 shot shots/07-native-mods.png
+          $X click 172 270 sleep 2 shot shots/08-settings.png
+          $X click 172 211 sleep 3 shot shots/09-cosmetics.png
+          $X key Escape sleep 2 shot shots/10-closed.png
+          $X click 1035 519 sleep 3 shot shots/11-relay.png
+          $X key Escape sleep 2 shot shots/12-esc.png
           cp /tmp/native-client/mc-${{ matrix.mc }}/game/out.log shots/out.log || true
           grep -nE "Native|Exception|Error" shots/out.log | head -80 || true
       - uses: actions/upload-artifact@v4
