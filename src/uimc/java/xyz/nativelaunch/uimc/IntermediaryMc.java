@@ -173,6 +173,17 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
+	public boolean connect(String address, Object parent) {
+		// class_412 ConnectScreen, class_639 ServerAddress (method_2950 parse), class_642 ServerInfo
+		Object r = xyz.nativelaunch.ui.ServerJoin.start(client(), parent instanceof class_437 ? parent : null, class_437.class,
+				"net.minecraft.class_412", "net.minecraft.class_639", "method_2950", "net.minecraft.class_642", address);
+		if (r instanceof class_437) {
+			setScreen(r);
+		}
+		return r != null;
+	}
+
+	@Override
 	public boolean hasMods() {
 		return mods() != null;
 	}

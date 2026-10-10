@@ -21,6 +21,7 @@ public final class NativeState {
 	private volatile boolean started;
 	private volatile AccountInfo account;
 	private volatile String api = DEFAULT_API;
+	private volatile Path gameDir;
 
 	private NativeState() {
 	}
@@ -42,12 +43,18 @@ public final class NativeState {
 		return api;
 	}
 
+	/** The instance folder the game runs in (null before start). */
+	public Path gameDir() {
+		return gameDir;
+	}
+
 	/** Idempotent. Called from the mod entrypoint and lazily by the hooks. */
 	public synchronized void start(Path gameDir) {
 		if (started) {
 			return;
 		}
 		started = true;
+		this.gameDir = gameDir;
 		TextureCache.init(gameDir);
 		directory.setLocal(TextureCache.localLook(gameDir));
 		Handoff handoff = Handoff.read(gameDir);

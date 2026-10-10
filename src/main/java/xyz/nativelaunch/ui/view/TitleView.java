@@ -2,6 +2,7 @@ package xyz.nativelaunch.ui.view;
 
 import xyz.nativelaunch.relay.Model;
 import xyz.nativelaunch.relay.RelayClient;
+import xyz.nativelaunch.ui.Ads;
 import xyz.nativelaunch.ui.Avatars;
 import xyz.nativelaunch.ui.McBridge;
 import xyz.nativelaunch.ui.TextLayout;
@@ -23,6 +24,10 @@ public final class TitleView {
 	private long shownAt;
 	private Object lastScreen;
 	private boolean confirmQuit;
+	private final java.util.Set<String> hiddenAds = new java.util.HashSet<>();
+	private int adIndex;
+	private long adSwitchAt;
+	private static final long AD_ROTATE_MS = 12_000;
 
 	private void load() {
 		if (bgLoaded) {
@@ -120,16 +125,38 @@ public final class TitleView {
 		}
 		c.popAlpha();
 
-		// relay card
+		// relay card + ad card (the same ads as the launcher's Home)
+		List<Ads.Ad> ads = visibleAds();
 		if (wide) {
 			float cw = Math.min(340, W * 0.3f);
 			float cx = W - x0 - cw;
-			float ch = Math.min(H - top - 80, 460);
+			float avail = Math.min(H - top - 80, 460 + 12 + adHeight(cw));
+			float adH = adHeight(cw);
+			boolean showAd = !ads.isEmpty() && avail - adH - 12 >= 230;
+			float ch = showAd ? Math.min(avail - adH - 12, 460) : Math.min(H - top - 80, 460);
 			float appear = clamp01((ui.now - shownAt - 250) / 450f);
 			float e = 1 - (1 - appear) * (1 - appear) * (1 - appear);
 			c.pushAlpha(e);
 			relayCard(ui, cx + (1 - e) * 30, top, cw, ch, screen);
 			c.popAlpha();
+			if (showAd) {
+				float appear2 = clamp01((ui.now - shownAt - 340) / 450f);
+				float e2 = 1 - (1 - appear2) * (1 - appear2) * (1 - appear2);
+				c.pushAlpha(e2);
+				adCard(ui, ads, cx + (1 - e2) * 30, top + ch + 12, cw, screen);
+				c.popAlpha();
+			}
+		} else if (!ads.isEmpty()) {
+			float room = W - (x0 + bw + 24) - x0;
+			float cw = Math.min(320, room);
+			float adH = adHeight(cw);
+			if (cw >= 240 && H - 40 - adH >= top) {
+				float appear = clamp01((ui.now - shownAt - 250) / 450f);
+				float e = 1 - (1 - appear) * (1 - appear) * (1 - appear);
+				c.pushAlpha(e);
+				adCard(ui, ads, W - x0 - cw + (1 - e) * 30, H - 40 - adH, cw, screen);
+				c.popAlpha();
+			}
 		}
 
 		// footer
@@ -308,6 +335,134 @@ public final class TitleView {
 		String label = unread > 0 ? "Open Relay \u00b7 " + unread + " new" : "Open Relay";
 		if (ui.button("card:open", x + pad, y + h - 52, w - pad * 2, 38, label, Theme.I_MESSAGE, Ui.BTN_PRIMARY)) {
 			UiRuntime.openRelay(screen);
+		}
+	}
+
+	private List<Ads.Ad> visibleAds() {
+		List<Ads.Ad> all = Ads.list();
+		if (hiddenAds.isEmpty()) {
+			return all;
+		}
+		List<Ads.Ad> out = new java.util.ArrayList<>();
+		for (Ads.Ad ad : all) {
+			if (!hiddenAds.contains(ad.id)) {
+				out.add(ad);
+			}
+		}
+		return out;
+	}
+
+	private static float adHeight(float w) {
+		return w * 5f / 12f + 62;
+	}
+
+	/** A Feather-style sponsored card: banner (with the player's own skin when the ad asks for it), text, buttons. */
+	private void adCard(Ui ui, List<Ads.Ad> ads, float x, float y, float w, Object screen) {
+		Canvas c = ui.c;
+		int count = ads.size();
+		float mh = w * 5f / 12f, h = adHeight(w);
+		boolean over = ui.hover(x, y, w, h);
+		if (adSwitchAt == 0 || over) {
+			adSwitchAt = ui.now + AD_ROTATE_MS;
+		} else if (ui.now >= adSwitchAt && count > 1) {
+			adIndex = (adIndex + 1) % count;
+			adSwitchAt = ui.now + AD_ROTATE_MS;
+		}
+		Ads.Ad ad = ads.get(adIndex % count);
+		c.shadow(x, y + 8, w, h, 16, 28, 0x80000000);
+		c.round(x, y, w, h, 16, 0xE608090C);
+		c.imageCover(ad.image, x, y, w, mh, 1f, 0, 0, 0xFFFFFFFF);
+		c.outline(x, y, w, h, 16, 1, Theme.HAIRLINE);
+
+		// close: hide this ad for the rest of the session
+		float cs = 22, cxx = x + w - cs - 8, cyy = y + 8;
+		boolean overClose = ui.hover(cxx, cyy, cs, cs);
+		float hc = ui.anim("ad#close", overClose, 14f);
+		c.circle(cxx + cs / 2, cyy + cs / 2, cs / 2, Theme.alpha(0xFF000000, 0.5f + 0.25f * hc));
+		c.icon(Theme.I_X, 11, cxx + cs / 2, cyy + cs / 2, 0xFFFFFFFF);
+		if (ui.clicked("ad#close", cxx, cyy, cs, cs)) {
+			hiddenAds.add(ad.id);
+			adIndex = 0;
+			return;
+		}
+
+		// buttons (right side of the footer)
+		float pad = 14, fy = y + mh, fh = h - mh;
+		float bx = x + w - pad;
+		int n = Math.min(2, ad.buttons.size());
+		float bh = n > 1 ? 22 : 28, gap = 5;
+		float by = fy + (fh - (bh * n + gap * (n - 1))) / 2;
+		float buttonsW = 0;
+		for (int i = 0; i < n; i++) {
+			buttonsW = Math.max(buttonsW, c.textWidth(Fonts.BOLD, 12, ad.buttons.get(i).label) + 34);
+		}
+		buttonsW = Math.min(buttonsW, w * 0.42f);
+		boolean buttonHit = false;
+		for (int i = 0; i < n; i++) {
+			Ads.Button b = ad.buttons.get(i);
+			float yy = by + i * (bh + gap), xx = bx - buttonsW;
+			String id = "ad#b" + i;
+			boolean ob = ui.hover(xx, yy, buttonsW, bh);
+			float hb = ui.anim(id, ob, 14f);
+			int bg = i == 0 ? Theme.mix(0xFFFFFFFF, 0xFFE8E9EF, hb) : Theme.alpha(0xFFFFFFFF, 0.10f + 0.08f * hb);
+			int fg = i == 0 ? 0xFF0D0E12 : 0xFFFFFFFF;
+			c.round(xx, yy, buttonsW, bh, bh / 2, bg);
+			int icon = b.server() ? Theme.I_PLAY : Theme.I_CHEVRON_RIGHT;
+			float tw = c.textWidth(Fonts.BOLD, 12, b.label);
+			float iw = 12;
+			float tx = xx + (buttonsW - tw - iw - 5) / 2;
+			c.text(Fonts.BOLD, 12, c.ellipsize(Fonts.BOLD, 12, b.label, buttonsW - 30), tx, yy + (bh - c.lineHeight(Fonts.BOLD, 12)) / 2, fg);
+			c.icon(icon, 11, tx + tw + 5 + iw / 2, yy + bh / 2, fg);
+			if (ob) {
+				buttonHit = true;
+			}
+			if (ui.clicked(id, xx, yy, buttonsW, bh)) {
+				run(b, screen);
+			}
+		}
+
+		// text
+		float tx = x + pad, maxW = w - pad * 2 - (n > 0 ? buttonsW + 10 : 0);
+		String tag = ad.tag.isEmpty() ? "AD" : "AD \u00b7 " + ad.tag.toUpperCase(java.util.Locale.ROOT);
+		float lines = ad.body.isEmpty() ? 2 : 3;
+		float ty = fy + (fh - (lines == 3 ? 46 : 30)) / 2;
+		c.text(Fonts.BOLD, 9.5f, c.ellipsize(Fonts.BOLD, 9.5f, tag, maxW), tx, ty, Theme.TEXT_MUTED);
+		c.text(Fonts.SEMIBOLD, 13.5f, c.ellipsize(Fonts.SEMIBOLD, 13.5f, ad.title, maxW), tx, ty + 13, Theme.TEXT_STRONG);
+		if (!ad.body.isEmpty()) {
+			c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, ad.body, maxW), tx, ty + 32, Theme.TEXT_SECONDARY);
+		}
+
+		// banner / card click = main button
+		if (!buttonHit && !overClose && ui.clicked("ad#card", x, y, w, h)) {
+			run(ad.primary(), screen);
+		}
+
+		// dots
+		if (count > 1) {
+			float dw = 6, dg = 5, total = count * dw + (count - 1) * dg + 6;
+			float dx = x + (w - total) / 2, dy = y + mh - 14;
+			c.round(dx - 4, dy - 4, total + 8, dw + 8, (dw + 8) / 2, 0x66000000);
+			for (int i = 0; i < count; i++) {
+				boolean active = i == adIndex % count;
+				float ww = active ? dw + 6 : dw;
+				c.round(dx, dy, ww, dw, dw / 2, active ? 0xFFFFFFFF : 0x80FFFFFF);
+				if (ui.clicked("ad#dot" + i, dx - 2, dy - 4, ww + 4, dw + 8)) {
+					adIndex = i;
+					adSwitchAt = ui.now + AD_ROTATE_MS;
+				}
+				dx += ww + dg;
+			}
+		}
+	}
+
+	private static void run(Ads.Button b, Object screen) {
+		if (b == null) {
+			return;
+		}
+		if (b.server()) {
+			UiRuntime.mc().connect(b.value, screen);
+		} else {
+			Ads.open(b.value);
 		}
 	}
 

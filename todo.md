@@ -1,12 +1,21 @@
 # Native mod — todo
 
-Current release: **1.8.2** (Minecraft 1.16 – 26.3).
+Current release: **1.8.3** (Minecraft 1.16 – 26.3).
 
 Everything on the 1.8.1 list is done; see `Shipped in 1.8.1` below for what changed and
 how it was verified. Add new items under `Next`.
 
 ## Next
 - More for the right-shift menu — players keep asking for extra modules and settings there.
+
+## Shipped in 1.8.3
+- **Ads on the title screen** — the same cards as the launcher's Home (under the Friends card,
+  or bottom-right on narrow windows), rotating every 12 s, with ✕ to hide one for the session.
+  The launcher writes `.native/ads.json` pointing at the banners it already downloaded and the
+  picture of the player's own skin, so nothing is downloaded twice; without the launcher the mod
+  reads `/v1/site/ads` itself and keeps banners in `.native/ads/`.
+- Ad buttons: **open a link** or **join a server** (`McBridge.connect`, `ui/ServerJoin.java`,
+  reflective so it covers 1.16 → 26.3).
 
 ## Shipped in 1.8.2
 - HUD text modules have a **Show labels** switch (Appearance). Off shows the bare number,

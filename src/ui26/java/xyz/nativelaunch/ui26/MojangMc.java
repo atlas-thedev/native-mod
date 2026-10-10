@@ -328,6 +328,17 @@ public final class MojangMc implements McBridge {
 	}
 
 	@Override
+	public boolean connect(String address, Object parent) {
+		Object r = xyz.nativelaunch.ui.ServerJoin.start(client(), parent instanceof Screen ? parent : null, Screen.class,
+				"net.minecraft.client.gui.screens.ConnectScreen", "net.minecraft.client.multiplayer.resolver.ServerAddress", "parseString",
+				"net.minecraft.client.multiplayer.ServerData", address);
+		if (r instanceof Screen) {
+			setScreen(r);
+		}
+		return r != null;
+	}
+
+	@Override
 	public boolean hasMods() {
 		return mods() != null;
 	}

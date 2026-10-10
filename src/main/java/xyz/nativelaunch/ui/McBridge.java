@@ -29,6 +29,11 @@ public interface McBridge {
 
 	boolean hasMods();
 
+	/** Joins a multiplayer server (host or host:port) like the vanilla server list does. */
+	default boolean connect(String address, Object parent) {
+		return false;
+	}
+
 	/** The vanilla pause screen (Esc in a world). */
 	default boolean isVanillaPause(Object screen) {
 		return false;
