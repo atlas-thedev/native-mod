@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -92,7 +93,11 @@ public final class TextureCache {
 		return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsString() : null;
 	}
 
-	/** Cached bytes for a texture hash (verified), or null. */
+	/**
+	 * Cached bytes for a texture hash (verified), or null. A file that does not match its hash is
+	 * treated as a miss and left alone: the directory belongs to the launcher, which may be
+	 * rewriting that very file right now, so the mod never deletes from it.
+	 */
 	public static byte[] read(String hash) {
 		Path base = dir;
 		if (base == null || hash == null || !HASH.matcher(hash).matches()) {
@@ -107,7 +112,6 @@ public final class TextureCache {
 			if (hash.equals(sha256(bytes))) {
 				return bytes;
 			}
-			Files.deleteIfExists(file);
 		} catch (Exception ignored) {
 			// treat as a miss
 		}
@@ -120,6 +124,7 @@ public final class TextureCache {
 		if (base == null || bytes == null || hash == null || !HASH.matcher(hash).matches()) {
 			return;
 		}
+		Path tmp = null;
 		try {
 			if (!hash.equals(sha256(bytes))) {
 				return;
@@ -129,11 +134,21 @@ public final class TextureCache {
 			if (Files.exists(file)) {
 				return;
 			}
-			Path tmp = base.resolve(hash + ".png." + Thread.currentThread().getId() + ".tmp");
+			// Unique per write: thread ids repeat across processes (the launcher and other game instances share this folder).
+			tmp = base.resolve(hash + ".png." + UUID.randomUUID() + ".tmp");
 			Files.write(tmp, bytes);
 			Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+			tmp = null;
 		} catch (Exception ignored) {
 			// cache is optional
+		} finally {
+			if (tmp != null) {
+				try {
+					Files.deleteIfExists(tmp);
+				} catch (Exception ignored) {
+					// leftover temp file: harmless
+				}
+			}
 		}
 	}
 

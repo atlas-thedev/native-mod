@@ -1,9 +1,11 @@
 package xyz.nativelaunch.core;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -14,6 +16,9 @@ import java.util.UUID;
 public final class NativeState {
 	public static final String DEFAULT_API = "https://api.playnative.fun";
 
+	/** Hosts (and their subdomains) the mod will send the game ticket to over https. */
+	private static final String[] TRUSTED_HOSTS = {"playnative.fun", "nativelaunch.xyz"};
+
 	private static final NativeState INSTANCE = new NativeState();
 
 	private final SkinDirectory directory = new SkinDirectory();
@@ -22,6 +27,7 @@ public final class NativeState {
 	private volatile AccountInfo account;
 	private volatile String api = DEFAULT_API;
 	private volatile Path gameDir;
+	private volatile Handoff handoff;
 
 	private NativeState() {
 	}
@@ -48,6 +54,14 @@ public final class NativeState {
 		return gameDir;
 	}
 
+	/**
+	 * The launcher hand-off read once at start (null in guest mode). Read it from here instead of
+	 * calling {@link Handoff#read} again, so every feature uses the same ticket.
+	 */
+	public Handoff handoff() {
+		return handoff;
+	}
+
 	/** Idempotent. Called from the mod entrypoint and lazily by the hooks. */
 	public synchronized void start(Path gameDir) {
 		if (started) {
@@ -58,6 +72,7 @@ public final class NativeState {
 		TextureCache.init(gameDir);
 		directory.setLocal(TextureCache.localLook(gameDir));
 		Handoff handoff = Handoff.read(gameDir);
+		this.handoff = handoff;
 		api = chooseApi(System.getProperty("native.api", System.getProperty("noctra.api")), handoff == null ? null : handoff.api);
 		SkinRefresh.install(directory);
 		sync = new SkinSync(directory, api);
@@ -89,11 +104,16 @@ public final class NativeState {
 		}
 	}
 
+	/** Strings and numbers only: an object or array here is a malformed reply, not a value. */
 	private static String text(JsonObject o, String key) {
-		return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : null;
+		if (o == null || !o.has(key)) {
+			return null;
+		}
+		JsonElement value = o.get(key);
+		return value.isJsonPrimitive() ? value.getAsString() : null;
 	}
 
-	/** Only https (or loopback http, for development) is ever accepted as the API address. */
+	/** Only the Native API over https (or loopback http, for development) is ever accepted. */
 	static String chooseApi(String override, String fromHandoff) {
 		for (String candidate : new String[] {override, fromHandoff}) {
 			if (candidate != null && acceptable(candidate.trim())) {
@@ -103,7 +123,11 @@ public final class NativeState {
 		return DEFAULT_API;
 	}
 
-	/** Parses the address instead of prefix-matching, so "http://localhost.evil.com" is not loopback. */
+	/**
+	 * Parses the address instead of prefix-matching, so "http://localhost.evil.com" is not loopback.
+	 * The game ticket is sent to this host, so https must also be one of Native's own domains:
+	 * a tampered session.json can no longer point the mod at someone else's server.
+	 */
 	static boolean acceptable(String url) {
 		java.net.URI uri;
 		try {
@@ -116,15 +140,26 @@ public final class NativeState {
 		if (scheme == null || host == null || uri.getUserInfo() != null) {
 			return false;
 		}
+		host = host.toLowerCase(Locale.ROOT);
+		boolean loopback = host.equals("localhost") || host.equals("127.0.0.1");
 		if ("https".equalsIgnoreCase(scheme)) {
-			return true;
+			return loopback || trusted(host);
 		}
-		return "http".equalsIgnoreCase(scheme) && (host.equals("localhost") || host.equals("127.0.0.1"));
+		return "http".equalsIgnoreCase(scheme) && loopback;
+	}
+
+	private static boolean trusted(String host) {
+		for (String domain : TRUSTED_HOSTS) {
+			if (host.equals(domain) || host.endsWith("." + domain)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
-	 * What to show for a player, or null to leave vanilla alone. Never blocks
-	 * (beyond a one-time 1.5 s grace for the very first snapshot).
+	 * What to show for a player, or null to leave vanilla alone. Never blocks: before the first
+	 * snapshot arrives this returns null, and SkinRefresh re-applies skins once it lands.
 	 */
 	public SkinOverride lookup(String name, UUID id) {
 		return lookup(name, id, false);
@@ -132,11 +167,9 @@ public final class NativeState {
 
 	/** @param premiumSession the game already has Mojang-signed textures for this player */
 	public SkinOverride lookup(String name, UUID id, boolean premiumSession) {
-		SkinSync current = sync;
-		if (current == null) {
+		if (sync == null) {
 			return null;
 		}
-		current.awaitFirstAttempt(1500);
 		return directory.find(name, id, premiumSession);
 	}
 }

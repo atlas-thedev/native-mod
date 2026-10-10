@@ -12,6 +12,11 @@ import java.util.zip.GZIPInputStream;
 public final class Http {
 	static final String USER_AGENT = "NativeMod/" + Version.MOD + " (Minecraft)";
 
+	/** Largest JSON document accepted (after gzip). The skin directory is far below this. */
+	static final long MAX_JSON_BYTES = 16L * 1024 * 1024;
+	/** Largest reply accepted from a POST (upload acknowledgements are tiny). */
+	static final int MAX_POST_REPLY_BYTES = 64 * 1024;
+
 	private Http() {
 	}
 
@@ -46,7 +51,7 @@ public final class Http {
 			long total = 0;
 			while ((read = in.read(buffer)) != -1) {
 				total += read;
-				if (total > 64L * 1024 * 1024) {
+				if (total > MAX_JSON_BYTES) {
 					throw new IOException("Response too large");
 				}
 				out.write(buffer, 0, read);
@@ -65,7 +70,12 @@ public final class Http {
 		connection.setRequestProperty("Content-Type", contentType);
 		connection.setFixedLengthStreamingMode(body.length);
 		try {
-			connection.getOutputStream().write(body);
+			java.io.OutputStream os = connection.getOutputStream();
+			try {
+				os.write(body);
+			} finally {
+				os.close();
+			}
 			int status = connection.getResponseCode();
 			if (status / 100 != 2) {
 				throw new IOException("HTTP " + status + " from " + url);
@@ -75,7 +85,8 @@ public final class Http {
 			byte[] buffer = new byte[4096];
 			int read;
 			while ((read = in.read(buffer)) != -1) {
-				if (out.size() > 64 * 1024) {
+				// Check before writing, so the limit is the real limit (not limit + one buffer).
+				if ((long) out.size() + read > MAX_POST_REPLY_BYTES) {
 					throw new IOException("Response too large");
 				}
 				out.write(buffer, 0, read);
