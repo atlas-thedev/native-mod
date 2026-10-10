@@ -67,6 +67,8 @@ jobs:
           $X key Escape sleep 2 shot shots/10-closed.png
           $X click 1035 519 sleep 3 shot shots/11-relay.png
           $X key Escape sleep 2 shot shots/12-esc.png
+          $X click 225 370 sleep 3 click 172 270 sleep 2 click 340 630 sleep 3 shot shots/13-hud-editor.png
+          $X move 640 360 sleep 1 shot shots/14-hud-hover.png
           cp /tmp/native-client/mc-${{ matrix.mc }}/game/out.log shots/out.log || true
           grep -nE "Native|Exception|Error" shots/out.log | head -80 || true
       - uses: actions/upload-artifact@v4

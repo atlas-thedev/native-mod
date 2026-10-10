@@ -12,23 +12,22 @@ public final class Boxes {
 	private final float[] view = new float[9];
 	private float cx, cy, scale;
 
-	private int faces;
-	private float[] xy = new float[8 * 256];
-	private float[] uv = new float[8 * 256];
-	private float[] z = new float[256];
-	/** Depth of the centre of the cube each face belongs to: faces are sorted per cube first (painter's order). */
-	private float[] cz = new float[256];
-	private float cubeZ;
-	private int[] color = new int[256];
-	private Image[] tex = new Image[256];
-	private Integer[] order = new Integer[256];
-	/** Faces seen from behind (only kept while {@link #twoSided}). */
-	private boolean[] back = new boolean[256];
 	/**
-	 * Draw faces that point away too (cosmetics). Vanilla renders cosmetics without back-face culling, so the inside
-	 * of a hat brim or the far side of a wing shows through the transparent pixels of the near side. Culling them
-	 * made those pixels see-through to the background: the "transparent" holes in the locker preview.
+	 * Faces are cut into one solid quad per texel and every texel is depth-sorted on its own. Sorting whole faces
+	 * (or cubes) can't be right when cubes overlap: a cape, a hood around the head or blades crossing the back would
+	 * paint over parts that are in front of them (the see-through look). Per texel there is no such overlap, and fully
+	 * transparent texels are dropped, so hats, wings and blades show what is really behind them.
 	 */
+	private int quads;
+	private float[] qx = new float[8 * 1024];
+	private float[] qz = new float[1024];
+	private int[] qc = new int[1024];
+	private long[] keys = new long[1024];
+	private static final Image WHITE = new Image(1, 1, new int[] {0xFFFFFFFF});
+	private static final float[] WHITE_UV = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
+	/** Texels per face side at most (big textures are sampled, not drawn texel by texel). */
+	private static final int MAX_SIDE = 48;
+	/** Draw faces that point away too (cosmetics: vanilla renders those without back-face culling). */
 	public boolean twoSided;
 
 	public void begin(float cx, float cy, float scale, float yaw, float pitch) {
@@ -42,7 +41,7 @@ public final class Boxes {
 		mul3(rx, ry, view);
 		identity();
 		depth = 0;
-		faces = 0;
+		quads = 0;
 		twoSided = false;
 	}
 
@@ -143,9 +142,6 @@ public final class Boxes {
 		float x0 = x - inflate, y0 = y - inflate, z0 = zz - inflate;
 		float x1 = x + w + inflate, y1 = y + h + inflate, z1 = zz + d + inflate;
 		float iu = 1f / texW, iv = 1f / texH;
-		float[] tmp = new float[2];
-		project((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, tmp, 0);
-		cubeZ = p[2];
 		// region rects {u0, v0, u1, v1} in pixels
 		float[] front = {u + d, v + d, u + d + w, v + d + h};
 		float[] right = {u, v + d, u + d, v + d + h};
@@ -166,100 +162,119 @@ public final class Boxes {
 		face(texture, tint, iu, iv, bottom, mirror, 0, 1, 0, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1);
 	}
 
+	private final float[] fa = new float[3], fb = new float[3], fd = new float[3];
+	private float[] gx = new float[(MAX_SIDE + 1) * (MAX_SIDE + 1)], gy = new float[gx.length], gz = new float[gx.length];
+
 	private void face(Image texture, int tint, float iu, float iv, float[] r, boolean mirror, float nx, float ny, float nz,
-			float ax, float ay, float az, float bx, float by, float bz, float qx, float qy, float qz, float dx, float dy, float dz) {
+			float ax, float ay, float az, float bx, float by, float bz, float qqx, float qqy, float qqz, float dx, float dy, float dz) {
 		if (r[2] - r[0] <= 0 || r[3] - r[1] <= 0) {
 			return;
 		}
 		float[] n = normal(nx, ny, nz);
-		boolean away = n[2] >= -0.0001f;
-		if (away && (!twoSided || n[2] < 0.0001f && n[2] > -0.0001f)) {
-			return; // facing away (or edge-on)
+		if (n[2] > -0.0001f && n[2] < 0.0001f) {
+			return; // edge-on
+		}
+		boolean away = n[2] > 0;
+		if (away && !twoSided) {
+			return;
 		}
 		if (away) {
 			n[0] = -n[0];
 			n[1] = -n[1];
 			n[2] = -n[2]; // light the inside as the side we are looking at
 		}
-		if (faces == z.length) {
-			int cap = faces * 2;
-			xy = java.util.Arrays.copyOf(xy, cap * 8);
-			uv = java.util.Arrays.copyOf(uv, cap * 8);
-			z = java.util.Arrays.copyOf(z, cap);
-			cz = java.util.Arrays.copyOf(cz, cap);
-			color = java.util.Arrays.copyOf(color, cap);
-			tex = java.util.Arrays.copyOf(tex, cap);
-			order = java.util.Arrays.copyOf(order, cap);
-			back = java.util.Arrays.copyOf(back, cap);
-		}
-		int o = faces * 8;
-		float zs = 0;
-		project(ax, ay, az, xy, o);
-		zs += p[2];
-		project(bx, by, bz, xy, o + 2);
-		zs += p[2];
-		project(qx, qy, qz, xy, o + 4);
-		zs += p[2];
-		project(dx, dy, dz, xy, o + 6);
-		zs += p[2];
-		float e = 0.02f; // keep nearest sampling inside the region
-		float u0 = (r[0] + e) * iu, v0 = (r[1] + e) * iv, u1 = (r[2] - e) * iu, v1 = (r[3] - e) * iv;
-		if (mirror) {
-			float t = u0;
-			u0 = u1;
-			u1 = t;
-		}
-		uv[o] = u0;
-		uv[o + 1] = v0;
-		uv[o + 2] = u1;
-		uv[o + 3] = v0;
-		uv[o + 4] = u1;
-		uv[o + 5] = v1;
-		uv[o + 6] = u0;
-		uv[o + 7] = v1;
-		z[faces] = zs / 4;
-		cz[faces] = cubeZ;
+		float[] t2 = new float[2];
+		project(ax, ay, az, t2, 0);
+		fa[0] = t2[0]; fa[1] = t2[1]; fa[2] = p[2];
+		project(bx, by, bz, t2, 0);
+		fb[0] = t2[0]; fb[1] = t2[1]; fb[2] = p[2];
+		project(dx, dy, dz, t2, 0);
+		fd[0] = t2[0]; fd[1] = t2[1]; fd[2] = p[2];
 		// light from the front, above and a little to the left
-		float lx = -0.35f, ly = -0.55f, lz = -0.76f;
-		float lit = Math.max(0f, n[0] * lx + n[1] * ly + n[2] * lz);
-		float b = 0.58f + 0.42f * lit;
-		int a = tint >>> 24, rr = (int) (((tint >> 16) & 255) * b), gg = (int) (((tint >> 8) & 255) * b), bb = (int) ((tint & 255) * b);
-		color[faces] = a << 24 | rr << 16 | gg << 8 | bb;
-		tex[faces] = texture;
-		back[faces] = away;
-		faces++;
+		float lit = Math.max(0f, n[0] * -0.35f + n[1] * -0.55f + n[2] * -0.76f);
+		float bright = 0.58f + 0.42f * lit;
+
+		// texel grid of the region, in real image pixels (textures can be bigger than the model's declared size)
+		float sx = texture.width * iu, sy = texture.height * iv;
+		float px0 = r[0] * sx, py0 = r[1] * sy, px1 = r[2] * sx, py1 = r[3] * sy;
+		int cols = Math.max(1, Math.round(px1 - px0)), rows = Math.max(1, Math.round(py1 - py0));
+		int gc = Math.min(cols, MAX_SIDE), gr = Math.min(rows, MAX_SIDE);
+		int stride = gc + 1;
+		for (int j = 0; j <= gr; j++) {
+			float t = (float) j / gr;
+			for (int i = 0; i <= gc; i++) {
+				float u = (float) i / gc;
+				int k = j * stride + i;
+				gx[k] = fa[0] + (fb[0] - fa[0]) * u + (fd[0] - fa[0]) * t;
+				gy[k] = fa[1] + (fb[1] - fa[1]) * u + (fd[1] - fa[1]) * t;
+				gz[k] = fa[2] + (fb[2] - fa[2]) * u + (fd[2] - fa[2]) * t;
+			}
+		}
+		int[] px = texture.argb;
+		int tw = texture.width, th = texture.height;
+		int ta = tint >>> 24, tr = (tint >> 16) & 255, tg = (tint >> 8) & 255, tb = tint & 255;
+		for (int j = 0; j < gr; j++) {
+			int sy0 = (int) (py0 + (j + 0.5f) * (py1 - py0) / gr);
+			if (sy0 < 0 || sy0 >= th) {
+				continue;
+			}
+			for (int i = 0; i < gc; i++) {
+				float uu = (i + 0.5f) / gc;
+				int sx0 = (int) (mirror ? px1 - uu * (px1 - px0) : px0 + uu * (px1 - px0));
+				if (sx0 < 0 || sx0 >= tw) {
+					continue;
+				}
+				int c = px[sy0 * tw + sx0];
+				int a = (c >>> 24) * ta / 255;
+				if (a < 8) {
+					continue; // transparent texel: whatever is behind shows through
+				}
+				int rr = (int) (((c >> 16) & 255) * tr / 255 * bright);
+				int gg = (int) (((c >> 8) & 255) * tg / 255 * bright);
+				int bb = (int) ((c & 255) * tb / 255 * bright);
+				add(j * stride + i, stride, a << 24 | rr << 16 | gg << 8 | bb);
+			}
+		}
 	}
 
-	private final float[] qxy = new float[8], quv = new float[8];
+	private void add(int k, int stride, int color) {
+		if (quads == qz.length) {
+			int cap = quads * 2;
+			qx = java.util.Arrays.copyOf(qx, cap * 8);
+			qz = java.util.Arrays.copyOf(qz, cap);
+			qc = java.util.Arrays.copyOf(qc, cap);
+			keys = new long[cap];
+		}
+		int o = quads * 8;
+		int k1 = k + 1, k2 = k + stride + 1, k3 = k + stride;
+		qx[o] = gx[k];
+		qx[o + 1] = gy[k];
+		qx[o + 2] = gx[k1];
+		qx[o + 3] = gy[k1];
+		qx[o + 4] = gx[k2];
+		qx[o + 5] = gy[k2];
+		qx[o + 6] = gx[k3];
+		qx[o + 7] = gy[k3];
+		qz[quads] = (gz[k] + gz[k1] + gz[k2] + gz[k3]) * 0.25f;
+		qc[quads] = color;
+		quads++;
+	}
 
-	/** Sorts back to front and draws. */
+	private final float[] qxy = new float[8];
+
+	/** Sorts every texel back to front (larger view z = farther) and draws them as one batch. */
 	public void end(Canvas c) {
-		for (int i = 0; i < faces; i++) {
-			order[i] = i;
+		for (int i = 0; i < quads; i++) {
+			int bits = Float.floatToIntBits(qz[i]);
+			bits ^= (bits >> 31) & 0x7FFFFFFF; // order-preserving int for floats
+			keys[i] = ((long) (-(long) bits - 1) << 32) | (i & 0xFFFFFFFFL); // descending z
 		}
-		final float[] zz = z, cc = cz;
-		final boolean[] bk = back;
-		java.util.Arrays.sort(order, 0, faces, (a, b) -> {
-			// every inside face first: they can only ever be seen through a transparent pixel of a front face,
-			// so drawing them before all front faces never paints an inside over something in front of it
-			if (bk[a] != bk[b]) {
-				return bk[a] ? -1 : 1;
-			}
-			float d = cc[b] - cc[a];
-			if (Math.abs(d) > 0.01f) {
-				return d > 0 ? 1 : -1;
-			}
-			return Float.compare(zz[b], zz[a]);
-		});
-		float s = 1f / c.scale;
-		for (int k = 0; k < faces; k++) {
-			int i = order[k];
-			for (int j = 0; j < 8; j++) {
-				qxy[j] = xy[i * 8 + j] * 1f;
-				quv[j] = uv[i * 8 + j];
-			}
-			c.freeQuad(tex[i], qxy, quv, color[i]);
+		java.util.Arrays.sort(keys, 0, quads);
+		for (int k = 0; k < quads; k++) {
+			int i = (int) keys[k];
+			System.arraycopy(qx, i * 8, qxy, 0, 8);
+			c.freeQuad(WHITE, qxy, WHITE_UV, qc[i]);
 		}
-		faces = 0;
+		quads = 0;
 	}
 }

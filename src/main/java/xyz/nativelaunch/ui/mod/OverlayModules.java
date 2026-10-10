@@ -136,6 +136,14 @@ final class OverlayModules {
 			}
 			Overlays.Sidebar d = data(g);
 			float s = scale.value, fs = 11.5f * s;
+			if (vanilla() && gui()) {
+				// Vanilla look, no live sidebar (editor preview): the size the game will really draw it at
+				float L = GUI[2] * s;
+				float vw = sidebarTextW(c, d);
+				size[0] = (vw + 4) * L;
+				size[1] = (d.count * 9 + (title.value ? 10 : 1)) * L;
+				return size;
+			}
 			float lh = c.lineHeight(Fonts.MEDIUM, fs) + ROW_AIR * s;
 			float w = title.value ? richWidth(c, Fonts.SEMIBOLD, fs, d.title) + 8 * s : 0;
 			float body = 0;
@@ -165,6 +173,10 @@ final class OverlayModules {
 			Overlays.Sidebar d = data(g);
 			float[] sz = measure(c, g);
 			float s = scale.value, fs = 11.5f * s;
+			if (vanilla() && gui()) {
+				paintVanilla(c, d, x, y, sz[0], GUI[2] * s);
+				return;
+			}
 			float lh = c.lineHeight(Fonts.MEDIUM, fs) + ROW_AIR * s;
 			boolean card = style.value != STYLE_TEXT;
 			float a = opacity.value / 100f;
@@ -205,6 +217,51 @@ final class OverlayModules {
 					draw(c, Fonts.MEDIUM, fs, d.scores[i], cx + (cw - nw) / 2, ty);
 				}
 				ty += lh;
+			}
+		}
+
+		/** Vanilla font px ~ our Medium at 10.5 px (most glyphs are 5 px + 1 px spacing). */
+		private static final float MC_FONT = 10.5f;
+
+		/** Widest row in vanilla GUI px: name, a space and the red score, or the title. */
+		private float sidebarTextW(Canvas c, Overlays.Sidebar d) {
+			float w = title.value ? richWidth(c, Fonts.MEDIUM, MC_FONT, d.title) : 0;
+			float space = numbers.value ? c.textWidth(Fonts.MEDIUM, MC_FONT, ": ") : 0;
+			for (int i = 0; i < d.count; i++) {
+				float row = richWidth(c, Fonts.MEDIUM, MC_FONT, d.names[i]) + (numbers.value ? space + richWidth(c, Fonts.MEDIUM, MC_FONT, d.scores[i]) : 0);
+				w = Math.max(w, row);
+			}
+			return w;
+		}
+
+		/** The editor's stand-in for the vanilla sidebar: same box, rows and colours as the game's. */
+		private void paintVanilla(Canvas c, Overlays.Sidebar d, float x, float y, float w, float L) {
+			float fs = 8.4f * L, row = 9 * L;
+			float ty = y;
+			if (title.value) {
+				c.fill(x, y, w, row + L, 0x66000000);
+				float tw = richWidth(c, Fonts.SEMIBOLD, fs, d.title);
+				float tx = x + (w - tw) / 2;
+				for (int i = 0; i < d.title.n; i++) {
+					tx = text(c, Fonts.SEMIBOLD, fs, d.title.text[i], tx, ty + 1.2f * L, d.title.color[i]);
+				}
+				ty += row + L;
+			}
+			c.fill(x, ty, w, d.count * row, 0x4D000000);
+			for (int i = 0; i < d.count; i++) {
+				float tx = x + 2 * L;
+				Rich r = d.names[i];
+				for (int j = 0; j < r.n; j++) {
+					tx = text(c, Fonts.MEDIUM, fs, r.text[j], tx, ty + 0.6f * L, colors.value ? r.color[j] : color.value);
+				}
+				if (numbers.value) {
+					float nw = richWidth(c, Fonts.MEDIUM, fs, d.scores[i]);
+					float nx = x + w - 2 * L - nw;
+					for (int j = 0; j < d.scores[i].n; j++) {
+						nx = text(c, Fonts.MEDIUM, fs, d.scores[i].text[j], nx, ty + 0.6f * L, 0xFFFF5555);
+					}
+				}
+				ty += row;
 			}
 		}
 
@@ -337,6 +394,12 @@ final class OverlayModules {
 			}
 			Overlays.Bars d = data(g);
 			float s = scale.value;
+			if (vanilla() && gui()) {
+				float L = GUI[2] * s;
+				size[0] = 182 * L;
+				size[1] = (Math.max(1, d.count) * 19 - 4) * L;
+				return size;
+			}
 			float w = width.value * s;
 			if (showName.value) {
 				for (int i = 0; i < d.count; i++) {
@@ -358,6 +421,25 @@ final class OverlayModules {
 			Overlays.Bars d = data(g);
 			float[] sz = measure(c, g);
 			float s = scale.value, fs = 11.5f * s;
+			if (vanilla() && gui()) {
+				// the editor's stand-in for vanilla bars: name over a 182 x 5 bar, 19 px per bar
+				float L = GUI[2] * s, vfs = 8.4f * L;
+				float ty = y;
+				for (int i = 0; i < Math.max(1, d.count); i++) {
+					Rich r = d.names[i];
+					float nw = richWidth(c, Fonts.SEMIBOLD, vfs, r);
+					float tx = x + (sz[0] - nw) / 2;
+					for (int j = 0; j < r.n; j++) {
+						tx = text(c, Fonts.SEMIBOLD, vfs, r.text[j], tx, ty, (r.color[j] & 0xFFFFFF) == 0xFFFFFF ? color.value : r.color[j]);
+					}
+					int col = COLORS[Math.max(0, Math.min(COLORS.length - 1, d.color[i]))];
+					float by = ty + 9 * L;
+					c.fill(x, by, sz[0], 5 * L, Theme.mix(col, 0xFF000000, 0.6f));
+					c.fill(x, by, sz[0] * Math.max(0, Math.min(1, d.progress[i])), 5 * L, col);
+					ty += 19 * L;
+				}
+				return;
+			}
 			boolean card = style.value == STYLE_CARD;
 			if (card) {
 				background(c, x, y, sz[0], sz[1], s);
