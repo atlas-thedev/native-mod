@@ -17,8 +17,13 @@ import java.util.List;
 
 /** The Native title screen: artwork background, launcher-style menu and a live Relay friends card. */
 public final class TitleView {
-	private static final String[] BACKGROUNDS = {"bg1.jpg", "bg2.jpg", "bg3.jpg"};
-	private final Image[] bg = new Image[BACKGROUNDS.length];
+	/**
+	 * One still picture: the artwork of this Minecraft version. The launcher copies the same picture it shows on the
+	 * instance card to {@code <game dir>/.native/version-art.jpg} at launch; without it the stock artwork is used.
+	 */
+	private static volatile Image art;
+	private static boolean artStarted;
+	private long artShownAt;
 	private boolean bgLoaded;
 	private Image logo;
 	private long shownAt;
@@ -34,9 +39,7 @@ public final class TitleView {
 			return;
 		}
 		bgLoaded = true;
-		for (int i = 0; i < BACKGROUNDS.length; i++) {
-			bg[i] = Image.resource("/assets/native/ui/" + BACKGROUNDS[i]);
-		}
+		startArt();
 		logo = Image.resource("/assets/native/ui/logo.png");
 	}
 
@@ -221,44 +224,48 @@ public final class TitleView {
 		drawBackground(ui, ui.c.width(), ui.c.height());
 	}
 
+	private static synchronized void startArt() {
+		if (artStarted) {
+			return;
+		}
+		artStarted = true;
+		Thread t = new Thread(() -> {
+			Image img = null;
+			try {
+				java.nio.file.Path gameDir = xyz.nativelaunch.core.NativeState.get().gameDir();
+				java.nio.file.Path file = gameDir == null ? null : gameDir.resolve(".native").resolve("version-art.jpg");
+				if (file != null && java.nio.file.Files.isRegularFile(file) && java.nio.file.Files.size(file) < 16L * 1024 * 1024) {
+					img = Image.decode(java.nio.file.Files.readAllBytes(file));
+				}
+			} catch (Throwable ignored) {
+				img = null;
+			}
+			if (img == null) {
+				img = Image.resource("/assets/native/ui/bg1.jpg");
+			}
+			if (img != null && img.width > 2560) {
+				img = img.scaled(2560, Math.max(1, Math.round(img.height * (2560f / img.width))));
+			}
+			art = img;
+		}, "Native title art");
+		t.setDaemon(true);
+		t.start();
+	}
+
 	private void drawBackground(Ui ui, float W, float H) {
 		Canvas c = ui.c;
 		c.fill(0, 0, W, H, 0xFF050608);
-		int count = 0;
-		for (Image i : bg) {
-			if (i != null) {
-				count++;
+		Image a = art;
+		if (a != null) {
+			if (artShownAt == 0) {
+				artShownAt = ui.now;
 			}
-		}
-		if (count > 0) {
-			double period = 16000, fade = 2200;
-			long t = ui.now;
-			int cur = (int) ((t / (long) period) % count);
-			double phase = t % (long) period;
-			Image a = nth(cur), b = nth((cur + 1) % count);
-			float zoomA = 1.04f + 0.08f * (float) (phase / period);
-			c.imageCover(a, 0, 0, W, H, zoomA, 0.2f, 0, 0xFFFFFFFF);
-			if (phase > period - fade && b != a) {
-				float k = (float) ((phase - (period - fade)) / fade);
-				c.imageCover(b, 0, 0, W, H, 1.04f, 0.2f, 0, Theme.alpha(0xFFFFFFFF, k));
-			}
+			float k = Math.min(1f, (ui.now - artShownAt) / 350f);
+			c.imageCover(a, 0, 0, W, H, 1.04f, 0.2f, 0, Theme.alpha(0xFFFFFFFF, k));
 		}
 		c.gradientH(0, 0, W * 0.7f, H, 0xF0000000, 0x00000000);
 		c.gradientV(0, H * 0.5f, W, H * 0.5f, 0x00000000, 0xD0000000);
 		c.gradientV(0, 0, W, 140, 0x99000000, 0x00000000);
-	}
-
-	private Image nth(int n) {
-		int k = 0;
-		for (Image i : bg) {
-			if (i != null) {
-				if (k == n) {
-					return i;
-				}
-				k++;
-			}
-		}
-		return null;
 	}
 
 	private void relayCard(Ui ui, float x, float y, float w, float h, Object screen) {

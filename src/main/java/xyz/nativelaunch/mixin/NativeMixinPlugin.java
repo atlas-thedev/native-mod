@@ -16,10 +16,17 @@ import java.util.Set;
 public final class NativeMixinPlugin implements IMixinConfigPlugin {
 	private static final String MODERN_MARKER = "com/mojang/authlib/minecraft/MinecraftProfileTextures.class";
 	private static final String SERVICES_MARKER = "com/mojang/authlib/services/MinecraftServicesSessionService.class";
+	private static final String YGGDRASIL_MARKER = "com/mojang/authlib/yggdrasil/YggdrasilMinecraftSessionService.class";
+	// 26.x ships unobfuscated (official names); older versions run on intermediary names
+	private static final String OFFICIAL_MARKER = "net/minecraft/client/Minecraft.class";
+	private static final String INTERMEDIARY_MARKER = "net/minecraft/class_310.class";
 
 	private boolean modern;
 	private boolean services;
+	private boolean yggdrasil;
 	private boolean known;
+	/** 1 = official names (26.x), -1 = intermediary (older), 0 = unknown. */
+	private int naming;
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -30,6 +37,10 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 			}
 			modern = loader.getResource(MODERN_MARKER) != null;
 			services = loader.getResource(SERVICES_MARKER) != null;
+			yggdrasil = loader.getResource(YGGDRASIL_MARKER) != null;
+			boolean official = loader.getResource(OFFICIAL_MARKER) != null;
+			boolean intermediary = loader.getResource(INTERMEDIARY_MARKER) != null;
+			naming = official == intermediary ? 0 : (official ? 1 : -1);
 			known = true;
 		} catch (Throwable t) {
 			known = false;
@@ -47,10 +58,20 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 			return true; // both hooks are no-ops where their target method does not exist
 		}
 		if (mixinClassName.endsWith("LegacyTexturesMixin")) {
-			return !modern;
+			return !modern && yggdrasil;
+		}
+		if (mixinClassName.endsWith("ServicesPackedTexturesMixin")) {
+			return services;
 		}
 		if (mixinClassName.endsWith("PackedTexturesMixin")) {
-			return modern;
+			return modern && yggdrasil;
+		}
+		// Game hooks come in two flavours: "*26" for the unobfuscated 26.x names and
+		// the plain ones for intermediary names. Loading the wrong set only produces
+		// "Error loading class" noise (and confuses crash analysis), so skip it.
+		if (naming != 0) {
+			boolean for26 = mixinClassName.endsWith("26");
+			return naming > 0 ? for26 : !for26;
 		}
 		return true;
 	}
