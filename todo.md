@@ -8,6 +8,10 @@ how it was verified. Add new items under `Next`.
 ## Next
 - More for the right-shift menu — players keep asking for extra modules and settings there.
 
+## Shipped in 1.8.8
+- Hoods / helmets / masks (a cosmetic box that wraps the whole head) hide the skin's hat layer and the vanilla
+  helmet / head item, in game (1.16 - 26.x) and in the wardrobe preview; the hood no longer moves for a helmet
+
 ## Shipped in 1.8.7
 - Cosmetics preview: every texel is depth-sorted on its own (no more capes / hoods / blades painting through the
   body); a back item hides the cape like in game

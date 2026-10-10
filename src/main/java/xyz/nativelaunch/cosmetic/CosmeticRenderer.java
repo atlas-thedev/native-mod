@@ -19,6 +19,9 @@ public final class CosmeticRenderer {
 	 * @param moving walk speed 0..1
 	 */
 	public void render(List<CosmeticLibrary.Loaded> worn, CosmeticSink sink, double time, float moving, int armor) {
+		if (HeadCover.any(worn)) {
+			armor &= ~ARMOR_HEAD; // the helmet is not drawn under a hood, so nothing has to make room for it
+		}
 		for (int i = 0; i < worn.size(); i++) {
 			CosmeticLibrary.Loaded cosmetic = worn.get(i);
 			int side = cosmetic.ref.side != 0 ? cosmetic.ref.side : cosmetic.model.defaultSide();

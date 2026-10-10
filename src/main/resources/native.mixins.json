@@ -22,7 +22,13 @@
     "MouseMixin26",
     "ZoomMixin26",
     "BossBarMixin26",
-    "SidebarMixin26"
+    "SidebarMixin26",
+    "HoodHatMixin",
+    "HoodSlotMixin",
+    "HoodScopeMixin",
+    "HoodHatMixin26",
+    "HoodSlotMixin26",
+    "HoodScopeMixin26"
   ],
   "injectors": {
     "defaultRequire": 0
