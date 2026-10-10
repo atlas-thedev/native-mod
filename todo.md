@@ -1,12 +1,17 @@
 # Native mod — todo
 
-Current release: **1.8.3** (Minecraft 1.16 – 26.3).
+Current release: **1.8.4** (Minecraft 1.16 – 26.3).
 
 Everything on the 1.8.1 list is done; see `Shipped in 1.8.1` below for what changed and
 how it was verified. Add new items under `Next`.
 
 ## Next
 - More for the right-shift menu — players keep asking for extra modules and settings there.
+
+## Shipped in 1.8.4
+
+- Only the game hooks for this version's naming load (26.x official names vs intermediary), so 26.3 no longer logs "Error loading class" warnings for the old hooks.
+- Title screen: one still picture of the Minecraft version (from the launcher), no more rotating backgrounds.
 
 ## Shipped in 1.8.3
 - **Ads on the title screen** — the same cards as the launcher's Home (under the Friends card,
