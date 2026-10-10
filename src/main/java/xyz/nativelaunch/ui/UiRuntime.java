@@ -6,12 +6,14 @@ import xyz.nativelaunch.ui.gfx.Atlas;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Fonts;
 import xyz.nativelaunch.ui.gfx.GlRenderer;
+import xyz.nativelaunch.ui.gfx.Renderer;
 import xyz.nativelaunch.ui.mod.Game;
 import xyz.nativelaunch.ui.mod.Module;
 import xyz.nativelaunch.ui.mod.Modules;
 import xyz.nativelaunch.ui.view.HudEditor;
 import xyz.nativelaunch.ui.view.HudOverlay;
 import xyz.nativelaunch.ui.view.MenuView;
+import xyz.nativelaunch.ui.view.PauseView;
 import xyz.nativelaunch.ui.view.RelayView;
 import xyz.nativelaunch.ui.view.TitleView;
 import xyz.nativelaunch.ui.view.Toasts;
@@ -28,7 +30,10 @@ public final class UiRuntime {
 	private static McBridge mc;
 	private static UiConfig config;
 	private static boolean failed;
-	private static GlRenderer gl;
+	private static Renderer gl;
+	/** Minecraft 26.x: the GuiGraphicsExtractor of the frame being built (read by the GUI renderer). */
+	public static Object guiContext;
+	private static final double[] cursorPos = new double[2];
 	private static Canvas canvas;
 	private static Ui ui;
 	private static GlfwInput input;
@@ -36,6 +41,7 @@ public final class UiRuntime {
 	private static RelayView relay;
 	private static Toasts toasts;
 	private static MenuView menu;
+	private static PauseView pause;
 	private static HudEditor editor;
 	private static final Game game = new Game();
 	private static volatile boolean playing;
@@ -85,11 +91,17 @@ public final class UiRuntime {
 		return version;
 	}
 
+	/** While true the vanilla pause screen may open (used to press its leave button). */
+	public static volatile boolean pauseBypass;
+
 	/** Used by the setScreen hook: swaps the vanilla title screen for ours. */
 	public static Object replaceScreen(Object screen) {
 		try {
 			if (mc != null && !failed && config.customTitle && !classic && screen != null && mc.isVanillaTitle(screen)) {
 				return mc.newHost(McBridge.TITLE, null);
+			}
+			if (mc != null && !failed && config.customPause && !pauseBypass && screen != null && mc.isVanillaPause(screen) && mc.inWorld()) {
+				return mc.newHost(McBridge.PAUSE, null);
 			}
 		} catch (Throwable t) {
 			fail(t);
@@ -97,15 +109,44 @@ public final class UiRuntime {
 		return screen;
 	}
 
+	/** 26.x setScreen hook: true when the call was replaced by opening the Native title screen. */
+	public static boolean swapScreen(Object screen) {
+		try {
+			Object next = replaceScreen(screen);
+			if (next != screen) {
+				mc.setScreen(next);
+				return true;
+			}
+		} catch (Throwable t) {
+			fail(t);
+		}
+		return false;
+	}
+
 	/** Called by the render hook right before the frame is presented. */
 	public static void onFrame() {
-		if (mc == null || failed) {
+		if (mc == null || failed || mc.guiFrames()) {
 			return;
 		}
 		try {
 			frame();
 		} catch (Throwable t) {
 			fail(t);
+		}
+	}
+
+	/** Minecraft 26.x: called at the end of the GUI pass with its GuiGraphicsExtractor. */
+	public static void onGuiFrame(Object ctx) {
+		if (mc == null || failed || !mc.guiFrames()) {
+			return;
+		}
+		guiContext = ctx;
+		try {
+			frame();
+		} catch (Throwable t) {
+			fail(t);
+		} finally {
+			guiContext = null;
 		}
 	}
 
@@ -134,7 +175,11 @@ public final class UiRuntime {
 		if (window == 0) {
 			return;
 		}
-		if (input == null) {
+		if (mc.handlesInput()) {
+			if (mc.cursor(cursorPos)) {
+				onMove(cursorPos[0], cursorPos[1]);
+			}
+		} else if (input == null) {
 			input = new GlfwInput(window);
 		} else if (++frames % 120 == 0) {
 			input.install();
@@ -195,6 +240,8 @@ public final class UiRuntime {
 				title.background(ui); // nothing is drawn behind us outside a world
 			}
 			relay.draw(ui, screen, false);
+		} else if (kind == McBridge.PAUSE) {
+			pause.draw(ui, screen);
 		} else if (kind == McBridge.MENU) {
 			if (!inWorld) {
 				title.background(ui);
@@ -225,18 +272,23 @@ public final class UiRuntime {
 			return;
 		}
 		canvas = new Canvas(new Atlas(1024), new Fonts());
-		gl = new GlRenderer();
+		gl = mc.renderer();
+		if (gl == null) {
+			gl = new GlRenderer();
+		}
 		ui = new Ui(canvas);
 		ui.clipboard = new Ui.Clipboard() {
 			@Override
 			public String get() {
-				return input == null ? null : input.clipboard();
+				return input == null ? mc.clipboard() : input.clipboard();
 			}
 
 			@Override
 			public void set(String text) {
 				if (input != null) {
 					input.clipboard(text);
+				} else {
+					mc.setClipboard(text);
 				}
 			}
 		};
@@ -244,6 +296,7 @@ public final class UiRuntime {
 		relay = new RelayView();
 		toasts = new Toasts();
 		menu = new MenuView();
+		pause = new PauseView();
 		editor = new HudEditor();
 	}
 
@@ -319,7 +372,7 @@ public final class UiRuntime {
 
 	// ── input (GLFW callbacks, main thread) ───────────────────────────────
 
-	static void onMove(double x, double y) {
+	public static void onMove(double x, double y) {
 		if (mc == null) {
 			return;
 		}
@@ -336,7 +389,7 @@ public final class UiRuntime {
 		return h <= 0 ? 1 : (double) mc.fbHeight() / h;
 	}
 
-	static boolean onButton(int button, int action, int mods) {
+	public static boolean onButton(int button, int action, int mods) {
 		if (capturing) {
 			Input.button(button, action == 0 ? 0 : 1, mods);
 			return true;
@@ -358,7 +411,7 @@ public final class UiRuntime {
 		return false;
 	}
 
-	static boolean onScroll(double dx, double dy) {
+	public static boolean onScroll(double dx, double dy) {
 		if (capturing) {
 			Input.scroll(dx, dy);
 			return true;
@@ -379,7 +432,7 @@ public final class UiRuntime {
 		return false;
 	}
 
-	static boolean onChar(int codepoint) {
+	public static boolean onChar(int codepoint) {
 		if (capturing) {
 			Input.character(codepoint);
 			return true;
@@ -387,7 +440,7 @@ public final class UiRuntime {
 		return false;
 	}
 
-	static boolean onKey(int key, int action, int mods) {
+	public static boolean onKey(int key, int action, int mods) {
 		if (mc == null || failed) {
 			return false;
 		}
@@ -399,7 +452,11 @@ public final class UiRuntime {
 			if (key == Ui.KEY_ESCAPE && action == 1) {
 				try {
 					Object s = mc.screen();
-					if (mc.hostKind(s) == McBridge.RELAY && (relay == null || !relay.consumeEscape(ui))) {
+					if (mc.hostKind(s) == McBridge.PAUSE) {
+						if (pause == null || !pause.escape()) {
+							closeHost(s);
+						}
+					} else if (mc.hostKind(s) == McBridge.RELAY && (relay == null || !relay.consumeEscape(ui))) {
 						closeHost(s);
 					} else if (mc.hostKind(s) == McBridge.TITLE && title != null) {
 						title.escape();

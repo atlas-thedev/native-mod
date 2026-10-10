@@ -13,6 +13,7 @@ import java.nio.file.Path;
 /** config/native-ui.json */
 public final class UiConfig {
 	public boolean customTitle = true;
+	public boolean customPause = true;
 	public boolean notifications = true;
 	/** GLFW key that opens the chat in game (default Y). */
 	public int relayKey = 89;

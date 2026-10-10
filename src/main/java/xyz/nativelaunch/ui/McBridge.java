@@ -5,7 +5,7 @@ package xyz.nativelaunch.ui;
  * official names for 26.x). Screens are passed around as plain Objects.
  */
 public interface McBridge {
-	int TITLE = 1, RELAY = 2, MENU = 3, HUD = 4;
+	int TITLE = 1, RELAY = 2, MENU = 3, HUD = 4, PAUSE = 5;
 
 	boolean ready();
 
@@ -28,6 +28,15 @@ public interface McBridge {
 	boolean open(String action, Object parent);
 
 	boolean hasMods();
+
+	/** The vanilla pause screen (Esc in a world). */
+	default boolean isVanillaPause(Object screen) {
+		return false;
+	}
+
+	/** Leaves the world like the vanilla "Save and Quit to Title" / "Disconnect" button. */
+	default void exitWorld() {
+	}
 
 	void quit();
 
@@ -128,5 +137,34 @@ public interface McBridge {
 
 	default String username() {
 		return null;
+	}
+
+	// ── Minecraft 26.x: the UI is drawn through the game's GUI pipeline and fed by the game's input handlers ──
+
+	/** The renderer to use; null = raw OpenGL. */
+	default xyz.nativelaunch.ui.gfx.Renderer renderer() {
+		return null;
+	}
+
+	/** True when frames come from the GUI pass (UiRuntime.onGuiFrame) instead of RenderSystem.flipFrame. */
+	default boolean guiFrames() {
+		return false;
+	}
+
+	/** True when keyboard / mouse events arrive through mixins instead of GLFW callbacks. */
+	default boolean handlesInput() {
+		return false;
+	}
+
+	/** Cursor position in window coordinates; false when unknown. */
+	default boolean cursor(double[] out) {
+		return false;
+	}
+
+	default String clipboard() {
+		return null;
+	}
+
+	default void setClipboard(String text) {
 	}
 }

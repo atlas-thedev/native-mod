@@ -15,14 +15,14 @@ public final class NativeHostScreen extends class_437 {
 	final class_437 parent;
 
 	NativeHostScreen(int kind, class_437 parent) {
-		super(class_2561.method_30163(kind == 1 ? "Native" : kind == 2 ? "Native Relay" : kind == 3 ? "Native Menu" : "Native HUD Editor"));
+		super(class_2561.method_30163(kind == 1 ? "Native" : kind == 2 ? "Native Relay" : kind == 3 ? "Native Menu" : kind == 5 ? "Native Pause" : "Native HUD Editor"));
 		this.kind = kind;
 		this.parent = parent;
 	}
 
 	/** shouldPause */
 	public boolean method_25421() {
-		return false;
+		return kind == 5;
 	}
 
 	/** shouldCloseOnEsc: Esc is handled by the Native UI itself */
