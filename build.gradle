@@ -266,6 +266,23 @@ tasks.named('compileCos26Java') {
 	options.release = 25
 }
 
+// Native UI bridge for 26.x (official names), compiled against the same 26.x jar.
+sourceSets {
+	ui26 {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+	}
+}
+
+dependencies {
+	ui26CompileOnly files("${animMcDir}/client.jar")
+	ui26CompileOnly fileTree(dir: "${animMcDir}/libs", include: '*.jar')
+}
+
+tasks.named('compileUi26Java') {
+	dependsOn 'fetchMinecraft'
+	options.release = 25
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Native UI bridge for Minecraft 1.16 - 1.21.11. Every member it touches has had the same intermediary name
 // and descriptor across all of those releases (checked with javap), so it is compiled against tiny stub
@@ -304,6 +321,7 @@ jar {
 	from sourceSets.glanim.output
 	from sourceSets.cos26.output
 	from sourceSets.uimc.output
+	from sourceSets.ui26.output
 	cosmeticEras.each { era ->
 		dependsOn "${era.name}Remap"
 		from(zipTree(layout.buildDirectory.file("cosmetics/${era.name}-intermediary.jar"))) {

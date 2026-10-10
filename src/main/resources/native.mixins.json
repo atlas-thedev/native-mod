@@ -15,7 +15,14 @@
     "ScreenSwapMixin",
     "ZoomMixin",
     "SidebarMixin",
-    "BossBarMixin"
+    "BossBarMixin",
+    "ScreenSwapMixin26",
+    "UiFrameMixin26",
+    "KeyboardMixin26",
+    "MouseMixin26",
+    "ZoomMixin26",
+    "BossBarMixin26",
+    "SidebarMixin26"
   ],
   "injectors": {
     "defaultRequire": 0
