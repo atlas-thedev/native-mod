@@ -4,6 +4,7 @@ import net.minecraft.class_1041;
 import net.minecraft.class_1074;
 import net.minecraft.class_310;
 import net.minecraft.class_429;
+import net.minecraft.class_433;
 import net.minecraft.class_4325;
 import net.minecraft.class_437;
 import net.minecraft.class_442;
@@ -61,6 +62,52 @@ public final class IntermediaryMc implements McBridge {
 	@Override
 	public Object newHost(int kind, Object parent) {
 		return new NativeHostScreen(kind, parent instanceof class_437 ? (class_437) parent : null);
+	}
+
+	@Override
+	public boolean isVanillaPause(Object screen) {
+		return screen instanceof class_433;
+	}
+
+	@Override
+	public void exitWorld() {
+		xyz.nativelaunch.ui.UiRuntime.pauseBypass = true;
+		try {
+			class_437 vanilla = new class_433(true);
+			setScreen(vanilla);
+			Object list = get(vanilla, "field_22786");
+			Object target = null;
+			String quit = tr("menu.returnToMenu", "Save and Quit to Title"), leave = tr("menu.disconnect", "Disconnect");
+			if (list instanceof java.util.List) {
+				for (Object w : (java.util.List<?>) list) {
+					Object msg = call(w, "method_25369");
+					Object text = call(msg, "getString");
+					if (text == null) {
+						text = call(msg, "method_54160");
+					}
+					if (text instanceof String && (text.equals(quit) || text.equals(leave))) {
+						target = w;
+					}
+				}
+			}
+			if (target == null) {
+				return; // the vanilla pause screen stays open: the player can press its button
+			}
+			for (Class<?> k = target.getClass(); k != null; k = k.getSuperclass()) {
+				try {
+					Method m = k.getDeclaredMethod("method_25306");
+					m.setAccessible(true);
+					m.invoke(target);
+					return;
+				} catch (NoSuchMethodException ignored) {
+					// try the parent class
+				}
+			}
+		} catch (Throwable t) {
+			// leave the vanilla screen open
+		} finally {
+			xyz.nativelaunch.ui.UiRuntime.pauseBypass = false;
+		}
 	}
 
 	@Override

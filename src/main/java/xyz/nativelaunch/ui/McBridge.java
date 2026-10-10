@@ -5,7 +5,7 @@ package xyz.nativelaunch.ui;
  * official names for 26.x). Screens are passed around as plain Objects.
  */
 public interface McBridge {
-	int TITLE = 1, RELAY = 2, MENU = 3, HUD = 4;
+	int TITLE = 1, RELAY = 2, MENU = 3, HUD = 4, PAUSE = 5;
 
 	boolean ready();
 
@@ -28,6 +28,15 @@ public interface McBridge {
 	boolean open(String action, Object parent);
 
 	boolean hasMods();
+
+	/** The vanilla pause screen (Esc in a world). */
+	default boolean isVanillaPause(Object screen) {
+		return false;
+	}
+
+	/** Leaves the world like the vanilla "Save and Quit to Title" / "Disconnect" button. */
+	default void exitWorld() {
+	}
 
 	void quit();
 

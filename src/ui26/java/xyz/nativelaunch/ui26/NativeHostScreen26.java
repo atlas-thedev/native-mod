@@ -13,14 +13,14 @@ public final class NativeHostScreen26 extends Screen {
 	final Screen parent;
 
 	NativeHostScreen26(int kind, Screen parent) {
-		super(Component.literal(kind == 1 ? "Native" : kind == 2 ? "Native Relay" : kind == 3 ? "Native Menu" : "Native HUD Editor"));
+		super(Component.literal(kind == 1 ? "Native" : kind == 2 ? "Native Relay" : kind == 3 ? "Native Menu" : kind == 5 ? "Native Pause" : "Native HUD Editor"));
 		this.kind = kind;
 		this.parent = parent;
 	}
 
 	@Override
 	public boolean isPauseScreen() {
-		return false;
+		return kind == 5;
 	}
 
 	@Override

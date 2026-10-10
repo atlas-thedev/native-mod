@@ -516,7 +516,7 @@ public final class RelayView {
 			}
 			c.outline(cx + 8, cyy + 8, tb, tb, 8, 1, Theme.HAIRLINE);
 			c.text(Fonts.SEMIBOLD, 12.5f, "Picture ready", cx + tb + 22, cyy + 18, Theme.TEXT_STRONG);
-			c.text(Fonts.REGULAR, 11, (staged.length / 1024) + " KB \u2014 press Enter to send", cx + tb + 22, cyy + 38, Theme.TEXT_MUTED);
+			c.text(Fonts.REGULAR, 11, (staged.length < 1024 ? staged.length + " B" : (staged.length / 1024) + " KB") + " \u2014 press Enter to send", cx + tb + 22, cyy + 38, Theme.TEXT_MUTED);
 			if (ui.iconButton("relay:unstage", cx + cw - 36, cyy + 8, 28, Theme.I_X, "Remove")) {
 				staged = null;
 			}

@@ -5,6 +5,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -204,6 +205,50 @@ public final class MojangMc implements McBridge {
 	@Override
 	public Object newHost(int kind, Object parent) {
 		return new NativeHostScreen26(kind, parent instanceof Screen ? (Screen) parent : null);
+	}
+
+	@Override
+	public boolean isVanillaPause(Object screen) {
+		return screen instanceof PauseScreen;
+	}
+
+	@Override
+	public void exitWorld() {
+		xyz.nativelaunch.ui.UiRuntime.pauseBypass = true;
+		try {
+			Screen vanilla = new PauseScreen(true);
+			setScreen(vanilla);
+			String quit = tr("menu.returnToMenu", "Save and Quit to Title"), leave = tr("menu.disconnect", "Disconnect");
+			Object target = null;
+			for (Object w : vanilla.children()) {
+				Object msg = call(w, "getMessage");
+				Object text = call(msg, "getString");
+				if (text instanceof String && (text.equals(quit) || text.equals(leave))) {
+					target = w;
+				}
+			}
+			if (target == null) {
+				return; // the vanilla pause screen stays open: the player can press its button
+			}
+			Object nul = null;
+			for (Class<?> k = target.getClass(); k != null; k = k.getSuperclass()) {
+				for (Method m : k.getDeclaredMethods()) {
+					if (m.getName().equals("onPress") && m.getParameterCount() <= 1) {
+						m.setAccessible(true);
+						if (m.getParameterCount() == 0) {
+							m.invoke(target);
+						} else {
+							m.invoke(target, nul);
+						}
+						return;
+					}
+				}
+			}
+		} catch (Throwable t) {
+			// leave the vanilla screen open
+		} finally {
+			xyz.nativelaunch.ui.UiRuntime.pauseBypass = false;
+		}
 	}
 
 	@Override

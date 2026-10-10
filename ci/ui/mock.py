@@ -35,6 +35,19 @@ def _hat(x, y): return (20, 20, 24, 255) if y < 16 else (200, 30, 30, 255)
 HAT_MODEL = json.dumps({"format": 1, "texture": [64, 32], "parts": [{"id": "hat", "attach": "head", "pivot": [0, 0, 0],
     "cubes": [{"origin": [-5, -9, -5], "size": [10, 1, 10], "uv": [0, 0]}, {"origin": [-3.5, -15, -3.5], "size": [7, 6, 7], "uv": [0, 11]}]}]}).encode()
 TEX = {}
+MEDIA = {}
+def _gradient(w, h, phase=0):
+    from PIL import Image
+    im = Image.new('RGB', (w, h)); px = im.load()
+    for y in range(h):
+        for x in range(w): px[x, y] = ((x * 255 // w + phase) % 256, y * 255 // h, 160)
+    return im
+def _store_png(w, h):
+    b = io.BytesIO(); _gradient(w, h).save(b, 'PNG'); MEDIA['pic1.png'] = (b.getvalue(), 'image/png')
+def _store_gif(name, phase0):
+    frames = [_gradient(160, 100, phase0 + i * 40) for i in range(6)]
+    b = io.BytesIO(); frames[0].save(b, 'GIF', save_all=True, append_images=frames[1:], duration=120, loop=0); MEDIA[name] = (b.getvalue(), 'image/gif')
+_store_png(480, 300); _store_gif('g1.gif', 0); _gif2 = _store_gif('g2.gif', 90)
 def _put(b): h = hashlib.sha256(b).hexdigest(); TEX[h] = b; return h
 SKIN_H = _put(_png(64, 64, _skin)); CAPE_H = _put(_png(64, 32, _cape)); HAT_T = _put(_png(64, 32, _hat)); HAT_M = _put(HAT_MODEL)
 B = 'http://127.0.0.1:8099/csl/textures/'
@@ -48,9 +61,12 @@ ME['skin'] = SKIN_H
 
 def msg(sender, text, ago=0, **kw):
     n = next(ids); return dict({'id': f'm{n}', 'senderId': sender, 'senderName': {'me': 'TestAlice', 'f1': 'Dinal', 'f2': 'Kasun', 'f3': 'Nethmi'}.get(sender, sender), 'content': text, 'createdAt': NOW() - ago}, **kw)
+MURL = 'http://127.0.0.1:8099/v1/social/media/'
 DM = {'f1': [msg('f1', 'machan server ekata enawada?', 86400000 * 2), msg('me', 'ow, poddak inna', 86400000 * 2 - 60000),
              msg('f1', 'ela! mama 1.21.4 eke', 3600000), msg('f1', 'Native chat eka game eka athule wada karanawa 🔥', 3500000),
-             msg('me', 'supiri, UI eka launcher eka wage ne', 120000), msg('f1', 'ow, FPS drop ekak naha', 60000)]}
+             msg('me', 'supiri, UI eka launcher eka wage ne', 120000), msg('f1', 'ow, FPS drop ekak naha', 60000),
+             msg('f1', '', 50000, mediaUrl=MURL + 'pic1.png', mediaName='pic1.png', mediaKind='image', isMedia=True),
+             msg('me', '', 40000, mediaUrl=MURL + 'g1.gif', mediaName='GIF.gif', mediaKind='image', isMedia=True)]}
 GROUPS = [{'id': 'g1', 'name': 'SMP Squad', 'memberCount': 4, 'unreadCount': 3, 'members': [{'id': 'me', 'name': 'TestAlice'}, {'id': 'f1', 'name': 'Dinal'}, {'id': 'f2', 'name': 'Kasun'}, {'id': 'f3', 'name': 'Nethmi'}]}]
 GM = {'g1': [msg('f2', 'tonight 9pm build session', 7200000), msg('f3', "I'll bring the redstone", 7100000), msg('f1', 'ela 👍', 7000000)]}
 streams = []
@@ -70,6 +86,12 @@ class H(http.server.BaseHTTPRequestHandler):
             b = TEX.get(p.rsplit('/', 1)[1])
             if b is None: self.send_response(404); self.send_header('Content-Length', '0'); self.end_headers(); return
             self.send_response(200); self.send_header('Content-Type', 'image/png'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b); return
+        if p.startswith('/v1/social/media/'):
+            e = MEDIA.get(p.rsplit('/', 1)[1])
+            if e is None: self.send_response(404); self.send_header('Content-Length', '0'); self.end_headers(); return
+            self.send_response(200); self.send_header('Content-Type', e[1]); self.send_header('Content-Length', str(len(e[0]))); self.end_headers(); self.wfile.write(e[0]); return
+        if p == '/v1/social/relay/gifs':
+            return self.j({'ok': True, 'source': 'mock', 'hasMore': False, 'gifs': [{'id': n, 'title': n, 'url': MURL + n, 'preview': MURL + n} for n in ('g1.gif', 'g2.gif', 'g1.gif', 'g2.gif')]})
         if p == '/v1/store/catalog': return self.j({'ok': True, 'textureBase': B, 'items': CATALOG})
         if p == '/v1/store/me': return self.j({'ok': True, 'equipped': LOCKER['equipped'], 'wearing': LOCKER['wearing'], 'sides': {}, 'owned': [{'id': i['id']} for i in CATALOG], 'dyes': {}})
         if p == '/v1/mod/me': return self.j({'ok': True, 'account': ME})
@@ -105,8 +127,14 @@ class H(http.server.BaseHTTPRequestHandler):
             if g: GM[g].append(m); push('group:message', {'groupId': g, 'message': m})
             else: m['receiverId'] = 'me'; DM.setdefault(who, []).append(m); push('message:new', {'message': m})
             return self.j({'ok': True, 'streams': len(streams)})
+        if p == '/v1/social/relay/upload':
+            import base64
+            b = self.body(); head, _, data = b['data'].partition(',')
+            raw = base64.b64decode(data); name = 'up%d.%s' % (len(MEDIA), 'png' if 'png' in head else 'gif' if 'gif' in head else 'jpg')
+            MEDIA[name] = (raw, head[5:].split(';')[0]); print('UPLOAD', name, len(raw), flush=True)
+            return self.j({'ok': True, 'url': MURL + name, 'name': b.get('name'), 'size': len(raw), 'kind': 'image'})
         if p.startswith('/v1/social/relay/') and p.endswith('/messages'):
-            b = self.body(); m = msg('me', b.get('content', ''))
+            b = self.body(); m = msg('me', b.get('content', ''), mediaUrl=b.get('mediaUrl'), mediaName=b.get('mediaName'), mediaKind=b.get('mediaKind'), isMedia=b.get('isMedia'))
             (GM if '/groups/' in p else DM).setdefault(p.split('/')[5], []).append(m)
             print('SENT', p, b.get('content'), flush=True)
             return self.j({'message': m})

@@ -13,6 +13,7 @@ import xyz.nativelaunch.ui.mod.Modules;
 import xyz.nativelaunch.ui.view.HudEditor;
 import xyz.nativelaunch.ui.view.HudOverlay;
 import xyz.nativelaunch.ui.view.MenuView;
+import xyz.nativelaunch.ui.view.PauseView;
 import xyz.nativelaunch.ui.view.RelayView;
 import xyz.nativelaunch.ui.view.TitleView;
 import xyz.nativelaunch.ui.view.Toasts;
@@ -40,6 +41,7 @@ public final class UiRuntime {
 	private static RelayView relay;
 	private static Toasts toasts;
 	private static MenuView menu;
+	private static PauseView pause;
 	private static HudEditor editor;
 	private static final Game game = new Game();
 	private static volatile boolean playing;
@@ -89,11 +91,17 @@ public final class UiRuntime {
 		return version;
 	}
 
+	/** While true the vanilla pause screen may open (used to press its leave button). */
+	public static volatile boolean pauseBypass;
+
 	/** Used by the setScreen hook: swaps the vanilla title screen for ours. */
 	public static Object replaceScreen(Object screen) {
 		try {
 			if (mc != null && !failed && config.customTitle && !classic && screen != null && mc.isVanillaTitle(screen)) {
 				return mc.newHost(McBridge.TITLE, null);
+			}
+			if (mc != null && !failed && config.customPause && !pauseBypass && screen != null && mc.isVanillaPause(screen) && mc.inWorld()) {
+				return mc.newHost(McBridge.PAUSE, null);
 			}
 		} catch (Throwable t) {
 			fail(t);
@@ -232,6 +240,8 @@ public final class UiRuntime {
 				title.background(ui); // nothing is drawn behind us outside a world
 			}
 			relay.draw(ui, screen, false);
+		} else if (kind == McBridge.PAUSE) {
+			pause.draw(ui, screen);
 		} else if (kind == McBridge.MENU) {
 			if (!inWorld) {
 				title.background(ui);
@@ -286,6 +296,7 @@ public final class UiRuntime {
 		relay = new RelayView();
 		toasts = new Toasts();
 		menu = new MenuView();
+		pause = new PauseView();
 		editor = new HudEditor();
 	}
 
@@ -441,7 +452,11 @@ public final class UiRuntime {
 			if (key == Ui.KEY_ESCAPE && action == 1) {
 				try {
 					Object s = mc.screen();
-					if (mc.hostKind(s) == McBridge.RELAY && (relay == null || !relay.consumeEscape(ui))) {
+					if (mc.hostKind(s) == McBridge.PAUSE) {
+						if (pause == null || !pause.escape()) {
+							closeHost(s);
+						}
+					} else if (mc.hostKind(s) == McBridge.RELAY && (relay == null || !relay.consumeEscape(ui))) {
 						closeHost(s);
 					} else if (mc.hostKind(s) == McBridge.TITLE && title != null) {
 						title.escape();
