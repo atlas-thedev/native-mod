@@ -8,6 +8,16 @@ how it was verified. Add new items under `Next`.
 ## Next
 - More for the right-shift menu — players keep asking for extra modules and settings there.
 
+## Shipped in 1.8.7
+- Cosmetics preview: every texel is depth-sorted on its own (no more capes / hoods / blades painting through the
+  body); a back item hides the cape like in game
+- Pause menu: vanilla layout (Back to Game, Advancements | Statistics, Relay | Native Mods, Options | Open to LAN,
+  Save and Quit) with Native's own buttons
+- Relay chat: opens at the latest message, never auto-loads older pages while opening, keeps the top visible
+  message in place while pictures / older pages load, follows new content at once when at the bottom
+- HUD editor: resize from any of the 4 corners (the opposite corner stays put), scoreboard + boss bar previews at
+  their real vanilla size, compact movable Done bar
+
 ## Shipped in 1.8.6
 - Settings page remade: cards (General, Controls, HUD tiles), profile card with stats + Open locker, about card
 - Cosmetics: faces seen from behind are drawn too (no see-through holes in hats/wings in the preview)

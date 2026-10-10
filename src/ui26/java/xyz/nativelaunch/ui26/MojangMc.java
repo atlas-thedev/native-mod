@@ -299,7 +299,12 @@ public final class MojangMc implements McBridge {
 				String cls = "advancements".equals(action) ? "net.minecraft.client.gui.screens.advancements.AdvancementsScreen"
 						: "stats".equals(action) ? "net.minecraft.client.gui.screens.achievement.StatsScreen"
 						: "net.minecraft.client.gui.screens.ShareToLanScreen";
-				next = xyz.nativelaunch.ui.ScreenFactory.create(cls, p, Screen.class, player, connection);
+				Object level = client().level;
+				next = xyz.nativelaunch.ui.ScreenFactory.create(cls, p, Screen.class, player, connection, level);
+				if (next == null && "lan".equals(action)) {
+					// 26.3 replaced Open to LAN with World Options (Screen parent, Level)
+					next = xyz.nativelaunch.ui.ScreenFactory.create("net.minecraft.client.gui.screens.WorldOptionsScreen", p, Screen.class, player, connection, level);
+				}
 			} else if ("mods".equals(action)) {
 				Constructor<?> ctor = mods();
 				if (ctor != null) {

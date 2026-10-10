@@ -346,7 +346,9 @@ public final class HudEditor {
 		}
 		String tip = "Drag to move  \u00B7  Drag a corner or scroll to resize  \u00B7  Right-click for settings";
 		float tipY = by > H / 2 ? by - 20 : by + bh + 8;
-		c.text(Fonts.MEDIUM, 11, tip, (W - c.textWidth(Fonts.MEDIUM, 11, tip)) / 2, tipY, Theme.alpha(0xFFFFFFFF, 0.6f * in));
+		float tipW = c.textWidth(Fonts.MEDIUM, 11, tip);
+		float tipX = Math.max(6, Math.min(W - tipW - 6, bx + (bw - tipW) / 2)); // follows the bar
+		c.text(Fonts.MEDIUM, 11, tip, tipX, tipY, Theme.alpha(0xFFFFFFFF, 0.6f * in));
 	}
 
 	private static boolean barButton(Ui ui, String id, float x, float y, float w, float h, String label, int icon, boolean primary) {

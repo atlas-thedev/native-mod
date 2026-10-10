@@ -103,7 +103,10 @@ public final class PauseView {
 			mc.open("options", screen);
 		}
 		if (single) {
-			if (button(ui, "pause:lan", x + half + gap, y, half, bh, mc.tr("menu.shareToLan", "Open to LAN"), Theme.I_GLOBE, NORMAL)) {
+			// 26.3+: World Options took Open to LAN's place in the vanilla menu
+			String worldOptions = mc.tr("options.worldOptions.button", null);
+			String lan = worldOptions != null ? worldOptions : mc.tr("menu.shareToLan", "Open to LAN");
+			if (button(ui, "pause:lan", x + half + gap, y, half, bh, lan, worldOptions != null ? Theme.I_SLIDERS : Theme.I_GLOBE, NORMAL)) {
 				mc.open("lan", screen);
 			}
 		} else if (button(ui, "pause:locker", x + half + gap, y, half, bh, "Cosmetics", Theme.I_SHIRT, NORMAL)) {
