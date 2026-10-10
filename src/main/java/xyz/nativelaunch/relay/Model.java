@@ -93,8 +93,20 @@ public final class Model {
 		public final String id, senderId, senderName, content;
 		public final long createdAt;
 		public final boolean pending, failed, system, deleted;
+		/** Attached picture (own upload or GIF), null for plain text. */
+		public final String mediaUrl, mediaName;
+		/** Locally pasted picture shown while it uploads. */
+		public final String localKey;
 
 		public Message(String id, String senderId, String senderName, String content, long createdAt, boolean pending, boolean failed, boolean system, boolean deleted) {
+			this(id, senderId, senderName, content, createdAt, pending, failed, system, deleted, null, null, null);
+		}
+
+		public Message(String id, String senderId, String senderName, String content, long createdAt, boolean pending, boolean failed, boolean system, boolean deleted,
+				String mediaUrl, String mediaName, String localKey) {
+			this.mediaUrl = mediaUrl;
+			this.mediaName = mediaName;
+			this.localKey = localKey;
 			this.id = id;
 			this.senderId = senderId;
 			this.senderName = senderName;

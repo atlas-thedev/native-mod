@@ -3,6 +3,8 @@ package xyz.nativelaunch.ui.view;
 import xyz.nativelaunch.relay.Model;
 import xyz.nativelaunch.relay.RelayClient;
 import xyz.nativelaunch.ui.Avatars;
+import xyz.nativelaunch.ui.ChatMedia;
+import xyz.nativelaunch.ui.ClipboardImage;
 import xyz.nativelaunch.ui.McBridge;
 import xyz.nativelaunch.ui.Scroll;
 import xyz.nativelaunch.ui.TextField;
@@ -21,6 +23,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 
 /** The in-game Relay chat: friends and groups on the left, the conversation on the right (like the launcher). */
@@ -36,6 +39,21 @@ public final class RelayView {
 	private Object lastScreen;
 	private boolean settingsOpen, bindingKey;
 	private int lastCount = -1;
+	// pasted picture waiting to be sent
+	private byte[] staged;
+	private String stagedMime, stagedKey, stagedNote;
+	private final AtomicBoolean pasting = new AtomicBoolean();
+	private volatile byte[] pasted;
+	private ChatMedia.Media viewer;
+	// GIF picker
+	private boolean gifOpen;
+	private final TextField gifSearch = new TextField("relay:gifs");
+	private final Scroll gifScroll = new Scroll();
+	private volatile List<String[]> gifResults;
+	private volatile boolean gifLoading, gifFailed;
+	private String gifQuery;
+	private long gifTyped;
+	private int gifSerial;
 	private final Map<String, Object[]> wrapCache = new HashMap<String, Object[]>();
 	private final SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.ROOT);
 	private final SimpleDateFormat dayFmt = new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH);
@@ -55,6 +73,18 @@ public final class RelayView {
 
 	/** Esc: closes popovers / clears search first; false = close the chat. */
 	public boolean consumeEscape(Ui ui) {
+		if (viewer != null) {
+			viewer = null;
+			return true;
+		}
+		if (gifOpen) {
+			gifOpen = false;
+			return true;
+		}
+		if (staged != null) {
+			staged = null;
+			return true;
+		}
 		if (settingsOpen) {
 			settingsOpen = false;
 			bindingKey = false;
@@ -107,6 +137,9 @@ public final class RelayView {
 		if (settingsOpen) {
 			settings(ui, px, py, sw);
 		}
+		if (viewer != null) {
+			lightbox(ui, W, H);
+		}
 		c.popAlpha();
 	}
 
@@ -121,6 +154,8 @@ public final class RelayView {
 		String draft = drafts.get(key);
 		input.set(draft == null ? "" : draft);
 		lastCount = -1;
+		staged = null;
+		gifOpen = false;
 		if (client != null) {
 			client.open(key);
 		}
@@ -186,7 +221,7 @@ public final class RelayView {
 		int shown = 0;
 		if (tab == 0) {
 			if (!client.friendsLoaded) {
-				ui.dots(x + w / 2, ty + 40, Theme.TEXT_SECONDARY);
+				skeletonRows(ui, x + 8, ty, w - 16, 7);
 			}
 			for (Model.Friend f : client.friends) {
 				if (!q.isEmpty() && !f.display().toLowerCase(Locale.ROOT).contains(q) && !f.name.toLowerCase(Locale.ROOT).contains(q)) {
@@ -214,7 +249,7 @@ public final class RelayView {
 				}
 				String key = "g:" + g.id;
 				if (ry + rh >= ty && ry <= ty + listH) {
-					String sub = g.lastText == null ? g.members + " members" : (g.lastSender == null ? "" : g.lastSender + ": ") + g.lastText;
+					String sub = g.lastText == null ? g.members + " members" : (g.lastSender == null ? "" : g.lastSender + ": ") + (g.lastText.isEmpty() ? "Sent a picture" : g.lastText);
 					rowDot = 0;
 					if (row(ui, client, key, x + 8, ry, w - 16, rh, g.name, g.name, null, sub, g.unread, -1)) {
 						select(key, client);
@@ -226,7 +261,7 @@ public final class RelayView {
 			}
 			if (shown == 0) {
 				if (!client.groupsLoaded) {
-					ui.dots(x + w / 2, ty + 40, Theme.TEXT_SECONDARY);
+					skeletonRows(ui, x + 8, ty, w - 16, 7);
 				} else {
 					TitleView.empty(c, x, ty, w, Math.min(listH, 220), Theme.I_USERS, q.isEmpty() ? "No groups" : "No matches", q.isEmpty() ? "Create a group in the launcher and it shows up here." : "Try another name.");
 				}
@@ -334,8 +369,8 @@ public final class RelayView {
 			cy += 26;
 		}
 		float before = cy;
-		if (!conv.loaded && conv.loading) {
-			ui.dots(x + w / 2, my0 + mh / 2, Theme.TEXT_SECONDARY);
+		if (!conv.loaded && conv.error == null) {
+			skeletonMessages(ui, x + pad, my0 + 14, w - pad * 2, mh);
 		} else if (conv.loaded && messages.isEmpty()) {
 			TitleView.empty(c, x, my0, w, mh, Theme.I_SMILE, "Say hi to " + name, "This is the beginning of your conversation.");
 		} else if (conv.error != null && messages.isEmpty()) {
@@ -368,6 +403,7 @@ public final class RelayView {
 				prev = m;
 				continue;
 			}
+			float rowTop = cy;
 			boolean head = newDay || prev == null || prev.system || !eq(prev.senderId, m.senderId) || m.createdAt - prev.createdAt > 5 * 60_000;
 			if (head) {
 				if (prev != null && !newDay) {
@@ -389,23 +425,47 @@ public final class RelayView {
 				}
 				cy += 20;
 			}
-			List<String> lines = wrapped(c, m, textW, Fonts.REGULAR, 13);
+			boolean hasMedia = m.mediaUrl != null || m.localKey != null;
+			boolean autoText = hasMedia && (m.content == null || m.content.trim().isEmpty() || m.content.startsWith("["));
 			int color = m.deleted ? Theme.TEXT_MUTED : (m.pending ? Theme.alpha(Theme.TEXT, 0.5f) : Theme.TEXT);
-			for (String line : lines) {
-				if (visible(cy, lh, my0, mh)) {
-					c.text(Fonts.REGULAR, 13, line, textX, cy, color);
+			if (!autoText) {
+				List<String> lines = wrapped(c, m, textW, Fonts.REGULAR, 13);
+				for (String line : lines) {
+					if (visible(cy, lh, my0, mh)) {
+						c.text(Fonts.REGULAR, 13, line, textX, cy, color);
+					}
+					cy += lh;
 				}
-				cy += lh;
+			}
+			if (hasMedia) {
+				cy += media(ui, client, m, textX, cy, Math.min(textW, 340), my0, mh) + 4;
 			}
 			if (m.failed) {
 				c.text(Fonts.MEDIUM, 10.5f, "Not sent \u2014 check your connection", textX, cy, 0xFFF87171);
 				cy += 16;
 			}
 			cy += 2;
+			if (ui.interactive && viewer == null && !gifOpen && ui.my >= my0 && ui.my <= my0 + mh && ui.hover(x, rowTop, w - 10, cy - rowTop)) {
+				c.fill(x, rowTop - 1, w - 10, cy - rowTop + 1, 0x0AFFFFFF);
+			}
 			prev = m;
 		}
 		float content = cy - before + (before - (my0 - off)) + 10;
 		sc.end(ui, content);
+		if (!sc.atBottom() && sc.content > mh + 40) {
+			String t = "Jump to latest";
+			float pw2 = c.textWidth(Fonts.SEMIBOLD, 11.5f, t) + 40, ph2 = 28;
+			float pxx = x + (w - pw2) / 2, pyy = my0 + mh - ph2 - 10;
+			boolean ov = ui.hover(pxx, pyy, pw2, ph2);
+			c.shadow(pxx, pyy + 3, pw2, ph2, 14, 14, 0x88000000);
+			c.round(pxx, pyy, pw2, ph2, 14, ov ? 0xFF2A2B31 : 0xFF1E1F25);
+			c.outline(pxx, pyy, pw2, ph2, 14, 1, Theme.HAIRLINE_STRONG);
+			c.text(Fonts.SEMIBOLD, 11.5f, t, pxx + 14, pyy + (ph2 - c.lineHeight(Fonts.SEMIBOLD, 11.5f)) / 2, Theme.TEXT_STRONG);
+			c.icon(Theme.I_ARROWS_UP, 12, pxx + pw2 - 16, pyy + ph2 / 2, Theme.TEXT_SECONDARY);
+			if (ui.clicked("relay:jump", pxx, pyy, pw2, ph2)) {
+				sc.toBottom();
+			}
+		}
 		if (messages.size() != lastCount) {
 			if (lastCount == -1) {
 				sc.snapBottom();
@@ -415,7 +475,7 @@ public final class RelayView {
 			lastCount = messages.size();
 		}
 
-		// typing + input
+		// typing + staged picture + input
 		List<String> typers = client.typing(selected);
 		float iy = y + h - inputH - 16;
 		if (!typers.isEmpty()) {
@@ -423,27 +483,298 @@ public final class RelayView {
 			ui.dots(x + pad + 12, iy - 12, Theme.TEXT_SECONDARY);
 			c.text(Fonts.MEDIUM, 11, t, x + pad + 30, iy - 12 - c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.TEXT_SECONDARY);
 		}
-		if (!ui.focusClaimed && ui.focus == null && !settingsOpen && search.value().isEmpty()) {
+		byte[] got = pasted;
+		if (got != null) {
+			pasted = null;
+			String mime = ClipboardImage.mime(got);
+			if (mime == null) {
+				stagedNote = "That clipboard picture isn't supported.";
+			} else if (got.length > 8 * 1024 * 1024) {
+				stagedNote = "Picture is too large (max 8 MB).";
+			} else {
+				staged = got;
+				stagedMime = mime;
+				stagedKey = "staged-" + System.nanoTime();
+				ChatMedia.putLocal(stagedKey, got);
+				stagedNote = null;
+			}
+		}
+		if (staged != null) {
+			ChatMedia.Media sm = ChatMedia.get(stagedKey, client.api());
+			float cw = Math.min(w - pad * 2, 330), ch = 76;
+			float cx = x + pad, cyy = iy - ch - 10 - (typers.isEmpty() ? 0 : 14);
+			c.shadow(cx, cyy + 4, cw, ch, 12, 16, 0x77000000);
+			c.round(cx, cyy, cw, ch, 12, 0xFF121318);
+			c.outline(cx, cyy, cw, ch, 12, 1, Theme.HAIRLINE_STRONG);
+			float tb = ch - 16;
+			c.round(cx + 8, cyy + 8, tb, tb, 8, 0xFF0B0C10);
+			Object img = sm.frame(ui.now);
+			if (img != null) {
+				c.pushClip(cx + 8, cyy + 8, tb, tb);
+				c.imageCover((xyz.nativelaunch.ui.gfx.Image) img, cx + 8, cyy + 8, tb, tb, 1f, 0, 0, 0xFFFFFFFF);
+				c.popClip();
+			}
+			c.outline(cx + 8, cyy + 8, tb, tb, 8, 1, Theme.HAIRLINE);
+			c.text(Fonts.SEMIBOLD, 12.5f, "Picture ready", cx + tb + 22, cyy + 18, Theme.TEXT_STRONG);
+			c.text(Fonts.REGULAR, 11, (staged.length / 1024) + " KB \u2014 press Enter to send", cx + tb + 22, cyy + 38, Theme.TEXT_MUTED);
+			if (ui.iconButton("relay:unstage", cx + cw - 36, cyy + 8, 28, Theme.I_X, "Remove")) {
+				staged = null;
+			}
+		} else if (stagedNote != null) {
+			c.text(Fonts.MEDIUM, 11, stagedNote, x + pad, iy - 26, 0xFFF87171);
+		}
+		if (!ui.focusClaimed && ui.focus == null && !settingsOpen && search.value().isEmpty() && !gifOpen) {
 			input.focus(ui);
 		}
 		String before2 = input.value();
-		boolean send = input.draw(ui, x + pad, iy, w - pad * 2 - 54, inputH, "Message " + (group ? "#" + name : "@" + name), 13.5f);
+		float btn = 46;
+		boolean send = input.draw(ui, x + pad, iy, w - pad * 2 - btn * 2 - 16, inputH, staged != null ? "Add a caption (optional)" : "Message " + (group ? "#" + name : "@" + name), 13.5f);
+		if (input.pasteMiss && pasting.compareAndSet(false, true)) {
+			new Thread(() -> {
+				try {
+					pasted = ClipboardImage.read();
+				} finally {
+					pasting.set(false);
+				}
+			}, "Native-Clip").start();
+		}
 		if (!input.value().equals(before2) && !input.value().isEmpty()) {
 			client.typingPing(selected);
 		}
-		boolean canSend = !input.value().trim().isEmpty();
-		float sx = x + w - pad - 46;
-		boolean over = ui.hover(sx, iy, 46, inputH);
+		// GIF button
+		float gx = x + w - pad - btn * 2 - 8;
+		boolean gOver = ui.hover(gx, iy, btn, inputH);
+		float gHv = ui.anim("relay:gifbtn", gOver || gifOpen, 14f);
+		boolean gClick = ui.clicked("relay:gifbtn", gx, iy, btn, inputH);
+		c.round(gx, iy, btn, inputH, 12, Theme.mix(Theme.SUBTLE, 0xFF26272D, gHv));
+		float gw = c.textWidth(Fonts.BOLD, 12, "GIF");
+		c.text(Fonts.BOLD, 12, "GIF", gx + (btn - gw) / 2, iy + (inputH - c.lineHeight(Fonts.BOLD, 12)) / 2, gifOpen ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
+		if (gClick) {
+			gifOpen = !gifOpen;
+			if (gifOpen) {
+				gifQuery = null;
+				gifSearch.clear();
+				gifSearch.focus(ui);
+				ui.focusClaimed = true;
+			} else {
+				input.focus(ui);
+			}
+		}
+		boolean canSend = !input.value().trim().isEmpty() || staged != null;
+		float sx = x + w - pad - btn;
+		boolean over = ui.hover(sx, iy, btn, inputH);
 		float hv = ui.anim("relay:send", over && canSend, 14f);
-		boolean click = ui.clicked("relay:sendbtn", sx, iy, 46, inputH);
-		c.round(sx, iy, 46, inputH, 12, canSend ? Theme.mix(0xFFE4E4E7, 0xFFFFFFFF, hv) : Theme.SUBTLE);
-		c.icon(Theme.I_SEND, 18, sx + 23, iy + inputH / 2, canSend ? Theme.SOLID_FG : Theme.TEXT_MUTED);
+		boolean click = ui.clicked("relay:sendbtn", sx, iy, btn, inputH);
+		c.round(sx, iy, btn, inputH, 12, canSend ? Theme.mix(0xFFE4E4E7, 0xFFFFFFFF, hv) : Theme.SUBTLE);
+		c.icon(Theme.I_SEND, 18, sx + btn / 2, iy + inputH / 2, canSend ? Theme.SOLID_FG : Theme.TEXT_MUTED);
 		if ((send || click) && canSend) {
-			client.send(selected, input.value());
+			if (staged != null) {
+				client.sendImage(selected, staged, stagedMime);
+				staged = null;
+			}
+			if (!input.value().trim().isEmpty()) {
+				client.send(selected, input.value());
+			}
 			input.clear();
 			drafts.remove(selected);
 			sc.toBottom();
 			input.focus(ui);
+		}
+		if (gifOpen) {
+			gifPicker(ui, client, x + w - pad - 372, iy - 360 - 8, 372, 360);
+		}
+	}
+
+	// ── pictures ──────────────────────────────────────────────────────────
+
+	/** Draws a picture message (or its loading box); returns its height. */
+	private float media(Ui ui, RelayClient client, Model.Message m, float x, float y, float maxW, float top, float viewH) {
+		Canvas c = ui.c;
+		String key = m.localKey != null ? m.localKey : m.mediaUrl;
+		ChatMedia.Media md = ChatMedia.get(key, client.api());
+		float dw = 240, dh = 150;
+		if (md.ready() && md.width > 0) {
+			float k = Math.min(1f, Math.min(maxW / md.width, 300f / md.height));
+			float up = md.width < 160 && md.height < 160 ? 1f : k;
+			dw = md.width * up;
+			dh = md.height * up;
+			if (dw > maxW) {
+				dh *= maxW / dw;
+				dw = maxW;
+			}
+		}
+		if (!visible(y, dh, top, viewH)) {
+			return dh;
+		}
+		if (md.failed) {
+			c.round(x, y, 240, 54, 10, 0xFF121318);
+			c.outline(x, y, 240, 54, 10, 1, Theme.HAIRLINE);
+			c.text(Fonts.MEDIUM, 11.5f, "Picture unavailable", x + 14, y + 19, Theme.TEXT_MUTED);
+			return 54;
+		}
+		Object frame = md.frame(ui.now);
+		if (frame == null) {
+			shimmer(ui, x, y, dw, dh, 10);
+			return dh;
+		}
+		float a = m.pending ? 0.55f : 1f;
+		c.pushClip(x, y, dw, dh);
+		c.image((xyz.nativelaunch.ui.gfx.Image) frame, x, y, dw, dh, 0, 0, 1, 1, Theme.alpha(0xFFFFFFFF, a));
+		c.popClip();
+		c.outline(x, y, dw, dh, 10, 1, Theme.HAIRLINE);
+		if (m.pending) {
+			ui.dots(x + dw / 2, y + dh / 2, Theme.TEXT_STRONG);
+		}
+		if (viewer == null && !gifOpen && ui.interactive && ui.my >= top && ui.my <= top + viewH) {
+			if (ui.hover(x, y, dw, dh)) {
+				ui.cursorHand = true;
+			}
+			if (ui.clicked("relay:img:" + m.id, x, y, dw, dh)) {
+				viewer = md;
+			}
+		}
+		return dh;
+	}
+
+	private void lightbox(Ui ui, float W, float H) {
+		Canvas c = ui.c;
+		ui.interactive = true;
+		c.fill(0, 0, W, H, 0xE6000000);
+		Object frame = viewer.frame(ui.now);
+		if (frame != null && viewer.width > 0) {
+			float k = Math.min((W - 80) / viewer.width, (H - 100) / viewer.height);
+			k = Math.min(k, 4f);
+			float dw = viewer.width * k, dh = viewer.height * k;
+			c.image((xyz.nativelaunch.ui.gfx.Image) frame, (W - dw) / 2, (H - dh) / 2, dw, dh, 0, 0, 1, 1, 0xFFFFFFFF);
+		}
+		c.text(Fonts.MEDIUM, 11.5f, "Click anywhere or press Esc to close", (W - c.textWidth(Fonts.MEDIUM, 11.5f, "Click anywhere or press Esc to close")) / 2, H - 34, Theme.TEXT_SECONDARY);
+		if (ui.pressed) {
+			viewer = null;
+			ui.pressed = false;
+		}
+	}
+
+	// ── GIF picker ────────────────────────────────────────────────────────
+
+	private void gifPicker(Ui ui, RelayClient client, float x, float y, float w, float h) {
+		Canvas c = ui.c;
+		if (ui.pressed && !ui.hover(x, y, w, h) && !ui.hover(x + w - 56, y + h + 8, 60, 60)) {
+			gifOpen = false;
+			return;
+		}
+		c.shadow(x, y + 8, w, h, 16, 28, 0xAA000000);
+		c.round(x, y, w, h, 16, 0xFF101115);
+		c.outline(x, y, w, h, 16, 1, Theme.HAIRLINE_STRONG);
+		gifSearch.draw(ui, x + 12, y + 12, w - 24, 36, "Search GIFs", 12.5f);
+		String q = gifSearch.value().trim();
+		if (gifQuery == null || !q.equals(gifQuery)) {
+			if (gifQuery == null) {
+				gifTyped = 0;
+			} else if (gifTyped == 0) {
+				gifTyped = ui.now;
+			}
+			if (gifQuery == null || ui.now - gifTyped > 350) {
+				gifQuery = q;
+				gifTyped = 0;
+				final int serial = ++gifSerial;
+				gifLoading = true;
+				gifFailed = false;
+				final String query = q;
+				new Thread(() -> {
+					try {
+						List<String[]> r = client.gifs(query);
+						if (serial == gifSerial) {
+							gifResults = r;
+						}
+					} catch (Exception e) {
+						if (serial == gifSerial) {
+							gifFailed = true;
+							gifResults = new ArrayList<String[]>();
+						}
+					} finally {
+						if (serial == gifSerial) {
+							gifLoading = false;
+						}
+					}
+				}, "Native-Gifs").start();
+			}
+		}
+		float gy = y + 58, gh = h - 58 - 8;
+		List<String[]> res = gifResults;
+		float off = gifScroll.begin(ui, x, gy, w, gh);
+		float cw = (w - 12 * 2 - 8) / 2;
+		if (res == null || (gifLoading && res.isEmpty())) {
+			for (int i = 0; i < 6; i++) {
+				shimmer(ui, x + 12 + (i % 2) * (cw + 8), gy + (i / 2) * 108 - off, cw, 100, 10);
+			}
+		} else if (res.isEmpty()) {
+			String t = gifFailed ? "GIF search is unavailable" : "No GIFs found";
+			c.text(Fonts.MEDIUM, 12, t, x + (w - c.textWidth(Fonts.MEDIUM, 12, t)) / 2, gy + 60, Theme.TEXT_MUTED);
+		} else {
+			float[] colY = {gy - off, gy - off};
+			int shown = 0;
+			for (String[] g : res) {
+				int col = colY[0] <= colY[1] ? 0 : 1;
+				ChatMedia.Media md = ChatMedia.get(g[1], client.api());
+				float tw = cw, th = md.ready() && md.width > 0 ? Math.max(50, Math.min(180, cw * md.height / md.width)) : 100;
+				float tx = x + 12 + col * (cw + 8), ty = colY[col];
+				if (ty + th >= gy && ty <= gy + gh) {
+					Object f = md.frame(ui.now);
+					if (f == null) {
+						shimmer(ui, tx, ty, tw, th, 10);
+					} else {
+						c.pushClip(tx, ty, tw, th);
+						c.imageCover((xyz.nativelaunch.ui.gfx.Image) f, tx, ty, tw, th, 1f, 0, 0, 0xFFFFFFFF);
+						c.popClip();
+						c.outline(tx, ty, tw, th, 10, 1, Theme.HAIRLINE);
+						if (ui.hover(tx, ty, tw, th) && ui.my >= gy && ui.my <= gy + gh) {
+							c.round(tx, ty, tw, th, 10, 0x22FFFFFF);
+							ui.cursorHand = true;
+						}
+					}
+					if (f != null && ui.my >= gy && ui.my <= gy + gh && ui.clicked("relay:gif:" + g[0], tx, ty, tw, th)) {
+						client.sendGif(selected, g[0], g[2]);
+						gifOpen = false;
+						chatScrolls.get(selected).toBottom();
+					}
+				}
+				colY[col] += th + 8;
+				shown++;
+			}
+			gifScroll.end(ui, Math.max(colY[0], colY[1]) + off - gy + 4);
+			c.popClip();
+			return;
+		}
+		gifScroll.end(ui, 0);
+	}
+
+	// ── skeletons ─────────────────────────────────────────────────────────
+
+	private static void shimmer(Ui ui, float x, float y, float w, float h, float r) {
+		float t = (float) ((Math.sin(ui.now / 420.0) + 1) / 2);
+		ui.c.round(x, y, w, h, r, Theme.mix(0xFF16171C, 0xFF1F2026, t));
+	}
+
+	private void skeletonRows(Ui ui, float x, float y, float w, int n) {
+		for (int i = 0; i < n; i++) {
+			float ry = y + i * 56;
+			shimmer(ui, x + 9, ry + 9, 36, 36, 10);
+			float lw = 70 + ((i * 37) % 60);
+			shimmer(ui, x + 56, ry + 12, Math.min(lw, w - 70), 11, 5);
+			shimmer(ui, x + 56, ry + 31, Math.min(lw + 50, w - 70), 9, 4);
+		}
+	}
+
+	private void skeletonMessages(Ui ui, float x, float y, float w, float h) {
+		float cy = y;
+		for (int i = 0; cy < y + h - 40 && i < 8; i++) {
+			shimmer(ui, x, cy + 1, 34, 34, 10);
+			shimmer(ui, x + 46, cy, 80 + (i * 29) % 50, 11, 5);
+			int lines = 1 + (i * 7) % 3;
+			for (int l = 0; l < lines; l++) {
+				shimmer(ui, x + 46, cy + 22 + l * 18, Math.min(w - 60, 120 + ((i + l) * 71) % 260), 10, 5);
+			}
+			cy += 36 + lines * 18 + 12;
 		}
 	}
 

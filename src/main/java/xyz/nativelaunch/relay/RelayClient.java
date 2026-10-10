@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import xyz.nativelaunch.core.Log;
+import xyz.nativelaunch.ui.ChatMedia;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -47,7 +48,7 @@ public final class RelayClient {
 	public final ConcurrentLinkedQueue<Model.Notice> notices = new ConcurrentLinkedQueue<Model.Notice>();
 	/** The conversation the player is looking at (null when the chat is closed): no notices, auto-read. */
 	public volatile String viewing;
-	private final ExecutorService pool = Executors.newFixedThreadPool(2, r -> {
+	private final ExecutorService pool = Executors.newFixedThreadPool(4, r -> {
 		Thread t = new Thread(r, "Native-Relay");
 		t.setDaemon(true);
 		return t;
@@ -271,6 +272,93 @@ public final class RelayClient {
 		});
 	}
 
+	/** Uploads a pasted picture (PNG/JPEG/GIF/WebP bytes) and posts it. Shows at once with a local preview. */
+	public void sendImage(final String key, final byte[] bytes, final String mime) {
+		if (ticket == null || bytes == null || bytes.length == 0 || bytes.length > 8 * 1024 * 1024) {
+			return;
+		}
+		final Model.Conversation c = conversation(key);
+		final String tempId = "local-" + System.nanoTime();
+		final String ext = "image/jpeg".equals(mime) ? "jpg" : "image/gif".equals(mime) ? "gif" : "image/webp".equals(mime) ? "webp" : "png";
+		final String name = "image-" + System.currentTimeMillis() + "." + ext;
+		ChatMedia.putLocal(tempId, bytes);
+		synchronized (c) {
+			List<Model.Message> next = new ArrayList<Model.Message>(c.messages);
+			next.add(new Model.Message(tempId, meId, meName, "", System.currentTimeMillis(), true, false, false, false, null, name, tempId));
+			c.messages = next;
+		}
+		pool.execute(() -> {
+			try {
+				JsonObject up = new JsonObject();
+				up.addProperty("data", "data:" + mime + ";base64," + java.util.Base64.getEncoder().encodeToString(bytes));
+				up.addProperty("name", name);
+				JsonObject res = postJson("/v1/social/relay/upload", up);
+				post(c, tempId, "", res.get("url").getAsString(), name);
+			} catch (Exception e) {
+				fail(c, tempId);
+			}
+		});
+	}
+
+	/** Sends a GIF picked from the picker (Giphy URL). */
+	public void sendGif(final String key, final String url, final String title) {
+		if (ticket == null || url == null) {
+			return;
+		}
+		final Model.Conversation c = conversation(key);
+		final String tempId = "local-" + System.nanoTime();
+		final String name = title == null || title.isEmpty() ? "GIF.gif" : title;
+		synchronized (c) {
+			List<Model.Message> next = new ArrayList<Model.Message>(c.messages);
+			next.add(new Model.Message(tempId, meId, meName, "", System.currentTimeMillis(), true, false, false, false, url, name, null));
+			c.messages = next;
+		}
+		pool.execute(() -> {
+			try {
+				post(c, tempId, "", url, name);
+			} catch (Exception e) {
+				fail(c, tempId);
+			}
+		});
+	}
+
+	private void post(Model.Conversation c, String tempId, String content, String mediaUrl, String mediaName) throws IOException {
+		JsonObject body = new JsonObject();
+		body.addProperty("content", content);
+		body.addProperty("mediaUrl", mediaUrl);
+		body.addProperty("mediaName", mediaName);
+		body.addProperty("mediaKind", "image");
+		body.addProperty("isMedia", true);
+		JsonObject res = postJson(messagesPath(c), body);
+		Model.Message sent = parseMessage(res.getAsJsonObject("message"), c);
+		synchronized (c) {
+			List<Model.Message> next = new ArrayList<Model.Message>();
+			boolean have = false;
+			for (Model.Message m : c.messages) {
+				if (m.id.equals(sent.id)) {
+					have = true;
+				}
+				if (!m.id.equals(tempId)) {
+					next.add(m);
+				}
+			}
+			if (!have) {
+				next.add(sent);
+			}
+			c.messages = next;
+		}
+	}
+
+	private void fail(Model.Conversation c, String tempId) {
+		synchronized (c) {
+			List<Model.Message> next = new ArrayList<Model.Message>();
+			for (Model.Message m : c.messages) {
+				next.add(m.id.equals(tempId) ? new Model.Message(tempId, m.senderId, m.senderName, m.content, m.createdAt, false, true, false, false, m.mediaUrl, m.mediaName, m.localKey) : m);
+			}
+			c.messages = next;
+		}
+	}
+
 	/** Tells the other side we are typing (groups only: DMs have no ticket route for it), at most every 3 s. */
 	public void typingPing(final String key) {
 		long now = System.currentTimeMillis();
@@ -337,6 +425,9 @@ public final class RelayClient {
 			requests = req != null && req.has("received") ? req.getAsJsonArray("received").size() : 0;
 			friendsLoaded = true;
 			state = State.ONLINE;
+			for (int i = 0; i < Math.min(3, list.size()); i++) {
+				prefetch("dm:" + list.get(i).id);
+			}
 		} catch (Exception e) {
 			Log.debug("Relay friends failed: {}", e.toString());
 			if (!friendsLoaded) {
@@ -369,9 +460,52 @@ public final class RelayClient {
 			}
 			groups = list;
 			groupsLoaded = true;
+			for (int i = 0; i < Math.min(3, list.size()); i++) {
+				prefetch("g:" + list.get(i).id);
+			}
 		} catch (Exception e) {
 			Log.debug("Relay groups failed: {}", e.toString());
 		}
+	}
+
+	/** GIF search through the Native API (Giphy proxy). Blocking. Each entry: {url, preview, title}. */
+	public List<String[]> gifs(String query) throws IOException {
+		JsonObject o = getJson("/v1/social/relay/gifs?limit=30&q=" + enc(query == null ? "" : query.trim()));
+		List<String[]> out = new ArrayList<String[]>();
+		JsonArray arr = o.getAsJsonArray("gifs");
+		if (arr != null) {
+			for (JsonElement e : arr) {
+				JsonObject g = e.getAsJsonObject();
+				String url = str(g, "url"), preview = str(g, "preview");
+				if (url != null) {
+					out.add(new String[] {url, preview == null ? url : preview, str(g, "title")});
+				}
+			}
+		}
+		return out;
+	}
+
+	/** Warms a chat's latest page in the background (doesn't mark it read) so it opens instantly. */
+	private void prefetch(final String key) {
+		final Model.Conversation c = conversation(key);
+		if (c.loaded || c.loading || ticket == null) {
+			return;
+		}
+		pool.execute(() -> {
+			if (c.loaded || c.loading) {
+				return;
+			}
+			try {
+				JsonObject page = getJson(messagesPath(c) + "?limit=50&markRead=0");
+				if (!c.loaded) {
+					c.messages = parseMessages(page.getAsJsonArray("messages"), c);
+					c.hasMore = page.has("hasMore") && page.get("hasMore").getAsBoolean();
+					c.loaded = true;
+				}
+			} catch (Exception ignored) {
+				// opening the chat loads it normally
+			}
+		});
 	}
 
 	private static Model.Group parseGroup(JsonObject g) {
@@ -405,20 +539,23 @@ public final class RelayClient {
 		String sender = str(m, "senderId");
 		String content = str(m, "content");
 		boolean deleted = bool(m, "isDeleted");
+		String mediaUrl = deleted ? null : str(m, "mediaUrl");
+		String mediaName = str(m, "mediaName");
+		String kind = str(m, "mediaKind");
+		boolean image = mediaUrl != null && (kind == null || "image".equals(kind)) && ChatMedia.allowed(mediaUrl, api);
 		if ((content == null || content.isEmpty()) && !deleted) {
-			String media = str(m, "mediaName");
-			content = media != null ? "[" + media + "]" : (bool(m, "isMedia") ? "[attachment]" : "");
+			content = mediaName != null ? "[" + mediaName + "]" : (mediaUrl != null || bool(m, "isMedia") ? "[attachment]" : "");
 		}
 		return new Model.Message(str(m, "id"), sender, nameOf(sender, str(m, "senderName")), deleted ? "Message deleted" : content,
-				lng(m, "createdAt"), false, false, bool(m, "isSystem"), deleted);
+				lng(m, "createdAt"), false, false, bool(m, "isSystem"), deleted, image ? mediaUrl : null, mediaName, null);
 	}
 
 	// ── live stream ───────────────────────────────────────────────────────
 
 	private void streamLoop() {
 		long backoff = 2000;
-		loadFriends();
-		loadGroups();
+		pool.execute(this::loadFriends);
+		pool.execute(this::loadGroups);
 		while (true) {
 			long started = System.currentTimeMillis();
 			try {
@@ -438,7 +575,7 @@ public final class RelayClient {
 				return;
 			}
 			backoff = Math.min(backoff * 2, 60_000);
-			loadFriends();
+			pool.execute(this::loadFriends);
 		}
 	}
 

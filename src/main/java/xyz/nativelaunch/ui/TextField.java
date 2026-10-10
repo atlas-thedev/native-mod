@@ -10,6 +10,8 @@ public final class TextField {
 	private float scrollX;
 	private long blinkStart;
 	public int maxLength = 2000;
+	/** Ctrl+V was pressed this frame; pasteMiss = the text clipboard was empty (maybe a picture is there). */
+	public boolean pasteKey, pasteMiss;
 
 	public TextField(String id) {
 		this.id = id;
@@ -51,6 +53,7 @@ public final class TextField {
 			ui.focusClaimed = true;
 		}
 		boolean focused = focused(ui);
+		pasteKey = pasteMiss = false;
 		boolean submit = false;
 		float pad = 12;
 		float innerW = w - pad * 2;
@@ -183,6 +186,10 @@ public final class TextField {
 				}
 			} else if (ctrl && key == Ui.KEY_V && ui.clipboard != null) {
 				String clip = ui.clipboard.get();
+				pasteKey = true;
+				if (clip == null || clip.isEmpty()) {
+					pasteMiss = true;
+				}
 				if (clip != null) {
 					insert(clip.replace('\n', ' ').replace('\r', ' ').replace('\t', ' '));
 				}
