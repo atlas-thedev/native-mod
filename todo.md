@@ -1,12 +1,20 @@
 # Native mod — todo
 
-Current release: **1.8.5** (Minecraft 1.16 – 26.3).
+Current release: **1.8.8** (Minecraft 1.16 – 26.3).
 
 Everything on the 1.8.1 list is done; see `Shipped in 1.8.1` below for what changed and
 how it was verified. Add new items under `Next`.
 
 ## Next
 - More for the right-shift menu — players keep asking for extra modules and settings there.
+
+## Fixed (bug sweep, after 1.8.8)
+- Skin lookups never block the render thread (the 1.5 s first-snapshot wait is gone; SkinRefresh re-applies skins).
+- The launcher hand-off is read once at start and shared (`NativeState.handoff()`).
+- The API address (and so the game ticket) only goes to playnative.fun / nativelaunch.xyz over https, or loopback.
+- HTTP: JSON replies capped at 16 MB, POST reply limit checked before writing.
+- Texture cache: unique temp names, temp files cleaned up, hash mismatches no longer delete the launcher's file.
+- Account fields only accept strings/numbers.
 
 ## Shipped in 1.8.8
 - Hoods / helmets / masks (a cosmetic box that wraps the whole head) hide the skin's hat layer and the vanilla
@@ -82,7 +90,7 @@ Every GLFW touch now sits behind the version bridge:
   never linked on 26.3.
 - New `ui/SdlKeys.java` translates SDL scancodes and mouse buttons to the GLFW numbering
   the UI and the keybind settings use (detected at runtime by probing for
-  `org.lwjgl.glfw.GLFW`), so keyboard and mouse input work on 26.3 and are untouched on 26.1/26.2.
+  `org.lwjgl.glfw.GLFW`), so keyboard and mouse input work on 26.1/26.2.
 
 ### 3. Avatar in the username pill — done
 The toolbar pill in `MenuView` draws the player head (`Avatars.self`, directory skin hash →

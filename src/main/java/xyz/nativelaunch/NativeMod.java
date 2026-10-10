@@ -21,6 +21,12 @@ public final class NativeMod implements ClientModInitializer {
 		startUi(gameDir);
 	}
 
+	/** The ticket read once at start, so presence, Relay and the account all use the same one. */
+	private static String ticket() {
+		Handoff handoff = NativeState.get().handoff();
+		return handoff == null ? null : handoff.ticket;
+	}
+
 	/** Custom title screen + in-game Relay chat (Minecraft 1.16 - 1.21.11 through intermediary names, 26.x through official names). */
 	private static void startUi(java.nio.file.Path gameDir) {
 		String bridgeClass;
@@ -41,8 +47,7 @@ public final class NativeMod implements ClientModInitializer {
 			return;
 		}
 		try {
-			Handoff handoff = Handoff.read(gameDir);
-			xyz.nativelaunch.relay.RelayClient.start(NativeState.get().api(), handoff == null ? null : handoff.ticket);
+			xyz.nativelaunch.relay.RelayClient.start(NativeState.get().api(), ticket());
 		} catch (Throwable t) {
 			Log.warn("Relay chat is unavailable ({}).", t.toString());
 		}
@@ -60,8 +65,7 @@ public final class NativeMod implements ClientModInitializer {
 	/** Discord Rich Presence + the launcher's Relay status (server, world, player count). */
 	private static void startPresence(java.nio.file.Path gameDir) {
 		try {
-			Handoff handoff = Handoff.read(gameDir);
-			PresenceService.start(gameDir, NativeState.get().api(), handoff == null ? null : handoff.ticket);
+			PresenceService.start(gameDir, NativeState.get().api(), ticket());
 		} catch (Throwable t) {
 			Log.warn("Presence is unavailable ({}).", t.toString());
 		}
