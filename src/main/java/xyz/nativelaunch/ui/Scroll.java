@@ -33,9 +33,15 @@ public final class Scroll {
 	public void end(Ui ui, float contentHeight) {
 		ui.c.popClip();
 		float max = Math.max(0, contentHeight - vh);
+		boolean grew = contentHeight > content + 0.5f;
 		content = contentHeight;
 		if (pinned && !dragging) {
+			// stuck to the bottom: follow growing content (pictures loading, new messages) at once instead of
+			// gliding after it, which looked like the chat bouncing while things loaded
 			target = max;
+			if (grew) {
+				offset = max;
+			}
 		}
 		target = Math.max(0, Math.min(max, target));
 		float k = 1f - (float) Math.exp(-18 * ui.dt);

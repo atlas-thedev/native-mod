@@ -37,6 +37,9 @@ public final class RelayView {
 	private final Map<String, Scroll> chatScrolls = new HashMap<String, Scroll>();
 	private final Map<String, String> drafts = new HashMap<String, String>();
 	private final Map<String, String> firstIds = new HashMap<String, String>();
+	/** The top visible message last frame and its content-space y: kept in place while rows above it change. */
+	private String anchorConv, anchorId, nextAnchorId;
+	private float anchorY, nextAnchorY, anchorNow = Float.NaN;
 	private float[] jumpRect;
 	private Object lastScreen;
 	private boolean settingsOpen, bindingKey;
@@ -365,7 +368,9 @@ public final class RelayView {
 		if (conv.hasMore) {
 			if (conv.loading) {
 				ui.dots(x + w / 2, cy + 8, Theme.TEXT_MUTED);
-			} else if (sc.offset < 30) {
+			} else if (firstIds.get(selected) != null && (sc.content <= mh || sc.offset < 30 && !sc.atBottom())) {
+				// only when the reader scrolled up to the top: not while the chat is still opening (that loaded
+				// page after page and the view jumped up and down)
 				client.loadOlder(selected);
 			}
 			cy += 26;
@@ -380,7 +385,18 @@ public final class RelayView {
 		}
 		Model.Message prev = null;
 		float lh = 19;
+		nextAnchorId = null;
+		anchorNow = Float.NaN;
 		for (Model.Message m : messages) {
+			if (m.id != null) {
+				if (m.id.equals(anchorId)) {
+					anchorNow = cy + off; // where the anchor message starts now, in content space
+				}
+				if (nextAnchorId == null && cy >= my0) {
+					nextAnchorId = m.id;
+					nextAnchorY = cy + off;
+				}
+			}
 			boolean newDay = prev == null || !sameDay(prev.createdAt, m.createdAt);
 			if (newDay) {
 				String day = dayLabel(m.createdAt);
@@ -457,11 +473,23 @@ public final class RelayView {
 		// jumping (and immediately loading the next page because the view landed at the top again).
 		String firstId = messages.isEmpty() ? null : messages.get(0).id;
 		String prevFirst = firstIds.get(selected);
-		if (firstId != null && prevFirst != null && !firstId.equals(prevFirst) && sc.content > 0 && !sc.atBottom()) {
+		// Rows above the reader changed height (older page loaded, a picture got its real size): move with them.
+		if (selected.equals(anchorConv) && anchorId != null && !Float.isNaN(anchorNow) && sc.content > 0 && !sc.atBottom()) {
+			float d = anchorNow - anchorY;
+			if (Math.abs(d) > 0.5f) {
+				sc.shift(d);
+			}
+		} else if (firstId != null && prevFirst != null && !firstId.equals(prevFirst) && sc.content > 0 && !sc.atBottom()) {
 			sc.shift(content - sc.content);
 		}
+		anchorConv = selected;
+		anchorId = nextAnchorId;
+		anchorY = nextAnchorY;
 		firstIds.put(selected, firstId);
 		sc.end(ui, content);
+		if (prevFirst == null && firstId != null) {
+			sc.snapBottom(); // first messages in: open at the latest one, no glide from the top
+		}
 		jumpRect = null;
 		if (!sc.atBottom() && sc.content > mh + 40) {
 			String t = "Jump to latest";

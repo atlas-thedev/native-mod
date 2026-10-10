@@ -21,7 +21,14 @@ public final class HudEditor {
 	private static final float SNAP = 6;
 	private HudModule drag, popover;
 	private HudModule sizing;
-	private float sizeStart, sizeDist;
+	/** Corner being dragged (0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left) and the fixed opposite one. */
+	private int sizeCorner;
+	private float sizeStart, anchorX, anchorY, startW, startH;
+	/** The Done bar: where it is (centre x, top y as screen fractions; NaN = default) and whether it is being moved. */
+	private static float barFx = Float.NaN, barFy = Float.NaN;
+	private boolean barDrag;
+	private float barGrabX, barGrabY;
+	private float barX, barY, barW, barH;
 	private float grabX, grabY;
 	private float popX, popY, popW, popH;
 	private final List<HudModule> shown = new ArrayList<HudModule>();
@@ -96,29 +103,38 @@ public final class HudEditor {
 			rects.add(new float[] {HudModule.pos(m.fx, W, w), HudModule.pos(m.fy, H, h), w, h});
 		}
 		boolean overPop = popover != null && ui.hover(popX, popY, popW, popH);
-		boolean overBar = ui.hover(W / 2 - 190, H - 150, 380, 52);
+		boolean overBar = barDrag || ui.hover(barX, barY, barW, barH);
 
-		// pick
+		// pick: a resize corner of the module under the cursor first
 		HudModule hover = null;
 		int hoverIndex = -1;
 		HudModule handle = null;
+		int handleCorner = -1;
 		if (!overPop && !overBar && drag == null && sizing == null) {
-			for (int i = shown.size() - 1; i >= 0; i--) {
+			for (int i = shown.size() - 1; i >= 0 && handle == null; i--) {
 				float[] r = rects.get(i);
-				float hx = r[0] + r[2] + 3, hy = r[1] + r[3] + 3;
-				if (ui.hover(hx - 9, hy - 9, 18, 18)) {
-					handle = shown.get(i);
-					hover = handle;
-					hoverIndex = i;
-					break;
+				for (int k = 0; k < 4; k++) {
+					float hx = cornerX(r, k), hy = cornerY(r, k);
+					if (ui.hover(hx - 8, hy - 8, 16, 16)) {
+						handle = shown.get(i);
+						handleCorner = k;
+						hover = handle;
+						hoverIndex = i;
+						break;
+					}
 				}
 			}
 		}
 		if (handle != null && ui.pressed) {
 			float[] r = rects.get(hoverIndex);
 			sizing = handle;
+			sizeCorner = handleCorner;
 			sizeStart = handle.scale.value;
-			sizeDist = Math.max(8, (float) Math.hypot(ui.mx - (r[0] + r[2] / 2), ui.my - (r[1] + r[3] / 2)));
+			startW = Math.max(4, r[2]);
+			startH = Math.max(4, r[3]);
+			// the opposite corner stays where it is while this one is dragged
+			anchorX = (handleCorner == 0 || handleCorner == 3) ? r[0] + r[2] : r[0];
+			anchorY = (handleCorner == 0 || handleCorner == 1) ? r[1] + r[3] : r[1];
 			popover = null;
 			hover = null;
 		}
@@ -129,11 +145,27 @@ public final class HudEditor {
 				Modules.changed();
 			} else {
 				float[] r = rects.get(si);
-				float d = (float) Math.hypot(ui.mx - (r[0] + r[2] / 2), ui.my - (r[1] + r[3] / 2));
-				float v = Math.round(sizeStart * d / sizeDist / 0.05f) * 0.05f;
+				boolean left = sizeCorner == 0 || sizeCorner == 3, up = sizeCorner == 0 || sizeCorner == 1;
+				float dx = Math.max(0, left ? anchorX - ui.mx : ui.mx - anchorX);
+				float dy = Math.max(0, up ? anchorY - ui.my : ui.my - anchorY);
+				// how far along the box's own diagonal the cursor is: grows evenly whichever way you pull
+				float ratio = (dx * startW + dy * startH) / (startW * startW + startH * startH);
+				float v = Math.round(sizeStart * ratio / 0.01f) * 0.01f;
 				if (Math.abs(v - sizing.scale.value) > 0.001f) {
 					sizing.scale.set(v);
 				}
+				Game g = inWorld && live != null && sizing.visible(live) ? live : sample;
+				float[] sz = sizing.measure(c, g);
+				float nw = sz[0], nh = sz[1];
+				float nx = left ? anchorX - nw : anchorX, ny = up ? anchorY - nh : anchorY;
+				nx = Math.max(0, Math.min(W - nw, nx));
+				ny = Math.max(0, Math.min(H - nh, ny));
+				sizing.fx = HudModule.frac(nx, W, nw);
+				sizing.fy = HudModule.frac(ny, H, nh);
+				r[0] = HudModule.pos(sizing.fx, W, nw);
+				r[1] = HudModule.pos(sizing.fy, H, nh);
+				r[2] = nw;
+				r[3] = nh;
 				ui.cursorHand = true;
 			}
 		}
@@ -208,10 +240,15 @@ public final class HudEditor {
 				float ly = r[1] - 24 < 0 ? r[1] + r[3] + 6 : r[1] - 24;
 				float lx = Math.max(2, Math.min(W - lw - 2, r[0] - 3));
 				c.round(lx, ly, lw, 18, 6, 0xF0141418);
-				// resize handle (bottom-right corner): drag it to make the module bigger or smaller
-				float hx = r[0] + r[2] + 3, hy = r[1] + r[3] + 3;
-				c.circle(hx, hy, 5.5f, Theme.alpha(0xFFFFFFFF, a));
-				c.circle(hx, hy, 3.5f, Theme.alpha(m == sizing ? Theme.ACCENT : 0xFF09090B, a));
+				// resize handles on all four corners: drag one, the opposite corner stays put
+				for (int k = 0; k < 4; k++) {
+					float hx = cornerX(r, k), hy = cornerY(r, k);
+					boolean on = m == sizing && k == sizeCorner;
+					boolean near = ui.hover(hx - 8, hy - 8, 16, 16);
+					float hs = on || near ? 9 : 7;
+					c.fill(hx - hs / 2, hy - hs / 2, hs, hs, Theme.alpha(0xFFFFFFFF, a));
+					c.fill(hx - hs / 2 + 1.5f, hy - hs / 2 + 1.5f, hs - 3, hs - 3, Theme.alpha(on ? Theme.ACCENT : 0xFF09090B, a));
+				}
 				c.text(Fonts.SEMIBOLD, 10.5f, label, lx + 6, ly + (18 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.TEXT_STRONG);
 			} else {
 				dashed(c, r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, 0x66FFFFFF);
@@ -242,25 +279,98 @@ public final class HudEditor {
 			}
 		}
 
-		// toolbar
-		float bw = 380, bh = 50, bx = (W - bw) / 2, by = H - 150 + (1 - in) * 20; // above the hotbar, clear of the top HUD (boss bar)
-		c.shadow(bx, by + 2, bw, bh, 14, 16, 0x77000000);
-		c.round(bx, by, bw, bh, 14, 0xF008090C);
-		c.outline(bx, by, bw, bh, 14, 1, Theme.HAIRLINE_STRONG);
-		if (ui.button("hud:done", bx + 8, by + 8, 100, 34, "Done", Theme.I_CHECK, Ui.BTN_PRIMARY)) {
-			Modules.save();
-			UiRuntime.closeHost(screen);
-			return;
+		// Done bar: small, square-ish, and movable by its grip (it remembers where you put it)
+		float bh = 36, pad = 5, gripW = 22, bw0 = 0;
+		String[] labels = {"Done", "Mods", "Reset"};
+		int[] icons = {Theme.I_CHECK, Theme.I_PUZZLE, Theme.I_RESET};
+		float[] widths = new float[3];
+		for (int i = 0; i < 3; i++) {
+			widths[i] = c.textWidth(Fonts.SEMIBOLD, 12, labels[i]) + 36;
+			bw0 += widths[i];
 		}
-		if (ui.button("hud:mods", bx + 116, by + 8, 100, 34, "Mods", Theme.I_PUZZLE, Ui.BTN_GLASS)) {
-			openMenu(screen);
-			return;
+		float bw = pad + gripW + 4 + bw0 + 4 * 2 + pad;
+		if (barDrag) {
+			if (!ui.down) {
+				barDrag = false;
+			} else {
+				float nx = Math.max(4, Math.min(W - bw - 4, ui.mx - barGrabX));
+				float ny = Math.max(4, Math.min(H - bh - 4, ui.my - barGrabY));
+				barFx = (nx + bw / 2) / W;
+				barFy = ny / H;
+			}
 		}
-		if (ui.button("hud:reset", bx + 224, by + 8, bw - 232, 34, "Reset positions", Theme.I_RESET, Ui.BTN_GHOST)) {
-			Modules.resetPositions();
+		float bx = Float.isNaN(barFx) ? (W - bw) / 2 : barFx * W - bw / 2;
+		float by = Float.isNaN(barFy) ? H - 130 : barFy * H;
+		bx = Math.max(4, Math.min(W - bw - 4, bx));
+		by = Math.max(4, Math.min(H - bh - 4, by)) + (1 - in) * 12;
+		barX = bx;
+		barY = by;
+		barW = bw;
+		barH = bh;
+		c.shadow(bx, by + 2, bw, bh, 6, 14, 0x77000000);
+		c.round(bx, by, bw, bh, 6, 0xF20A0B0E);
+		c.outline(bx, by, bw, bh, 6, 1, Theme.HAIRLINE_STRONG);
+		// grip
+		float gx = bx + pad, gy = by + pad, gh = bh - pad * 2;
+		boolean overGrip = ui.hover(gx, gy, gripW, gh);
+		float ga = ui.anim("hud:grip", overGrip || barDrag, 16f);
+		c.round(gx, gy, gripW, gh, 4, Theme.alpha(0x14FFFFFF, ga));
+		for (int row = 0; row < 3; row++) {
+			for (int col = 0; col < 2; col++) {
+				c.fill(gx + gripW / 2 - 3.5f + col * 5, gy + gh / 2 - 6 + row * 5, 2, 2, Theme.mix(0x66FFFFFF, 0xFFFFFFFF, ga));
+			}
 		}
-		String tip = "Drag to move  \u00B7  Drag the corner or scroll to resize  \u00B7  Right-click for settings";
-		c.text(Fonts.MEDIUM, 11, tip, (W - c.textWidth(Fonts.MEDIUM, 11, tip)) / 2, by - 22, Theme.alpha(0xFFFFFFFF, 0.6f * in));
+		if (overGrip) {
+			ui.cursorHand = true;
+			if (ui.pressed) {
+				barDrag = true;
+				barGrabX = ui.mx - bx;
+				barGrabY = ui.my - by;
+			}
+		}
+		float x0 = gx + gripW + 4;
+		for (int i = 0; i < 3; i++) {
+			if (barButton(ui, "hud:bar:" + i, x0, gy, widths[i], gh, labels[i], icons[i], i == 0)) {
+				if (i == 0) {
+					Modules.save();
+					UiRuntime.closeHost(screen);
+					return;
+				} else if (i == 1) {
+					openMenu(screen);
+					return;
+				} else {
+					Modules.resetPositions();
+				}
+			}
+			x0 += widths[i] + 4;
+		}
+		String tip = "Drag to move  \u00B7  Drag a corner or scroll to resize  \u00B7  Right-click for settings";
+		float tipY = by > H / 2 ? by - 20 : by + bh + 8;
+		c.text(Fonts.MEDIUM, 11, tip, (W - c.textWidth(Fonts.MEDIUM, 11, tip)) / 2, tipY, Theme.alpha(0xFFFFFFFF, 0.6f * in));
+	}
+
+	private static boolean barButton(Ui ui, String id, float x, float y, float w, float h, String label, int icon, boolean primary) {
+		Canvas c = ui.c;
+		boolean over = ui.hover(x, y, w, h);
+		boolean click = ui.clicked(id, x, y, w, h);
+		float hv = ui.anim(id + "#h", over, 16f);
+		float pr = ui.anim(id + "#p", ui.isPressing(id), 24f);
+		int bg = primary ? Theme.mix(Theme.mix(0xFFF4F4F5, 0xFFFFFFFF, hv), 0xFFD4D4D8, pr) : Theme.alpha(0x1FFFFFFF, hv + pr * 0.5f);
+		int fg = primary ? Theme.SOLID_FG : Theme.mix(Theme.TEXT_SECONDARY, Theme.TEXT_STRONG, hv);
+		c.round(x, y, w, h, 4, bg);
+		float tw = c.textWidth(Fonts.SEMIBOLD, 12, label);
+		float tx = x + (w - tw - 18) / 2;
+		c.icon(icon, 13, tx + 6, y + h / 2, fg);
+		c.text(Fonts.SEMIBOLD, 12, label, tx + 18, y + (h - c.lineHeight(Fonts.SEMIBOLD, 12)) / 2, fg);
+		return click;
+	}
+
+	private static float cornerX(float[] r, int k) {
+		return k == 0 || k == 3 ? r[0] - 3 : r[0] + r[2] + 3;
+	}
+
+	private static float cornerY(float[] r, int k) {
+		return k == 0 || k == 1 ? r[1] - 3 : r[1] + r[3] + 3;
 	}
 
 	private void openMenu(Object screen) {

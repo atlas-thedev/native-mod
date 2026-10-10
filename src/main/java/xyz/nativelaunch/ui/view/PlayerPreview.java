@@ -101,7 +101,9 @@ public final class PlayerPreview implements CosmeticSink {
 		} else if (e != null && e.capeHash != null && Wardrobe.equipped == null && Wardrobe.state != Wardrobe.State.READY) {
 			cape = Wardrobe.hash(textureBase(), e.capeHash);
 		}
-		if (cape == Wardrobe.NONE) {
+		// a back item (wings, blades, backpacks) takes the cape's place, like in game
+		boolean backWorn = !"back".equals(bare) && (Wardrobe.wearing.containsKey("back") || hover != null && !hover.isCape() && "back".equals(hover.group()));
+		if (cape == Wardrobe.NONE || backWorn && !(hover != null && hover.isCape())) {
 			cape = null;
 		}
 

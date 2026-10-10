@@ -132,6 +132,15 @@ public final class IntermediaryMc implements McBridge {
 			next = new class_4325(p);
 		} else if ("options".equals(action)) {
 			next = new class_429(p, client().field_1690);
+		} else if ("advancements".equals(action) || "stats".equals(action) || "lan".equals(action)) {
+			// AdvancementsScreen / StatsScreen / OpenToLanScreen: their constructors changed over the versions
+			Object player = xyz.nativelaunch.ui.ScreenFactory.field(client(), "field_1724");
+			Object connection = xyz.nativelaunch.ui.ScreenFactory.field(player, "field_3944");
+			String cls = "advancements".equals(action) ? "net.minecraft.class_457" : "stats".equals(action) ? "net.minecraft.class_447" : "net.minecraft.class_436";
+			next = (class_437) xyz.nativelaunch.ui.ScreenFactory.create(cls, p, class_437.class, player, connection);
+			if (next == null) {
+				return false;
+			}
 		} else if ("mods".equals(action)) {
 			Constructor<?> ctor = mods();
 			if (ctor == null) {
