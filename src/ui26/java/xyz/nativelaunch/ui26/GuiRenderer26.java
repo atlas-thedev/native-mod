@@ -16,6 +16,7 @@ import xyz.nativelaunch.core.Log;
 import xyz.nativelaunch.ui.UiRuntime;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Image;
+import xyz.nativelaunch.ui.gfx.TextureBudget;
 import xyz.nativelaunch.ui.gfx.Renderer;
 
 import java.lang.reflect.Field;
@@ -122,6 +123,7 @@ public final class GuiRenderer26 implements Renderer {
 	}
 
 	private Object imageSetup(Image img) throws Exception {
+		img.lastUsed = System.currentTimeMillis();
 		Object s = imageSetups.get(img);
 		if (s != null) {
 			return s;
@@ -139,7 +141,35 @@ public final class GuiRenderer26 implements Renderer {
 		return s;
 	}
 
+	private long lastSweep;
+
+	/**
+	 * Closes the textures of images nothing has drawn for a while. Every chat picture and GIF frame used to keep a
+	 * DynamicTexture (GPU memory plus a native pixel buffer) for the whole session, so a few minutes in the Relay
+	 * GIF picker could exhaust the driver and take the game down. Only images unused for over a second are closed,
+	 * so a texture is never freed while the frame that uses it is still in flight.
+	 */
+	private void sweep() {
+		long now = System.currentTimeMillis();
+		if (now - lastSweep < 2000 && imageTextures.size() <= TextureBudget.MAX) {
+			return;
+		}
+		lastSweep = now;
+		for (Image img : TextureBudget.stale(imageTextures.keySet(), now)) {
+			DynamicTexture tex = imageTextures.remove(img);
+			imageSetups.remove(img);
+			if (tex != null) {
+				try {
+					tex.close();
+				} catch (Throwable ignored) {
+					// already gone
+				}
+			}
+		}
+	}
+
 	private void draw(GuiGraphicsExtractor g, Canvas c) throws Exception {
+		sweep(); // before this frame's elements reference anything
 		uploadAtlas(c);
 		float k = 1f / Math.max(1, Minecraft.getInstance().getWindow().getGuiScale());
 		GuiRenderState state = (GuiRenderState) stateField.get(g);

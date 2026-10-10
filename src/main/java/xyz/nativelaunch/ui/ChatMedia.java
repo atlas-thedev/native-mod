@@ -78,6 +78,13 @@ public final class ChatMedia {
 		return url.matches("https://media[0-9]*\\.giphy\\.com/media/.+\\.gif(\\?.*)?");
 	}
 
+	/** The picture for a URL if it is already cached (or loading); never starts a download. */
+	public static Media peek(String url) {
+		synchronized (cache) {
+			return cache.get(url);
+		}
+	}
+
 	/** The picture for a URL; starts loading on first call. Never blocks. */
 	public static Media get(final String url, final String api) {
 		synchronized (cache) {
@@ -137,7 +144,16 @@ public final class ChatMedia {
 		m.frames = new Image[] {img};
 	}
 
+	/** Largest picture decoded at all (pixels): bigger ones would need hundreds of MB of native memory. */
+	static final long MAX_PIXELS = 4096L * 4096L;
+	/** GIFs are decoded whole (every frame at once): cap width x height x frames. */
+	static final long MAX_GIF_PIXELS = 24L * 1024 * 1024;
+
 	private static boolean decodeGif(Media m, byte[] bytes) {
+		long area = GifHeader.area(bytes);
+		if (area <= 0 || area > MAX_PIXELS || area * GifHeader.frames(bytes) > MAX_GIF_PIXELS) {
+			return false; // the still decoder below shows its first frame instead
+		}
 		ByteBuffer src = MemoryUtil.memAlloc(bytes.length);
 		try (MemoryStack stack = MemoryStack.stackPush()) {
 			src.put(bytes).flip();
@@ -182,6 +198,10 @@ public final class ChatMedia {
 				return true;
 			} finally {
 				STBImage.stbi_image_free(px);
+				long d = delays.get(0);
+				if (d != 0) {
+					STBImage.nstbi_image_free(d); // stb allocates the delay array; it is ours to free
+				}
 			}
 		} catch (Throwable t) {
 			return false;

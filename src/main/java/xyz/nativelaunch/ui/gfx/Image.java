@@ -16,6 +16,8 @@ public final class Image {
 	/** Backend texture handle (0 = not uploaded yet). */
 	public int handle;
 	public boolean linear = true;
+	/** When a renderer last drew this image (ms); lets renderers free textures nobody draws any more. */
+	public long lastUsed;
 
 	public Image(int width, int height, int[] argb) {
 		this.width = width;
@@ -46,6 +48,11 @@ public final class Image {
 		try (MemoryStack stack = MemoryStack.stackPush()) {
 			src.put(bytes).flip();
 			IntBuffer w = stack.mallocInt(1), h = stack.mallocInt(1), comp = stack.mallocInt(1);
+			// refuse huge pictures before decoding: stb would allocate width x height x 4 bytes of native memory
+			if (!STBImage.stbi_info_from_memory(src, w, h, comp) || w.get(0) <= 0 || h.get(0) <= 0
+					|| (long) w.get(0) * h.get(0) > 4096L * 4096L) {
+				return null;
+			}
 			ByteBuffer px = STBImage.stbi_load_from_memory(src, w, h, comp, 4);
 			if (px == null) {
 				return null;

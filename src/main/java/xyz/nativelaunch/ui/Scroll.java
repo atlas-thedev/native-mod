@@ -8,6 +8,8 @@ public final class Scroll {
 	private float dragFrom, dragOffset;
 	/** Stick to the bottom when new content arrives (chat). */
 	public boolean stickBottom;
+	/** Pinned to the bottom this frame (decided before the wheel moves anything). */
+	private boolean pinned;
 
 	/** Begins the region: pushes a clip and returns the y offset to subtract from content. */
 	public float begin(Ui ui, float x, float y, float w, float h) {
@@ -15,8 +17,13 @@ public final class Scroll {
 		vy = y;
 		vw = w;
 		vh = h;
+		// Pinned = the *target* sits at the bottom. It used to be read from the animated offset after the wheel had
+		// already moved the target, so in a chat every wheel step up was undone on the same frame (scrolling never
+		// worked from the bottom) and the view twitched between the two positions.
+		pinned = stickBottom && content > 0 && target >= Math.max(0, content - vh) - 2;
 		if (ui.hover(x, y, w, h) && ui.scroll != 0) {
 			target -= ui.scroll * 48;
+			pinned = false;
 		}
 		ui.c.pushClip(x, y, w, h);
 		return offset;
@@ -26,9 +33,8 @@ public final class Scroll {
 	public void end(Ui ui, float contentHeight) {
 		ui.c.popClip();
 		float max = Math.max(0, contentHeight - vh);
-		boolean wasBottom = content > 0 && offset >= Math.max(0, content - vh) - 2;
 		content = contentHeight;
-		if (stickBottom && wasBottom) {
+		if (pinned && !dragging) {
 			target = max;
 		}
 		target = Math.max(0, Math.min(max, target));
@@ -63,6 +69,14 @@ public final class Scroll {
 		ui.c.round(tx, thumbY, 4, thumbH, 2, Theme.mix(0x29FFFFFF, 0x47FFFFFF, a));
 	}
 
+	/** Content was added above what is on screen (older messages): move by the same amount so nothing jumps. */
+	public void shift(float dy) {
+		if (dy != 0) {
+			offset += dy;
+			target += dy;
+		}
+	}
+
 	public void toBottom() {
 		target = 1e9f;
 	}
@@ -72,6 +86,6 @@ public final class Scroll {
 	}
 
 	public boolean atBottom() {
-		return offset >= Math.max(0, content - vh) - 4;
+		return target >= Math.max(0, content - vh) - 4;
 	}
 }
