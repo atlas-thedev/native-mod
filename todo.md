@@ -8,6 +8,12 @@ how it was verified. Add new items under `Next`.
 ## Next
 - More for the right-shift menu — players keep asking for extra modules and settings there.
 
+## Shipped in 1.8.6
+- Settings page remade: cards (General, Controls, HUD tiles), profile card with stats + Open locker, about card
+- Cosmetics: faces seen from behind are drawn too (no see-through holes in hats/wings in the preview)
+- Title screen: ad banners crossfade; failed opens are logged; 26.x clicks use the fresh cursor position
+- ui-probe clicks every title button + Native Mods tabs on 1.16.5 - 26.3
+
 ## Shipped in 1.8.5
 
 - **Crash on 26.3 (exit 0xC0000409)**: UI textures were never freed. Every chat picture and GIF frame kept a
