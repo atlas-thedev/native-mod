@@ -134,12 +134,75 @@ public final class CosmeticModel {
 	public final List<Part> roots;
 	/** Every part, parents before children. */
 	public final List<Part> flat;
+	/**
+	 * A hood, helmet or mask that wraps the whole head: while it is worn the skin's hat layer and the vanilla
+	 * helmet / head item are not drawn (they would poke through it).
+	 */
+	public final boolean coversHead;
 
 	private CosmeticModel(int textureWidth, int textureHeight, List<Part> roots, List<Part> flat) {
 		this.textureWidth = textureWidth;
 		this.textureHeight = textureHeight;
 		this.roots = roots;
 		this.flat = flat;
+		boolean covers = false;
+		for (Part root : roots) {
+			if (root.attach == Attach.HEAD && wraps(root, new float[] {1, 0, 0, 0, 1, 0, 0, 0, 1}, new float[3])) {
+				covers = true;
+				break;
+			}
+		}
+		this.coversHead = covers;
+	}
+
+	/**
+	 * True when one of the part's (rest pose) cubes is at least head sized and holds the head's centre, i.e. the
+	 * head sits inside it. {@code m} / {@code t} map the part's parent space to head space (vanilla ModelPart
+	 * order: translate by the pivot, then rotate z, y, x).
+	 */
+	private static boolean wraps(Part part, float[] m, float[] t) {
+		float[] nt = {
+				t[0] + m[0] * part.px + m[1] * part.py + m[2] * part.pz,
+				t[1] + m[3] * part.px + m[4] * part.py + m[5] * part.pz,
+				t[2] + m[6] * part.px + m[7] * part.py + m[8] * part.pz};
+		float[] nm = mul(m, mul(rot(2, part.rz), mul(rot(1, part.ry), rot(0, part.rx))));
+		// head centre (0, -4, 0) in this part's space: nm is a rotation, so its inverse is its transpose
+		float dx = 0 - nt[0], dy = -4 - nt[1], dz = 0 - nt[2];
+		float lx = nm[0] * dx + nm[3] * dy + nm[6] * dz;
+		float ly = nm[1] * dx + nm[4] * dy + nm[7] * dz;
+		float lz = nm[2] * dx + nm[5] * dy + nm[8] * dz;
+		for (Cube c : part.cubes) {
+			float e = c.inflate;
+			if (c.w + 2 * e >= 8 && c.h + 2 * e >= 8 && c.d + 2 * e >= 8
+					&& lx >= c.x - e && lx <= c.x + c.w + e && ly >= c.y - e && ly <= c.y + c.h + e && lz >= c.z - e && lz <= c.z + c.d + e) {
+				return true;
+			}
+		}
+		for (Part child : part.children) {
+			if (wraps(child, nm, nt)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static float[] rot(int axis, float a) {
+		float c = (float) Math.cos(a), s = (float) Math.sin(a);
+		switch (axis) {
+			case 0: return new float[] {1, 0, 0, 0, c, -s, 0, s, c};
+			case 1: return new float[] {c, 0, s, 0, 1, 0, -s, 0, c};
+			default: return new float[] {c, -s, 0, s, c, 0, 0, 0, 1};
+		}
+	}
+
+	private static float[] mul(float[] a, float[] b) {
+		float[] o = new float[9];
+		for (int r = 0; r < 3; r++) {
+			for (int c = 0; c < 3; c++) {
+				o[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];
+			}
+		}
+		return o;
 	}
 
 	/** The side of the first side-flagged root (1 left, 2 right), or 0 when the model has none. */

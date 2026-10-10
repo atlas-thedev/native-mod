@@ -132,7 +132,7 @@ public final class PlayerPreview implements CosmeticSink {
 		// head
 		bone(CosmeticModel.Attach.HEAD);
 		part(s, tw, th, -4, -8, -4, 8, 8, 8, 0, 0, false, tint, skin == null ? 0xFFA3A8B1 : tint);
-		if (skin != null) {
+		if (skin != null && !xyz.nativelaunch.cosmetic.HeadCover.any(worn)) { // a hood replaces the hat layer, like in game
 			b.cube(s, tw, th, -4, -8, -4, 8, 8, 8, 32, 0, 0.5f, false, tint);
 		}
 		b.pop();

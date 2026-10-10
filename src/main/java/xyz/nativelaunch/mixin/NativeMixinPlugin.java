@@ -27,6 +27,7 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 	private boolean known;
 	/** 1 = official names (26.x), -1 = intermediary (older), 0 = unknown. */
 	private int naming;
+	private ClassLoader loader;
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -38,6 +39,7 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 			modern = loader.getResource(MODERN_MARKER) != null;
 			services = loader.getResource(SERVICES_MARKER) != null;
 			yggdrasil = loader.getResource(YGGDRASIL_MARKER) != null;
+			this.loader = loader;
 			boolean official = loader.getResource(OFFICIAL_MARKER) != null;
 			boolean intermediary = loader.getResource(INTERMEDIARY_MARKER) != null;
 			naming = official == intermediary ? 0 : (official ? 1 : -1);
@@ -71,9 +73,13 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 		// "Error loading class" noise (and confuses crash analysis), so skip it.
 		if (naming != 0) {
 			boolean for26 = mixinClassName.endsWith("26");
-			return naming > 0 ? for26 : !for26;
+			if (naming > 0 ? !for26 : for26) {
+				return false;
+			}
 		}
-		return true;
+		// hooks list classes from several versions (e.g. PlayerLikeEntity only exists from 1.21.9): skip the
+		// ones this version doesn't have instead of logging "Error loading class"
+		return loader == null || loader.getResource(targetClassName.replace('.', '/') + ".class") != null;
 	}
 
 	@Override
