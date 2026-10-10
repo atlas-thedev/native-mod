@@ -32,6 +32,8 @@ public final class TitleView {
 	private final java.util.Set<String> hiddenAds = new java.util.HashSet<>();
 	private int adIndex;
 	private long adSwitchAt;
+	private int adPrev = -1;
+	private long adFadeAt;
 	private static final long AD_ROTATE_MS = 12_000;
 
 	private void load() {
@@ -176,8 +178,8 @@ public final class TitleView {
 			UiRuntime.openRelay(screen);
 		} else if ("nativemods".equals(id)) {
 			UiRuntime.openMenu(screen);
-		} else {
-			mc.open(id, screen);
+		} else if (!mc.open(id, screen)) {
+			xyz.nativelaunch.core.Log.warn("Title screen: could not open {}", id);
 		}
 	}
 
@@ -372,13 +374,18 @@ public final class TitleView {
 		if (adSwitchAt == 0 || over) {
 			adSwitchAt = ui.now + AD_ROTATE_MS;
 		} else if (ui.now >= adSwitchAt && count > 1) {
-			adIndex = (adIndex + 1) % count;
-			adSwitchAt = ui.now + AD_ROTATE_MS;
+			showAd((adIndex + 1) % count, ui.now);
 		}
 		Ads.Ad ad = ads.get(adIndex % count);
+		// crossfade from the previous banner instead of a hard cut
+		float fade = adPrev < 0 ? 1f : clamp01((ui.now - adFadeAt) / 420f);
+		fade = fade * fade * (3 - 2 * fade);
 		c.shadow(x, y + 8, w, h, 16, 28, 0x80000000);
 		c.round(x, y, w, h, 16, 0xE608090C);
-		c.imageCover(ad.image, x, y, w, mh, 1f, 0, 0, 0xFFFFFFFF);
+		if (fade < 1f && adPrev < count && adPrev != adIndex % count) {
+			c.imageCover(ads.get(adPrev).image, x, y, w, mh, 1f, 0, 0, 0xFFFFFFFF);
+		}
+		c.imageCover(ad.image, x, y, w, mh, 1f + 0.03f * (1 - fade), 0, 0, Theme.alpha(0xFFFFFFFF, fade));
 		c.outline(x, y, w, h, 16, 1, Theme.HAIRLINE);
 
 		// close: hide this ad for the rest of the session
@@ -390,8 +397,10 @@ public final class TitleView {
 		if (ui.clicked("ad#close", cxx, cyy, cs, cs)) {
 			hiddenAds.add(ad.id);
 			adIndex = 0;
+			adPrev = -1;
 			return;
 		}
+		c.pushAlpha(0.35f + 0.65f * fade);
 
 		// buttons (right side of the footer)
 		float pad = 14, fy = y + mh, fh = h - mh;
@@ -439,6 +448,8 @@ public final class TitleView {
 			c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, ad.body, maxW), tx, ty + 32, Theme.TEXT_SECONDARY);
 		}
 
+		c.popAlpha();
+
 		// banner / card click = main button
 		if (!buttonHit && !overClose && ui.clicked("ad#card", x, y, w, h)) {
 			run(ad.primary(), screen);
@@ -453,13 +464,19 @@ public final class TitleView {
 				boolean active = i == adIndex % count;
 				float ww = active ? dw + 6 : dw;
 				c.round(dx, dy, ww, dw, dw / 2, active ? 0xFFFFFFFF : 0x80FFFFFF);
-				if (ui.clicked("ad#dot" + i, dx - 2, dy - 4, ww + 4, dw + 8)) {
-					adIndex = i;
-					adSwitchAt = ui.now + AD_ROTATE_MS;
+				if (ui.clicked("ad#dot" + i, dx - 2, dy - 4, ww + 4, dw + 8) && i != adIndex % count) {
+					showAd(i, ui.now);
 				}
 				dx += ww + dg;
 			}
 		}
+	}
+
+	private void showAd(int index, long now) {
+		adPrev = adIndex;
+		adIndex = index;
+		adFadeAt = now;
+		adSwitchAt = now + AD_ROTATE_MS;
 	}
 
 	private static void run(Ads.Button b, Object screen) {

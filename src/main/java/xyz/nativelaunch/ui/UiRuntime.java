@@ -427,6 +427,15 @@ public final class UiRuntime {
 	public static boolean onButton(int button, int action, int mods) {
 		xyz.nativelaunch.ui.mod.Keys.track(button, action);
 		if (capturing) {
+			// 26.x: the cursor is otherwise read once per frame, so a click right after a quick move would land
+			// where the pointer was on the last frame (a missed button). Read it fresh for the click itself.
+			try {
+				if (mc.handlesInput() && mc.cursor(cursorPos)) {
+					onMove(cursorPos[0], cursorPos[1]);
+				}
+			} catch (Throwable ignored) {
+				// keep the last known position
+			}
 			Input.button(button, action == 0 ? 0 : 1, mods);
 			return true;
 		}

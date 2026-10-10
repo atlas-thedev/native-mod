@@ -925,46 +925,31 @@ public final class MenuView {
 		}
 		sMenu.value = cfg.menuKey;
 		sChat.value = cfg.relayKey;
-		float rw = Math.min(560, w);
-		float off = prefs.begin(ui, x, y, w + 6, h);
+
+		boolean wide = w >= 760;
+		float sideW = wide ? Math.min(320, w * 0.36f) : 0;
+		float lw = wide ? w - sideW - 20 : w;
+		float off = prefs.begin(ui, x, y, lw + 8, h);
 		float ry = y - off;
-		ry = section(c, "GENERAL", x, ry);
-		Setting[] general = {sTitle, sNotify, sScale};
-		for (Setting s : general) {
-			Widgets.row(ui, "menu:pref:" + s.id, x, ry, rw, s);
-			ry += Widgets.ROW;
-			c.fill(x, ry, rw, 1, Theme.HAIRLINE);
+		float cw = lw - 6;
+		ry = group(ui, "general", x, ry, cw, Theme.I_SLIDERS, "General", "How Native looks and talks to you",
+				new Setting[] {sTitle, sNotify, sScale});
+		ry = group(ui, "keys", x, ry, cw, Theme.I_KEYBOARD, "Controls", "Click a key, then press the one you want",
+				new Setting[] {sMenu, sChat});
+		ry = hudCard(ui, x, ry, cw, screen);
+		if (!wide) {
+			ry = profileCard(ui, x, ry, cw) + 16;
+			ry = aboutCard(ui, x, ry, cw) + 16;
 		}
-		ry = section(c, "KEYS", x, ry + 18);
-		for (Setting s : new Setting[] {sMenu, sChat}) {
-			Widgets.row(ui, "menu:pref:" + s.id, x, ry, rw, s);
-			ry += Widgets.ROW;
-			c.fill(x, ry, rw, 1, Theme.HAIRLINE);
-		}
-		ry = section(c, "HUD", x, ry + 18);
-		float bw = (rw - 16) / 3;
-		if (ui.button("menu:pref:edit", x, ry, bw, 36, "Edit HUD layout", Theme.I_MOVE, Ui.BTN_GLASS)) {
-			openEditor(screen);
-		}
-		if (ui.button("menu:pref:positions", x + bw + 8, ry, bw, 36, "Reset positions", Theme.I_RESET, Ui.BTN_GLASS)) {
-			Modules.resetPositions();
-		}
-		if (confirmReset) {
-			if (ui.button("menu:pref:reset-yes", x + 2 * (bw + 8), ry, bw, 36, "Reset everything?", 0, Ui.BTN_DANGER)) {
-				for (Module m : Modules.all()) {
-					m.resetSettings();
-					m.setEnabled(m.defaultEnabled);
-				}
-				Modules.resetPositions();
-				confirmReset = false;
-			}
-		} else if (ui.button("menu:pref:reset", x + 2 * (bw + 8), ry, bw, 36, "Reset all mods", Theme.I_POWER, Ui.BTN_GHOST)) {
-			confirmReset = true;
-		}
-		ry += 52;
-		c.text(Fonts.REGULAR, 11, "Settings are saved to config/native-ui.json and config/native-modules.json.", x, ry, Theme.TEXT_MUTED);
-		ry += 24;
+		c.text(Fonts.REGULAR, 11, "Saved automatically to config/native-ui.json and config/native-modules.json.", x + 4, ry, Theme.TEXT_MUTED);
+		ry += 28;
 		prefs.end(ui, ry + off - y);
+
+		if (wide) {
+			float sx = x + w - sideW;
+			float sy = profileCard(ui, sx, y, sideW);
+			aboutCard(ui, sx, sy + 16, sideW);
+		}
 
 		// write back
 		boolean save = false;
@@ -990,6 +975,171 @@ public final class MenuView {
 		}
 		if (save) {
 			cfg.save();
+		}
+	}
+
+	/** A settings card: icon tile, title and a hint on top, then the rows. Returns the y below it. */
+	private float group(Ui ui, String id, float x, float y, float w, int icon, String title, String hint, Setting[] rows) {
+		Canvas c = ui.c;
+		float head = 62;
+		float rh = 0;
+		for (Setting s : rows) {
+			rh += Widgets.rowHeight(s);
+		}
+		float h = head + rh + 8;
+		cardFrame(ui, "menu:pref:card:" + id, x, y, w, h);
+		cardHead(c, x, y, w, icon, title, hint);
+		float cy = y + head;
+		for (int i = 0; i < rows.length; i++) {
+			c.fill(x + 18, cy, w - 36, 1, Theme.HAIRLINE);
+			Widgets.row(ui, "menu:pref:" + rows[i].id, x + 18, cy, w - 36, rows[i]);
+			cy += Widgets.rowHeight(rows[i]);
+		}
+		return y + h + 16;
+	}
+
+	private void cardFrame(Ui ui, String id, float x, float y, float w, float h) {
+		Canvas c = ui.c;
+		float hv = ui.anim(id, ui.hover(x, y, w, h), 10f);
+		c.round(x, y, w, h, 16, Theme.mix(CARD, CARD_HOVER, hv));
+		glow(c, x, y, w, Math.min(h, 70), 16, 0x0AFFFFFF);
+		c.outline(x, y, w, h, 16, 1, Theme.mix(Theme.HAIRLINE, Theme.HAIRLINE_STRONG, hv));
+	}
+
+	private static void cardHead(Canvas c, float x, float y, float w, int icon, String title, String hint) {
+		float ic = 34;
+		c.round(x + 18, y + 14, ic, ic, 10, Theme.SUBTLE_HOVER);
+		c.outline(x + 18, y + 14, ic, ic, 10, 1, Theme.HAIRLINE);
+		c.icon(icon, 16, x + 18 + ic / 2, y + 14 + ic / 2, Theme.TEXT_STRONG);
+		float tx = x + 18 + ic + 14;
+		c.text(Fonts.SEMIBOLD, 14, title, tx, y + 15, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, hint, w - (tx - x) - 18), tx, y + 34, Theme.TEXT_MUTED);
+	}
+
+	private float hudCard(Ui ui, float x, float y, float w, Object screen) {
+		Canvas c = ui.c;
+		float h = 62 + 74 + 14;
+		cardFrame(ui, "menu:pref:card:hud", x, y, w, h);
+		cardHead(c, x, y, w, Theme.I_LAYOUT, "HUD", "Where your HUD mods sit on screen");
+		float ty = y + 62, gap = 10;
+		float tw = (w - 36 - gap * 2) / 3, th = 74;
+		if (tile(ui, "menu:pref:edit", x + 18, ty, tw, th, Theme.I_MOVE, "Edit layout", "Drag and resize", false)) {
+			openEditor(screen);
+		}
+		if (tile(ui, "menu:pref:positions", x + 18 + tw + gap, ty, tw, th, Theme.I_RESET, "Reset positions", "Back to defaults", false)) {
+			Modules.resetPositions();
+		}
+		String label = confirmReset ? "Click to confirm" : "Reset all mods";
+		if (tile(ui, "menu:pref:reset", x + 18 + (tw + gap) * 2, ty, tw, th, Theme.I_POWER, label, confirmReset ? "Settings + on/off" : "Every setting", true)) {
+			if (confirmReset) {
+				for (Module m : Modules.all()) {
+					m.resetSettings();
+					m.setEnabled(m.defaultEnabled);
+				}
+				Modules.resetPositions();
+				confirmReset = false;
+			} else {
+				confirmReset = true;
+			}
+		}
+		if (confirmReset && ui.pressed && !ui.hover(x + 18 + (tw + gap) * 2, ty, tw, th)) {
+			confirmReset = false; // clicking anywhere else cancels
+		}
+		return y + h + 16;
+	}
+
+	/** A square-ish action tile with an icon, a title and a hint. */
+	private boolean tile(Ui ui, String id, float x, float y, float w, float h, int icon, String title, String hint, boolean danger) {
+		Canvas c = ui.c;
+		boolean over = ui.hover(x, y, w, h);
+		boolean click = ui.clicked(id, x, y, w, h);
+		float hv = ui.anim(id + "#h", over, 14f);
+		float pr = ui.anim(id + "#p", ui.isPressing(id), 20f);
+		boolean armed = danger && confirmReset;
+		int bg = armed ? Theme.mix(0x26EF4444, 0x40EF4444, hv) : Theme.mix(Theme.SUBTLE, Theme.SUBTLE_HOVER, hv);
+		float sy = y + pr * 1.5f;
+		c.round(x, sy, w, h, 12, bg);
+		c.outline(x, sy, w, h, 12, 1, armed ? 0x4DEF4444 : Theme.mix(Theme.HAIRLINE, Theme.HAIRLINE_STRONG, hv));
+		int fg = armed ? 0xFFFCA5A5 : (danger ? Theme.mix(Theme.TEXT_SECONDARY, 0xFFFCA5A5, hv) : Theme.TEXT_STRONG);
+		c.icon(icon, 15, x + 22, sy + 22, fg);
+		c.text(Fonts.SEMIBOLD, 12, c.ellipsize(Fonts.SEMIBOLD, 12, title, w - 24), x + 12, sy + h - 36, fg);
+		c.text(Fonts.REGULAR, 10.5f, c.ellipsize(Fonts.REGULAR, 10.5f, hint, w - 24), x + 12, sy + h - 19, Theme.TEXT_MUTED);
+		if (over) {
+			ui.cursorHand = true;
+		}
+		return click;
+	}
+
+	private float profileCard(Ui ui, float x, float y, float w) {
+		Canvas c = ui.c;
+		float h = 196;
+		cardFrame(ui, "menu:pref:card:me", x, y, w, h);
+		glow(c, x, y, w, 90, 16, 0x10FFFFFF);
+		String who = UiRuntime.mc().username();
+		xyz.nativelaunch.relay.RelayClient rc = xyz.nativelaunch.relay.RelayClient.get();
+		boolean signed = rc != null && rc.state != xyz.nativelaunch.relay.RelayClient.State.NO_ACCOUNT;
+		float av = 56;
+		Avatars.draw(c, Avatars.api(), who == null ? "Steve" : who, who == null ? null : Avatars.self(who), x + 18, y + 18, av, 12f);
+		int dot = !signed ? 0xFF71717A : rc.state == xyz.nativelaunch.relay.RelayClient.State.ONLINE ? Theme.ONLINE : Theme.IDLE;
+		c.circle(x + 18 + av - 4, y + 18 + av - 4, 7f, 0xFF05060A);
+		c.circle(x + 18 + av - 4, y + 18 + av - 4, 5f, dot);
+		float tx = x + 18 + av + 14;
+		c.text(Fonts.SEMIBOLD, 16, c.ellipsize(Fonts.SEMIBOLD, 16, who == null ? "Player" : who, w - (tx - x) - 16), tx, y + 24, Theme.TEXT_STRONG);
+		String status = !signed ? "Guest \u00b7 start from the Native Client to sign in"
+				: rc.state == xyz.nativelaunch.relay.RelayClient.State.ONLINE ? "Signed in \u00b7 Relay online"
+				: rc.state == xyz.nativelaunch.relay.RelayClient.State.CONNECTING ? "Signed in \u00b7 connecting\u2026" : "Signed in \u00b7 Relay offline";
+		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, status, w - (tx - x) - 16), tx, y + 48, Theme.TEXT_MUTED);
+		// stats
+		int on = 0, all = 0;
+		for (Module m : Modules.all()) {
+			all++;
+			if (m.enabled) {
+				on++;
+			}
+		}
+		float sy = y + 92, sw = (w - 36 - 10) / 2;
+		stat(c, x + 18, sy, sw, String.valueOf(on), "of " + all + " mods on");
+		stat(c, x + 18 + sw + 10, sy, sw, String.valueOf(Wardrobe.owned.size()), "cosmetics owned");
+		float by = y + h - 18 - 34;
+		if (ui.button("menu:pref:locker", x + 18, by, w - 36, 34, "Open locker", Theme.I_SHIRT, Ui.BTN_PRIMARY)) {
+			setTab(1);
+		}
+		return y + h;
+	}
+
+	private static void stat(Canvas c, float x, float y, float w, String value, String label) {
+		c.round(x, y, w, 44, 10, Theme.SUBTLE);
+		c.text(Fonts.BOLD, 15, value, x + 12, y + 6, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 10.5f, c.ellipsize(Fonts.REGULAR, 10.5f, label, w - 24), x + 12, y + 25, Theme.TEXT_MUTED);
+	}
+
+	private float aboutCard(Ui ui, float x, float y, float w) {
+		Canvas c = ui.c;
+		float h = 112;
+		cardFrame(ui, "menu:pref:card:about", x, y, w, h);
+		float lg = 34;
+		c.image(logo, x + 18, y + 16, lg, lg, 0, 0, 1, 1, 0xFFFFFFFF);
+		c.text(Fonts.SEMIBOLD, 14, "Native Client", x + 18 + lg + 12, y + 17, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 11, "Mod " + modVersion() + "  \u00b7  Minecraft " + gameVersion(), x + 18 + lg + 12, y + 36, Theme.TEXT_MUTED);
+		c.fill(x + 18, y + 64, w - 36, 1, Theme.HAIRLINE);
+		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, "Updates install from the launcher. playnative.fun", w - 36), x + 18, y + 80, Theme.TEXT_SECONDARY);
+		return y + h;
+	}
+
+	private static String modVersion() {
+		return fabricVersion("native");
+	}
+
+	private static String gameVersion() {
+		return fabricVersion("minecraft");
+	}
+
+	private static String fabricVersion(String id) {
+		try {
+			return net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer(id)
+					.map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("?");
+		} catch (Throwable t) {
+			return "?";
 		}
 	}
 

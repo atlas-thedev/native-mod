@@ -22,6 +22,14 @@ public final class Boxes {
 	private int[] color = new int[256];
 	private Image[] tex = new Image[256];
 	private Integer[] order = new Integer[256];
+	/** Faces seen from behind (only kept while {@link #twoSided}). */
+	private boolean[] back = new boolean[256];
+	/**
+	 * Draw faces that point away too (cosmetics). Vanilla renders cosmetics without back-face culling, so the inside
+	 * of a hat brim or the far side of a wing shows through the transparent pixels of the near side. Culling them
+	 * made those pixels see-through to the background: the "transparent" holes in the locker preview.
+	 */
+	public boolean twoSided;
 
 	public void begin(float cx, float cy, float scale, float yaw, float pitch) {
 		this.cx = cx;
@@ -35,6 +43,7 @@ public final class Boxes {
 		identity();
 		depth = 0;
 		faces = 0;
+		twoSided = false;
 	}
 
 	public void identity() {
@@ -163,8 +172,14 @@ public final class Boxes {
 			return;
 		}
 		float[] n = normal(nx, ny, nz);
-		if (n[2] >= -0.0001f) {
-			return; // facing away
+		boolean away = n[2] >= -0.0001f;
+		if (away && (!twoSided || n[2] < 0.0001f && n[2] > -0.0001f)) {
+			return; // facing away (or edge-on)
+		}
+		if (away) {
+			n[0] = -n[0];
+			n[1] = -n[1];
+			n[2] = -n[2]; // light the inside as the side we are looking at
 		}
 		if (faces == z.length) {
 			int cap = faces * 2;
@@ -175,6 +190,7 @@ public final class Boxes {
 			color = java.util.Arrays.copyOf(color, cap);
 			tex = java.util.Arrays.copyOf(tex, cap);
 			order = java.util.Arrays.copyOf(order, cap);
+			back = java.util.Arrays.copyOf(back, cap);
 		}
 		int o = faces * 8;
 		float zs = 0;
@@ -210,6 +226,7 @@ public final class Boxes {
 		int a = tint >>> 24, rr = (int) (((tint >> 16) & 255) * b), gg = (int) (((tint >> 8) & 255) * b), bb = (int) ((tint & 255) * b);
 		color[faces] = a << 24 | rr << 16 | gg << 8 | bb;
 		tex[faces] = texture;
+		back[faces] = away;
 		faces++;
 	}
 
@@ -221,7 +238,13 @@ public final class Boxes {
 			order[i] = i;
 		}
 		final float[] zz = z, cc = cz;
+		final boolean[] bk = back;
 		java.util.Arrays.sort(order, 0, faces, (a, b) -> {
+			// every inside face first: they can only ever be seen through a transparent pixel of a front face,
+			// so drawing them before all front faces never paints an inside over something in front of it
+			if (bk[a] != bk[b]) {
+				return bk[a] ? -1 : 1;
+			}
 			float d = cc[b] - cc[a];
 			if (Math.abs(d) > 0.01f) {
 				return d > 0 ? 1 : -1;
