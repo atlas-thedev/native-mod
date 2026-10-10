@@ -139,6 +139,7 @@ public final class GlRenderer implements Renderer {
 				init(c.atlas);
 			}
 			draw(c);
+			sweep();
 		} catch (Throwable t) {
 			failed = true;
 			Log.warn("Native UI renderer disabled ({}).", t.toString());
@@ -259,6 +260,7 @@ public final class GlRenderer implements Renderer {
 	}
 
 	private int textureFor(Image img) {
+		img.lastUsed = System.currentTimeMillis();
 		if (img.handle != 0) {
 			return img.handle;
 		}
@@ -281,6 +283,23 @@ public final class GlRenderer implements Renderer {
 		img.handle = id;
 		uploaded.add(img);
 		return id;
+	}
+
+	private long lastSweep;
+
+	/**
+	 * Frees textures nothing has drawn for a while. Chat pictures and GIF frames come and go (the media cache
+	 * forgets them), so without this the textures piled up for the whole session until the driver gave out.
+	 */
+	private void sweep() {
+		long now = System.currentTimeMillis();
+		if (now - lastSweep < 2000 && uploaded.size() <= TextureBudget.MAX) {
+			return;
+		}
+		lastSweep = now;
+		for (Image img : TextureBudget.stale(uploaded, now)) {
+			release(img);
+		}
 	}
 
 	/** Frees an image's texture (call on the render thread). */

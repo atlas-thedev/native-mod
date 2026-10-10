@@ -36,6 +36,8 @@ public final class RelayView {
 	private final Scroll listScroll = new Scroll();
 	private final Map<String, Scroll> chatScrolls = new HashMap<String, Scroll>();
 	private final Map<String, String> drafts = new HashMap<String, String>();
+	private final Map<String, String> firstIds = new HashMap<String, String>();
+	private float[] jumpRect;
 	private Object lastScreen;
 	private boolean settingsOpen, bindingKey;
 	private int lastCount = -1;
@@ -451,11 +453,21 @@ public final class RelayView {
 			prev = m;
 		}
 		float content = cy - before + (before - (my0 - off)) + 10;
+		// Older messages were loaded in on top: keep the message under the cursor where it was instead of
+		// jumping (and immediately loading the next page because the view landed at the top again).
+		String firstId = messages.isEmpty() ? null : messages.get(0).id;
+		String prevFirst = firstIds.get(selected);
+		if (firstId != null && prevFirst != null && !firstId.equals(prevFirst) && sc.content > 0 && !sc.atBottom()) {
+			sc.shift(content - sc.content);
+		}
+		firstIds.put(selected, firstId);
 		sc.end(ui, content);
+		jumpRect = null;
 		if (!sc.atBottom() && sc.content > mh + 40) {
 			String t = "Jump to latest";
 			float pw2 = c.textWidth(Fonts.SEMIBOLD, 11.5f, t) + 40, ph2 = 28;
 			float pxx = x + (w - pw2) / 2, pyy = my0 + mh - ph2 - 10;
+			jumpRect = new float[] {pxx, pyy, pw2, ph2};
 			boolean ov = ui.hover(pxx, pyy, pw2, ph2);
 			c.shadow(pxx, pyy + 3, pw2, ph2, 14, 14, 0x88000000);
 			c.round(pxx, pyy, pw2, ph2, 14, ov ? 0xFF2A2B31 : 0xFF1E1F25);
@@ -588,12 +600,28 @@ public final class RelayView {
 	// ── pictures ──────────────────────────────────────────────────────────
 
 	/** Draws a picture message (or its loading box); returns its height. */
+	/** Laid-out size of every picture seen (key -> {w, h}, h = -1 failed), so heights never change while scrolling. */
+	private final Map<String, float[]> mediaSizes = new java.util.LinkedHashMap<String, float[]>(64, 0.75f, true) {
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<String, float[]> eldest) {
+			return size() > 2000;
+		}
+	};
+
 	private float media(Ui ui, RelayClient client, Model.Message m, float x, float y, float maxW, float top, float viewH) {
 		Canvas c = ui.c;
 		String key = m.localKey != null ? m.localKey : m.mediaUrl;
-		ChatMedia.Media md = ChatMedia.get(key, client.api());
-		float dw = 240, dh = 150;
-		if (md.ready() && md.width > 0) {
+		float[] known = mediaSizes.get(key);
+		float dw = known != null ? known[0] : 240, dh = known != null ? (known[1] < 0 ? 54 : known[1]) : 150;
+		// Only pictures on (or near) the screen are fetched: asking for every picture of a long chat each frame made
+		// the media cache evict and re-download them in a loop, and the rows jumped between placeholder and real size.
+		boolean near = visible(y - viewH, dh + viewH * 2, top, viewH);
+		ChatMedia.Media md = near ? ChatMedia.get(key, client.api()) : ChatMedia.peek(key);
+		if (md != null && md.failed) {
+			mediaSizes.put(key, new float[] {240, -1});
+			dw = 240;
+			dh = 54;
+		} else if (md != null && md.ready() && md.width > 0) {
 			float k = Math.min(1f, Math.min(maxW / md.width, 300f / md.height));
 			float up = md.width < 160 && md.height < 160 ? 1f : k;
 			dw = md.width * up;
@@ -602,8 +630,9 @@ public final class RelayView {
 				dh *= maxW / dw;
 				dw = maxW;
 			}
+			mediaSizes.put(key, new float[] {dw, dh});
 		}
-		if (!visible(y, dh, top, viewH)) {
+		if (md == null || !visible(y, dh, top, viewH)) {
 			return dh;
 		}
 		if (md.failed) {
@@ -625,7 +654,9 @@ public final class RelayView {
 		if (m.pending) {
 			ui.dots(x + dw / 2, y + dh / 2, Theme.TEXT_STRONG);
 		}
-		if (viewer == null && !gifOpen && ui.interactive && ui.my >= top && ui.my <= top + viewH) {
+		float[] jr = jumpRect; // the "Jump to latest" pill floats over the messages: clicks on it are not for a picture
+		boolean underPill = jr != null && ui.mx >= jr[0] && ui.mx < jr[0] + jr[2] && ui.my >= jr[1] && ui.my < jr[1] + jr[3];
+		if (viewer == null && !gifOpen && !underPill && ui.interactive && ui.my >= top && ui.my <= top + viewH) {
 			if (ui.hover(x, y, dw, dh)) {
 				ui.cursorHand = true;
 			}

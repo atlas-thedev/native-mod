@@ -1,12 +1,27 @@
 # Native mod — todo
 
-Current release: **1.8.4** (Minecraft 1.16 – 26.3).
+Current release: **1.8.5** (Minecraft 1.16 – 26.3).
 
 Everything on the 1.8.1 list is done; see `Shipped in 1.8.1` below for what changed and
 how it was verified. Add new items under `Next`.
 
 ## Next
 - More for the right-shift menu — players keep asking for extra modules and settings there.
+
+## Shipped in 1.8.5
+
+- **Crash on 26.3 (exit 0xC0000409)**: UI textures were never freed. Every chat picture and GIF frame kept a
+  `DynamicTexture` (GPU memory + a native pixel buffer) for the whole session, so the Relay GIF picker could
+  exhaust the driver. `ui/gfx/TextureBudget` now frees textures unused for 20 s (and the oldest over 192),
+  on 26.x (`GuiRenderer26`) and on GL (`GlRenderer`); never one drawn in the last 1.5 s.
+- Huge pictures/GIFs are refused before stb decodes them (`GifHeader`, `stbi_info_from_memory`); the GIF delay
+  array stb allocates is freed.
+- Relay chat: **mouse wheel works from the bottom of a chat** (`Scroll` decided "pinned to bottom" from the
+  animated offset after the wheel had moved, so every step up was undone).
+- Relay chat: **no more jumping up and down**. Only on-screen pictures are fetched (the 80-entry media cache used
+  to evict/re-download in a loop in long chats), picture heights are remembered, failed pictures have one height,
+  and loading older messages keeps the view in place.
+- Clicks on "Jump to latest" no longer open the picture underneath.
 
 ## Shipped in 1.8.4
 
