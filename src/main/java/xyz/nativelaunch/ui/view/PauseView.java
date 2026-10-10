@@ -10,7 +10,9 @@ import xyz.nativelaunch.ui.gfx.Fonts;
 
 /**
  * The pause menu (Esc in a world), laid out like vanilla's (title, Back to Game, two columns, Save and Quit) so it
- * feels like the game, but drawn with Native's own buttons. Relay and Mods take the place of Feedback / Report Bugs.
+ * feels like the game, but drawn with the same buttons as the Native title screen (rounded slab, icon chip, label,
+ * chevron). Relay and Mods take the place of Feedback / Report Bugs. The view is shared by every Minecraft version
+ * the mod supports, so the look is the same everywhere.
  */
 public final class PauseView {
 	private Object lastScreen;
@@ -38,7 +40,8 @@ public final class PauseView {
 
 		String where = mc.server();
 		boolean single = where == null || "Singleplayer".equals(where);
-		float bw = Math.min(400, W - 40), bh = 40, gap = 8, half = (bw - gap) / 2;
+		// same size and spacing as the title screen menu (46 px rows, 8 px gaps)
+		float bw = Math.min(420, W - 40), bh = 46, gap = 8, half = (bw - gap) / 2;
 		float rows = 5;
 		float total = 28 + 24 + rows * bh + (rows - 1) * gap + 14;
 		float x = (W - bw) / 2;
@@ -66,14 +69,14 @@ public final class PauseView {
 				mc.exitWorld();
 			}
 			y += bh + gap;
-			if (button(ui, "pause:leave:no", x, y, bw, bh, "Stay in game", 0, NORMAL)) {
+			if (button(ui, "pause:leave:no", x, y, bw, bh, "Stay in game", Theme.I_PLAY, NORMAL)) {
 				confirmLeave = false;
 			}
 			c.popAlpha();
 			return;
 		}
 
-		if (button(ui, "pause:resume", x, y, bw, bh, mc.tr("menu.returnToGame", "Back to Game"), 0, PRIMARY)) {
+		if (button(ui, "pause:resume", x, y, bw, bh, mc.tr("menu.returnToGame", "Back to Game"), Theme.I_PLAY, PRIMARY)) {
 			UiRuntime.closeHost(screen);
 			c.popAlpha();
 			return;
@@ -92,7 +95,7 @@ public final class PauseView {
 		}
 		int unread = client == null ? 0 : client.unreadTotal();
 		if (unread > 0) {
-			TitleView.badge(c, x + half - 10, y + bh / 2, unread);
+			TitleView.badge(c, x + half - 12, y + bh / 2, unread);
 		}
 		if (button(ui, "pause:menu", x + half + gap, y, half, bh, "Native Mods", Theme.I_SPARKLES, NORMAL)) {
 			UiRuntime.openMenu(screen);
@@ -114,7 +117,7 @@ public final class PauseView {
 		}
 		y += bh + gap;
 		String leave = single ? mc.tr("menu.returnToMenu", "Save and Quit to Title") : mc.tr("menu.disconnect", "Disconnect");
-		if (button(ui, "pause:leave", x, y, bw, bh, leave, 0, NORMAL)) {
+		if (button(ui, "pause:leave", x, y, bw, bh, leave, Theme.I_LOG_OUT, NORMAL)) {
 			confirmLeave = true;
 		}
 		c.popAlpha();
@@ -123,57 +126,61 @@ public final class PauseView {
 	private static final int NORMAL = 0, PRIMARY = 1, DANGER = 2;
 
 	/**
-	 * Native's pause button: a dark glass slab with a soft top light and a hairline edge, small corners like the
-	 * game's own buttons; hover brightens the edge and lifts it a pixel, pressing sinks it.
+	 * The title screen's menu button (see {@code TitleView.menuButton}): 12 px corners, an icon chip on the left,
+	 * the label after it and a chevron on wide buttons. Same colours and the same hover / press motion, so the
+	 * pause menu and the title screen look like one family on every version.
 	 */
 	private static boolean button(Ui ui, String id, float x, float y, float w, float h, String label, int icon, int kind) {
 		Canvas c = ui.c;
 		boolean over = ui.hover(x, y, w, h);
 		boolean click = ui.clicked(id, x, y, w, h);
-		float hv = ui.anim(id + "#h", over, 16f);
-		float pr = ui.anim(id + "#p", ui.isPressing(id), 24f);
-		float r = 6;
-		float yy = y - hv + pr * 1.5f;
-		int bg, top, edge, fg;
+		float hv = ui.anim(id + "#h", over, 12f);
+		float pr = ui.anim(id + "#p", ui.isPressing(id), 22f);
+		// the title menu slides 4 px; buttons here sit side by side, so keep the nudge inside the 8 px gap
+		x += hv * 3 - pr * 1.5f;
+		int bg, border, fg, iconBg, iconFg;
 		if (kind == PRIMARY) {
-			bg = Theme.mix(0xF2EDEDF0, 0xFFFFFFFF, hv);
-			top = 0x00FFFFFF;
-			edge = 0;
+			bg = Theme.mix(0xF2F4F4F5, 0xFFFFFFFF, hv);
+			border = 0;
 			fg = Theme.SOLID_FG;
+			iconBg = 0x14000000;
+			iconFg = Theme.SOLID_FG;
 		} else if (kind == DANGER) {
 			bg = Theme.mix(0xE0281416, 0xF0381A1D, hv);
-			top = 0x14FFFFFF;
-			edge = Theme.mix(0x66EF4444, 0xB3EF4444, hv);
+			border = Theme.mix(0x66EF4444, 0xB3EF4444, hv);
 			fg = 0xFFFECACA;
+			iconBg = 0x26EF4444;
+			iconFg = 0xFFFECACA;
 		} else {
-			bg = Theme.mix(0xD90C0D11, 0xEB16181E, hv);
-			top = Theme.mix(0x0FFFFFFF, 0x1AFFFFFF, hv);
-			edge = Theme.mix(0x24FFFFFF, 0x59FFFFFF, hv);
-			fg = Theme.mix(0xFFE4E4E7, 0xFFFFFFFF, hv);
+			bg = Theme.mix(0xB308090C, 0xE00E1014, hv);
+			border = Theme.mix(Theme.HAIRLINE, Theme.BORDER_HOVER, hv);
+			fg = Theme.mix(Theme.TEXT, Theme.TEXT_STRONG, hv);
+			iconBg = Theme.mix(Theme.SUBTLE, Theme.SUBTLE_HOVER, hv);
+			iconFg = fg;
 		}
 		if (hv > 0.01f) {
-			c.shadow(x, yy + 3, w, h, r, 12, Theme.alpha(0x80000000, hv));
+			c.shadow(x, y + 4, w, h, 12, 16, Theme.alpha(0x80000000, hv));
 		}
-		c.round(x, yy, w, h, r, bg);
-		if ((top >>> 24) != 0) {
-			c.pushClip(x, yy, w, h / 2);
-			c.round(x, yy, w, h, r, top);
-			c.popClip();
+		c.round(x, y, w, h, 12, bg);
+		if (border != 0) {
+			c.outline(x, y, w, h, 12, 1, border);
 		}
-		if (edge != 0) {
-			c.outline(x, yy, w, h, r, 1, edge);
-		}
-		float size = 13.5f;
-		float tw = c.textWidth(Fonts.SEMIBOLD, size, label);
-		float iw = icon != 0 ? 22 : 0;
-		float maxText = w - 16 - iw;
-		String text = tw > maxText ? c.ellipsize(Fonts.SEMIBOLD, size, label, maxText) : label;
-		tw = Math.min(tw, maxText);
-		float tx = x + (w - tw - iw) / 2;
+		float is = h - 14;
 		if (icon != 0) {
-			c.icon(icon, 15, tx + 7, yy + h / 2, Theme.alpha(fg, 0.8f + 0.2f * hv));
+			c.round(x + 7, y + 7, is, is, 8, iconBg);
+			c.icon(icon, 16, x + 7 + is / 2, y + h / 2, iconFg);
 		}
-		c.text(Fonts.SEMIBOLD, size, text, tx + iw, yy + (h - c.lineHeight(Fonts.SEMIBOLD, size)) / 2, fg);
+		boolean chevron = w >= 240;
+		float tx = icon != 0 ? x + 7 + is + 12 : x + 16;
+		float maxText = x + w - tx - (chevron ? 34 : 12);
+		String text = c.ellipsize(Fonts.SEMIBOLD, 14, label, maxText);
+		c.text(Fonts.SEMIBOLD, 14, text, tx, y + (h - c.lineHeight(Fonts.SEMIBOLD, 14)) / 2, fg);
+		if (chevron) {
+			c.icon(Theme.I_CHEVRON_RIGHT, 15, x + w - 20 + hv * 3, y + h / 2, Theme.alpha(fg, 0.35f + 0.65f * hv));
+		}
+		if (over) {
+			ui.cursorHand = true;
+		}
 		return click;
 	}
 }
