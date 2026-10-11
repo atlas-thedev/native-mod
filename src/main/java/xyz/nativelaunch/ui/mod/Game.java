@@ -32,7 +32,7 @@ public final class Game {
 	// ── player state for the status modules (filled by McBridge.vitals while a module needs it) ──
 
 	/** Bits of {@link Module#needs()}: which parts of the player to read this frame. */
-	public static final int NEED_VITALS = 1, NEED_EFFECTS = 2, NEED_ARMOR = 4, NEED_INVENTORY = 8, NEED_TARGET = 16;
+	public static final int NEED_VITALS = 1, NEED_EFFECTS = 2, NEED_ARMOR = 4, NEED_INVENTORY = 8, NEED_TARGET = 16, NEED_TAGS = 32;
 	public int needs;
 	/** The HUD is being drawn this frame (no screen, F1 / F3 off). */
 	public boolean hudAllowed;
@@ -53,6 +53,42 @@ public final class Game {
 	public boolean hasTarget;
 	public String targetName = "";
 	public float targetHealth, targetMax;
+
+	// ── hearts over mobs and players (filled by McBridge.vitals while the Health Indicator is on) ──
+	/** What the Health Indicator wants: kinds (1 players, 2 hostile mobs, 4 other mobs, 8 yourself), range in blocks, line of sight. */
+	public int tagKinds;
+	public float tagRange = 24;
+	public boolean tagSight;
+	public final Projector projector = new Projector();
+	public final Tag[] tags = new Tag[96];
+	public int tagCount;
+
+	/** A living thing on screen: where its head is, and its health. */
+	public static final class Tag {
+		public float nx, ny, depth, perBlock, health, max;
+		public int kind;
+	}
+
+	/** Adds one entry (far ones first matters for drawing, so the list is kept sorted by depth, farthest first). */
+	public void addTag(float nx, float ny, float depth, float perBlock, float health, float max, int kind) {
+		if (tagCount >= tags.length) {
+			return;
+		}
+		Tag t = tags[tagCount];
+		int i = tagCount++;
+		while (i > 0 && tags[i - 1].depth < depth) {
+			tags[i] = tags[i - 1];
+			i--;
+		}
+		tags[i] = t;
+		t.nx = nx;
+		t.ny = ny;
+		t.depth = depth;
+		t.perBlock = perBlock;
+		t.health = health;
+		t.max = max;
+		t.kind = kind;
+	}
 
 	/** An active potion effect. {@code id} is the bare vanilla id ("speed"), or "namespace:name" for modded ones. */
 	public static final class Effect {
@@ -130,6 +166,9 @@ public final class Game {
 		}
 		for (int i = 0; i < inv.length; i++) {
 			inv[i] = new Slot();
+		}
+		for (int i = 0; i < tags.length; i++) {
+			tags[i] = new Tag();
 		}
 	}
 

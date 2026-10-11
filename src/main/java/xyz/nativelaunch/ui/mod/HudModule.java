@@ -95,7 +95,8 @@ public abstract class HudModule extends Module {
 	/** The background opacity only matters behind a card. */
 	@Override
 	protected boolean hidden(Setting s) {
-		return s == opacity && style.value != STYLE_CARD;
+		// the size is set by dragging a corner (or scrolling) in the Right Shift hub, so it is not listed as a setting
+		return s == scale || s == opacity && style.value != STYLE_CARD;
 	}
 
 	/** Screen position (logical px) for an anchor fraction, a screen side and the module size. */

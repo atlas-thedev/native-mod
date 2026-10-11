@@ -58,16 +58,17 @@ CATALOG = [
 ]
 LOCKER = {'equipped': 'cape-lilac', 'wearing': {'hats': 'tophat'}}
 ME['skin'] = SKIN_H
+FRIENDS[0]['skin'] = SKIN_H; FRIENDS[2]['skin'] = HAT_T
 
 def msg(sender, text, ago=0, **kw):
     n = next(ids); return dict({'id': f'm{n}', 'senderId': sender, 'senderName': {'me': 'TestAlice', 'f1': 'Dinal', 'f2': 'Kasun', 'f3': 'Nethmi'}.get(sender, sender), 'content': text, 'createdAt': NOW() - ago}, **kw)
 MURL = 'http://127.0.0.1:8099/v1/social/media/'
 DM = {'f1': [msg('f1', 'machan server ekata enawada?', 86400000 * 2), msg('me', 'ow, poddak inna', 86400000 * 2 - 60000),
-             msg('f1', 'ela! mama 1.21.4 eke', 3600000), msg('f1', 'Native chat eka game eka athule wada karanawa 🔥', 3500000),
+             msg('f1', 'ela! mama 1.21.4 eke', 3600000, isRead=True), msg('f1', 'Native chat eka game eka athule wada karanawa 🔥', 3500000),
              msg('me', 'supiri, UI eka launcher eka wage ne', 120000), msg('f1', 'ow, FPS drop ekak naha', 60000),
              msg('f1', '', 50000, mediaUrl=MURL + 'pic1.png', mediaName='pic1.png', mediaKind='image', isMedia=True),
              msg('me', '', 40000, mediaUrl=MURL + 'g1.gif', mediaName='GIF.gif', mediaKind='image', isMedia=True)]}
-GROUPS = [{'id': 'g1', 'name': 'SMP Squad', 'memberCount': 4, 'unreadCount': 3, 'members': [{'id': 'me', 'name': 'TestAlice'}, {'id': 'f1', 'name': 'Dinal'}, {'id': 'f2', 'name': 'Kasun'}, {'id': 'f3', 'name': 'Nethmi'}]}]
+GROUPS = [{'id': 'g1', 'name': 'SMP Squad', 'role': 'owner', 'memberCount': 4, 'unreadCount': 3, 'members': [{'id': 'me', 'name': 'TestAlice'}, {'id': 'f1', 'name': 'Dinal'}, {'id': 'f2', 'name': 'Kasun'}, {'id': 'f3', 'name': 'Nethmi'}]}]
 GM = {'g1': [msg('f2', 'tonight 9pm build session', 7200000), msg('f3', "I'll bring the redstone", 7100000), msg('f1', 'ela 👍', 7000000)]}
 streams = []
 def push(event, data):
@@ -135,9 +136,34 @@ class H(http.server.BaseHTTPRequestHandler):
             return self.j({'ok': True, 'url': MURL + name, 'name': b.get('name'), 'size': len(raw), 'kind': 'image'})
         if p.startswith('/v1/social/relay/') and p.endswith('/messages'):
             b = self.body(); m = msg('me', b.get('content', ''), mediaUrl=b.get('mediaUrl'), mediaName=b.get('mediaName'), mediaKind=b.get('mediaKind'), isMedia=b.get('isMedia'))
-            (GM if '/groups/' in p else DM).setdefault(p.split('/')[5], []).append(m)
+            store = (GM if '/groups/' in p else DM).setdefault(p.split('/')[5], [])
+            if b.get('replyTo'):
+                o = next((x for x in store if x['id'] == b['replyTo']), None)
+                if o: m['reply'] = {'id': o['id'], 'senderId': o['senderId'], 'senderName': o['senderName'], 'content': o['content'], 'mediaName': o.get('mediaName'), 'mediaUrl': o.get('mediaUrl'), 'deleted': bool(o.get('isDeleted'))}
+            store.append(m)
             print('SENT', p, b.get('content'), flush=True)
             return self.j({'message': m})
+        parts = p.strip('/').split('/')
+        if len(parts) == 6 and parts[:3] == ['v1', 'social', 'relay'] and parts[3] in ('messages', 'dm-messages') and parts[5] in ('react', 'edit', 'delete'):
+            b = self.body(); mid = parts[4]; act = parts[5]
+            for store in list(GM.values()) + list(DM.values()):
+                for m in store:
+                    if m['id'] != mid: continue
+                    gid = next((k for k, v in GM.items() if v is store), None)
+                    if act == 'react':
+                        rs = m.setdefault('reactions', []); mine = [r for r in rs if r['userId'] == 'me']
+                        if mine and mine[0]['reaction'] == b.get('reaction'): rs.remove(mine[0])
+                        else:
+                            for r in mine: rs.remove(r)
+                            rs.append({'userId': 'me', 'reaction': b.get('reaction')})
+                        push('group:message:reaction', {'groupId': gid, 'messageId': mid, 'reactions': rs})
+                        print('REACT', mid, b, flush=True); return self.j({'ok': True, 'reactions': rs})
+                    if act == 'edit': m['content'] = b.get('content'); m['editedAt'] = NOW()
+                    else: m['isDeleted'] = True; m['content'] = ''; m.pop('mediaUrl', None)
+                    print(act.upper(), mid, b, flush=True)
+                    push('group:message:updated' if gid else 'message:updated', {'message': m})
+                    return self.j({'ok': True, 'message': m})
+            return self.j({'error': 'not found'}, 404)
         if p == '/v1/store/equip':
             b = self.body(); it = b.get('itemId')
             if it is None and b.get('slot'): LOCKER['wearing'].pop(b['slot'], None)

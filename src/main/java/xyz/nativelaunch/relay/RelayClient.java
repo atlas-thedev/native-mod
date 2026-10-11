@@ -226,6 +226,11 @@ public final class RelayClient {
 	}
 
 	public void send(final String key, String text) {
+		send(key, text, null);
+	}
+
+	/** Sends text, as an answer to {@code replyTo} when given. */
+	public void send(final String key, String text, final Model.Message replyTo) {
 		final String content = text == null ? "" : text.trim();
 		if (content.isEmpty() || ticket == null) {
 			return;
@@ -233,6 +238,9 @@ public final class RelayClient {
 		final Model.Conversation c = conversation(key);
 		final String tempId = "local-" + System.nanoTime();
 		final Model.Message pending = new Model.Message(tempId, meId, meName, content, System.currentTimeMillis(), true, false, false, false);
+		if (replyTo != null && replyTo.id != null && !replyTo.id.startsWith("local-")) {
+			pending.reply = quote(replyTo);
+		}
 		synchronized (c) {
 			List<Model.Message> next = new ArrayList<Model.Message>(c.messages);
 			next.add(pending);
@@ -242,6 +250,9 @@ public final class RelayClient {
 			try {
 				JsonObject body = new JsonObject();
 				body.addProperty("content", content);
+				if (pending.reply != null) {
+					body.addProperty("replyTo", pending.reply.id);
+				}
 				JsonObject res = postJson(messagesPath(c), body);
 				Model.Message sent = parseMessage(res.getAsJsonObject("message"), c);
 				synchronized (c) {
@@ -261,13 +272,7 @@ public final class RelayClient {
 					c.messages = next;
 				}
 			} catch (Exception e) {
-				synchronized (c) {
-					List<Model.Message> next = new ArrayList<Model.Message>();
-					for (Model.Message m : c.messages) {
-						next.add(m.id.equals(tempId) ? new Model.Message(tempId, m.senderId, m.senderName, m.content, m.createdAt, false, true, false, false) : m);
-					}
-					c.messages = next;
-				}
+				fail(c, tempId);
 			}
 		});
 	}
@@ -353,10 +358,128 @@ public final class RelayClient {
 		synchronized (c) {
 			List<Model.Message> next = new ArrayList<Model.Message>();
 			for (Model.Message m : c.messages) {
-				next.add(m.id.equals(tempId) ? new Model.Message(tempId, m.senderId, m.senderName, m.content, m.createdAt, false, true, false, false, m.mediaUrl, m.mediaName, m.localKey) : m);
+				next.add(m.id.equals(tempId) ? Model.withState(m, false, true) : m);
 			}
 			c.messages = next;
 		}
+	}
+
+	/** The quote a reply to {@code m} shows. */
+	public static Model.Reply quote(Model.Message m) {
+		return new Model.Reply(m.id, m.senderName, m.deleted ? "" : m.content, m.mediaUrl != null || m.localKey != null, m.deleted);
+	}
+
+	/** Replaces one message in a chat (by id) with {@code with(old)}; no-op when it isn't loaded. */
+	private void change(Model.Conversation c, String id, java.util.function.Function<Model.Message, Model.Message> with) {
+		synchronized (c) {
+			List<Model.Message> next = null;
+			for (int i = 0; i < c.messages.size(); i++) {
+				if (id.equals(c.messages.get(i).id)) {
+					if (next == null) {
+						next = new ArrayList<Model.Message>(c.messages);
+					}
+					next.set(i, with.apply(c.messages.get(i)));
+				}
+			}
+			if (next != null) {
+				c.messages = next;
+			}
+		}
+	}
+
+	private String actionPath(Model.Conversation c, String id, String action) {
+		return (c.isGroup() ? "/v1/social/relay/messages/" : "/v1/social/relay/dm-messages/") + enc(id) + "/" + action;
+	}
+
+	/** Toggles your reaction on a group message (the server flips it); shows at once, then takes the server's list. */
+	public void react(final String key, final String messageId, final String emoji) {
+		final Model.Conversation c = conversation(key);
+		if (ticket == null || !c.isGroup() || messageId == null || messageId.startsWith("local-")) {
+			return;
+		}
+		change(c, messageId, m -> {
+			List<String[]> next = new ArrayList<String[]>();
+			boolean had = false;
+			for (String[] r : m.reactions) {
+				if (r[0] != null && r[0].equals(meId) && r[1].equals(emoji)) {
+					had = true;
+				} else {
+					next.add(r);
+				}
+			}
+			if (!had) {
+				next.add(new String[] {meId, emoji});
+			}
+			Model.Message n = Model.withState(m, m.pending, m.failed);
+			n.reactions = next;
+			return n;
+		});
+		pool.execute(() -> {
+			try {
+				JsonObject body = new JsonObject();
+				body.addProperty("reaction", emoji);
+				JsonObject res = postJson(actionPath(c, messageId, "react"), body);
+				if (res.has("reactions") && res.get("reactions").isJsonArray()) {
+					final List<String[]> list = parseReactions(res.getAsJsonArray("reactions"));
+					change(c, messageId, m -> {
+						Model.Message n = Model.withState(m, m.pending, m.failed);
+						n.reactions = list;
+						return n;
+					});
+				}
+			} catch (Exception e) {
+				Log.debug("Relay react failed: {}", e.toString());
+			}
+		});
+	}
+
+	/** Changes the text of one of your messages. */
+	public void edit(final String key, final String messageId, String text) {
+		final String content = text == null ? "" : text.trim();
+		final Model.Conversation c = conversation(key);
+		if (ticket == null || content.isEmpty() || messageId == null || messageId.startsWith("local-")) {
+			return;
+		}
+		pool.execute(() -> {
+			try {
+				JsonObject body = new JsonObject();
+				body.addProperty("content", content);
+				JsonObject res = postJson(actionPath(c, messageId, "edit"), body);
+				final Model.Message updated = parseMessage(res.getAsJsonObject("message"), c);
+				change(c, messageId, m -> updated);
+			} catch (Exception e) {
+				c.error = "Could not edit that message.";
+			}
+		});
+	}
+
+	/** Deletes a message (yours, or anyone's when you are a group admin). It stays as "This message was deleted". */
+	public void delete(final String key, final String messageId) {
+		final Model.Conversation c = conversation(key);
+		if (ticket == null || messageId == null) {
+			return;
+		}
+		if (messageId.startsWith("local-")) { // never sent: just drop it
+			synchronized (c) {
+				List<Model.Message> next = new ArrayList<Model.Message>();
+				for (Model.Message m : c.messages) {
+					if (!m.id.equals(messageId)) {
+						next.add(m);
+					}
+				}
+				c.messages = next;
+			}
+			return;
+		}
+		pool.execute(() -> {
+			try {
+				JsonObject res = postJson(actionPath(c, messageId, "delete"), new JsonObject());
+				final Model.Message updated = parseMessage(res.getAsJsonObject("message"), c);
+				change(c, messageId, m -> updated);
+			} catch (Exception e) {
+				c.error = "Could not delete that message.";
+			}
+		});
 	}
 
 	/** Tells the other side we are typing (groups only: DMs have no ticket route for it), at most every 3 s. */
@@ -521,8 +644,12 @@ public final class RelayClient {
 				members.add(new String[] {str(mo, "id"), name == null ? "Member" : name});
 			}
 		}
-		return new Model.Group(str(g, "id"), str(g, "name"), last == null ? null : str(last, "content"), last == null ? null : str(last, "senderName"),
+		Model.Group group = new Model.Group(str(g, "id"), str(g, "name"), last == null ? null : str(last, "content"), last == null ? null : str(last, "senderName"),
 				last == null ? 0 : lng(last, "createdAt"), num(g, "unreadCount"), num(g, "memberCount"), members);
+		if (str(g, "role") != null) {
+			group.role = str(g, "role");
+		}
+		return group;
 	}
 
 	private List<Model.Message> parseMessages(JsonArray arr, Model.Conversation c) {
@@ -546,8 +673,31 @@ public final class RelayClient {
 		if ((content == null || content.isEmpty()) && !deleted) {
 			content = mediaName != null ? "[" + mediaName + "]" : (mediaUrl != null || bool(m, "isMedia") ? "[attachment]" : "");
 		}
-		return new Model.Message(str(m, "id"), sender, nameOf(sender, str(m, "senderName")), deleted ? "Message deleted" : content,
+		Model.Message out = new Model.Message(str(m, "id"), sender, nameOf(sender, str(m, "senderName")), deleted ? "Message deleted" : content,
 				lng(m, "createdAt"), false, false, bool(m, "isSystem"), deleted, image ? mediaUrl : null, mediaName, null);
+		out.edited = !deleted && lng(m, "editedAt") > 0;
+		out.read = bool(m, "isRead");
+		if (!deleted && m.has("reactions") && m.get("reactions").isJsonArray()) {
+			out.reactions = parseReactions(m.getAsJsonArray("reactions"));
+		}
+		if (m.has("reply") && m.get("reply").isJsonObject()) {
+			JsonObject r = m.getAsJsonObject("reply");
+			boolean gone = bool(r, "deleted");
+			String rc = gone ? "" : str(r, "content");
+			boolean media = !gone && (str(r, "mediaName") != null || str(r, "mediaUrl") != null);
+			out.reply = new Model.Reply(str(r, "id"), nameOf(str(r, "senderId"), str(r, "senderName")), rc, media, gone);
+		}
+		return out;
+	}
+
+	private static List<String[]> parseReactions(JsonArray arr) {
+		List<String[]> out = new ArrayList<String[]>();
+		for (JsonElement e : arr) {
+			if (e.isJsonObject() && str(e.getAsJsonObject(), "reaction") != null) {
+				out.add(new String[] {str(e.getAsJsonObject(), "userId"), str(e.getAsJsonObject(), "reaction")});
+			}
+		}
+		return out;
 	}
 
 	// ── live stream ───────────────────────────────────────────────────────
@@ -675,6 +825,35 @@ public final class RelayClient {
 						}
 						if (next != null) {
 							c.messages = next;
+						}
+					}
+				}
+				break;
+			}
+			case "group:message:reaction": {
+				final List<String[]> list = p.has("reactions") && p.get("reactions").isJsonArray() ? parseReactions(p.getAsJsonArray("reactions")) : new ArrayList<String[]>();
+				change(conversation("g:" + str(p, "groupId")), str(p, "messageId"), m -> {
+					Model.Message n = Model.withState(m, m.pending, m.failed);
+					n.reactions = list;
+					return n;
+				});
+				break;
+			}
+			case "message:read": {
+				final java.util.Set<String> ids = new java.util.HashSet<String>();
+				if (p.has("messageIds") && p.get("messageIds").isJsonArray()) {
+					for (JsonElement e : p.getAsJsonArray("messageIds")) {
+						ids.add(e.getAsString());
+					}
+				}
+				for (Model.Conversation c : conversations.values()) {
+					if (!c.isGroup()) {
+						for (String id : ids) {
+							change(c, id, m -> {
+								Model.Message n = Model.withState(m, m.pending, m.failed);
+								n.read = true;
+								return n;
+							});
 						}
 					}
 				}

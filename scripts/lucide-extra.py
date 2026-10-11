@@ -12,7 +12,7 @@ EXTRA = ['gauge', 'mouse-pointer-click', 'compass', 'map-pin', 'clock-3', 'memor
          'eye-off', 'mouse', 'timer', 'wifi', 'glasses', 'backpack', 'hand', 'hard-hat', 'layout-grid', 'magnet', 'type',
          'person-standing', 'activity', 'crosshair', 'feather', 'arrows-up-from-line', 'grid-3-x-3', 'brush',
          'heart', 'star', 'list', 'store', 'ban', 'flask-conical', 'shield', 'heart-pulse', 'minus',
-         'circle-help', 'drumstick', 'sword']
+         'circle-help', 'drumstick', 'sword', 'pencil', 'trash-2', 'check-check', 'corner-up-left']
 B64 = 'src/main/uiassets/lucide.ttf.b64'
 
 full = TTFont(sys.argv[1])

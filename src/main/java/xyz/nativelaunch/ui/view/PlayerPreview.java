@@ -2,6 +2,7 @@ package xyz.nativelaunch.ui.view;
 
 import xyz.nativelaunch.core.NativeState;
 import xyz.nativelaunch.core.SkinEntry;
+import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.cosmetic.CosmeticLibrary;
 import xyz.nativelaunch.cosmetic.CosmeticModel;
 import xyz.nativelaunch.cosmetic.CosmeticRef;
@@ -74,22 +75,26 @@ public final class PlayerPreview implements CosmeticSink {
 		// skin
 		String name = myName();
 		SkinEntry e = name == null ? null : NativeState.get().directory().entry(name);
-		Image skin = null;
 		if (e != null && e.skinHash != null) {
-			skin = Wardrobe.hash(textureBase(), e.skinHash);
 			slim = e.slim;
-		} else {
-			RelayClient r = RelayClient.get();
-			String ref = r == null ? null : r.meSkin;
-			if (ref != null && ref.startsWith("mj:")) {
-				final String uuid = ref.substring(3);
-				skin = Wardrobe.image(ref, () -> xyz.nativelaunch.core.Http.getBytes(Avatars.mojangSkinUrl(uuid), 2 * 1024 * 1024), true, 0);
-			} else if (ref != null && ref.matches("[a-f0-9]{64}")) {
-				skin = Wardrobe.hash(textureBase(), ref);
-			}
 		}
-		if (skin == Wardrobe.NONE) {
-			skin = null;
+		boolean[] pending = new boolean[1];
+		Image skin = skinOf(name, e, pending);
+		if (pending[0]) {
+			// the skin is still on its way: a skeleton of the model instead of a grey body that turns into the skin
+			Canvas k = ui.c;
+			k.skeleton(cx - 4 * scale, feet - 32 * scale, 8 * scale, 8 * scale, 2 * scale);
+			k.skeleton(cx - 4 * scale, feet - 24 * scale, 8 * scale, 12 * scale, 2 * scale);
+			k.skeleton(cx - 8 * scale, feet - 24 * scale, 4 * scale, 12 * scale, 2 * scale);
+			k.skeleton(cx + 4 * scale, feet - 24 * scale, 4 * scale, 12 * scale, 2 * scale);
+			k.skeleton(cx - 4 * scale, feet - 12 * scale, 4 * scale, 12 * scale, 2 * scale);
+			k.skeleton(cx, feet - 12 * scale, 4 * scale, 12 * scale, 2 * scale);
+			return;
+		}
+
+		if (skin == null) {
+			skin = xyz.nativelaunch.ui.mod.Vanilla.steve(); // no skin at all: the default one, not a grey body
+			slim = false;
 		}
 
 		// cape: the store cape worn (or the one being hovered), else the directory one
@@ -222,6 +227,53 @@ public final class PlayerPreview implements CosmeticSink {
 			l = l.as(ref);
 			worn.add(l);
 			itemOf.put(l, it);
+		}
+	}
+
+	/**
+	 * The player's own skin: the Native one from the directory, else the one the relay reports, else their Mojang skin. Null
+	 * while it is loading ({@code pending[0]} true) or when there is none.
+	 */
+	private static Image skinOf(String name, SkinEntry e, boolean[] pending) {
+		Image skin = null;
+		String ref = null;
+		if (e != null && e.skinHash != null) {
+			ref = e.skinHash;
+		} else {
+			RelayClient r = RelayClient.get();
+			ref = r == null ? null : r.meSkin;
+			if (ref == null && r != null && r.state == RelayClient.State.CONNECTING) {
+				pending[0] = true; // the relay is about to say which skin is worn: wait for it instead of showing the wrong one first
+				return null;
+			}
+			if (ref == null) {
+				ref = Avatars.self(name); // the launcher already knows the account
+			}
+		}
+		if (ref != null && ref.startsWith("mj:")) {
+			final String uuid = ref.substring(3);
+			skin = Wardrobe.image(ref, () -> {
+				String url = Avatars.mojangSkinUrl(uuid);
+				return url == null ? null : xyz.nativelaunch.core.TextureCache.getOrDownloadUrl(url, 2 * 1024 * 1024);
+			}, true, 0);
+		} else if (ref != null && ref.matches("[a-f0-9]{64}")) {
+			skin = Wardrobe.hash(textureBase(), ref);
+		}
+		if (skin == Wardrobe.NONE) {
+			skin = null;
+		} else {
+			pending[0] = skin == null && ref != null;
+		}
+		return skin;
+	}
+
+	/** Starts loading the player's skin ahead of time, so the wardrobe shows it the moment it opens. */
+	public static void warm() {
+		try {
+			String name = myName();
+			skinOf(name, name == null ? null : NativeState.get().directory().entry(name), new boolean[1]);
+		} catch (Throwable ignored) {
+			// nothing to warm yet
 		}
 	}
 

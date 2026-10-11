@@ -670,7 +670,75 @@ public final class MojangMc implements McBridge {
 				g.hasTarget = true;
 			}
 		}
+		g.tagCount = 0;
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_TAGS) != 0) {
+			try {
+				tags(g);
+			} catch (Throwable t) {
+				g.tagCount = 0;
+			}
+		}
 		return true;
+	}
+
+	/** Finds the players and mobs near the camera and projects the spot above their heads onto the screen. */
+	private void tags(xyz.nativelaunch.ui.mod.Game g) {
+		Minecraft mc = client();
+		if (mc.level == null || mc.getWindow() == null) {
+			return;
+		}
+		net.minecraft.client.Camera cam = mc.gameRenderer.mainCamera();
+		net.minecraft.world.phys.Vec3 cp = cam.position();
+		float tick = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+		float fov;
+		try {
+			fov = cam.getFov();
+		} catch (Throwable t) {
+			fov = 70f;
+		}
+		if (!(fov > 1f)) {
+			fov = mc.options.fov().get();
+		}
+		Window w = mc.getWindow();
+		xyz.nativelaunch.ui.mod.Projector pr = g.projector;
+		pr.set(cp.x, cp.y, cp.z, cam.yRot(), cam.xRot(), fov, w.getWidth() / (float) Math.max(1, w.getHeight()));
+		net.minecraft.world.entity.Entity self = mc.getCameraEntity();
+		boolean third = cam.isDetached();
+		float r2 = g.tagRange * g.tagRange;
+		for (net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) {
+			if (!(e instanceof net.minecraft.world.entity.LivingEntity) || e instanceof net.minecraft.world.entity.decoration.ArmorStand) {
+				continue;
+			}
+			int kind;
+			if (e == self || e == mc.player) {
+				if (!third || (g.tagKinds & 8) == 0) {
+					continue;
+				}
+				kind = 8;
+			} else {
+				kind = e instanceof net.minecraft.world.entity.player.Player ? 1 : e instanceof net.minecraft.world.entity.monster.Enemy ? 2 : 4;
+				if ((g.tagKinds & kind) == 0) {
+					continue;
+				}
+			}
+			net.minecraft.world.entity.LivingEntity l = (net.minecraft.world.entity.LivingEntity) e;
+			float hp = l.getHealth();
+			if (hp <= 0f || e.isInvisible() || e.isSpectator()) {
+				continue;
+			}
+			net.minecraft.world.phys.Vec3 p = e.getPosition(tick);
+			double dx = p.x - cp.x, dy = p.y - cp.y, dz = p.z - cp.z;
+			if (dx * dx + dy * dy + dz * dz > r2) {
+				continue;
+			}
+			if (g.tagSight && e != self && self instanceof net.minecraft.world.entity.LivingEntity && !((net.minecraft.world.entity.LivingEntity) self).hasLineOfSight(e)) {
+				continue;
+			}
+			if (!pr.project(p.x, p.y + e.getBbHeight() + (kind == 4 || kind == 2 ? 0.34 : 0.8), p.z)) {
+				continue;
+			}
+			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, l.getMaxHealth()), kind);
+		}
 	}
 
 	@Override

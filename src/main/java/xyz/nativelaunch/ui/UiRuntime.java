@@ -213,6 +213,10 @@ public final class UiRuntime {
 		game.hudAllowed = kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !mc.hudHidden() && !mc.debugOpen();
 		modulesFrame();
 		Modules.tick();
+		if (System.currentTimeMillis() - lastWarm > 3000) {
+			lastWarm = System.currentTimeMillis();
+			xyz.nativelaunch.ui.view.PlayerPreview.warm(); // the wardrobe shows the player's skin the moment it opens
+		}
 		watchLogin();
 		if (game.hudAllowed) {
 			hud = HudOverlay.any(game);
@@ -327,6 +331,8 @@ public final class UiRuntime {
 			// prefetching is best-effort
 		}
 	}
+
+	private static long lastWarm;
 
 	/** Runs every enabled module; one that throws is switched off instead of taking the UI down. */
 	private static void modulesFrame() {

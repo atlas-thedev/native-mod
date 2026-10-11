@@ -172,9 +172,24 @@ public final class Widgets {
 		Canvas c = ui.c;
 		float h = ROW;
 		float fs = 12.5f;
-		c.text(Fonts.MEDIUM, fs, s.label, x, y + (h - c.lineHeight(Fonts.MEDIUM, fs)) / 2, Theme.TEXT);
+		float labelW = c.textWidth(Fonts.MEDIUM, fs, s.label);
 		boolean changed = false;
 		float controlX = x + w; // left edge of the control, so the reset button can sit just before it
+		float labelMax = w;
+		if (s instanceof Setting.Bool) {
+			labelMax = w - 34 - 40;
+		} else if (s instanceof Setting.Num) {
+			labelMax = w - 70 - 46 - 36; // a slider never gets squeezed below 70 and never runs into the label
+		} else if (s instanceof Setting.Choice) {
+			labelMax = w * 0.4f;
+		} else if (s instanceof Setting.Color) {
+			labelMax = w - swatchesWidth() - 40;
+		} else if (s instanceof Setting.Key) {
+			labelMax = w - 110 - 40;
+		}
+		String label = labelW > labelMax ? c.ellipsize(Fonts.MEDIUM, fs, s.label, Math.max(40, labelMax)) : s.label;
+		labelW = c.textWidth(Fonts.MEDIUM, fs, label);
+		c.text(Fonts.MEDIUM, fs, label, x, y + (h - c.lineHeight(Fonts.MEDIUM, fs)) / 2, Theme.TEXT);
 		if (s instanceof Setting.Bool) {
 			controlX = x + w - 34;
 			Setting.Bool b = (Setting.Bool) s;
@@ -186,7 +201,7 @@ public final class Widgets {
 			Setting.Num n = (Setting.Num) s;
 			String v = n.text();
 			float vw = 46;
-			float sw = Math.min(170, w * 0.45f);
+			float sw = Math.max(70, Math.min(170, w - labelW - vw - 36));
 			c.text(Fonts.SEMIBOLD, 11.5f, v, x + w - c.textWidth(Fonts.SEMIBOLD, 11.5f, v), y + (h - c.lineHeight(Fonts.SEMIBOLD, 11.5f)) / 2,
 					Theme.TEXT_SECONDARY);
 			changed = slider(ui, id, x + w - vw - sw, y + (h - 18) / 2, sw, n);
@@ -197,7 +212,7 @@ public final class Widgets {
 			for (String o : ch.options) {
 				sw += c.textWidth(Fonts.SEMIBOLD, 11.5f, o) + 24;
 			}
-			sw = Math.min(Math.max(sw, 90), Math.max(w * 0.68f, w - c.textWidth(Fonts.MEDIUM, fs, s.label) - 16));
+			sw = Math.min(Math.max(sw, 90), Math.max(w * 0.6f, w - labelW - 16));
 			int v = segmented(ui, id, x + w - sw, y + (h - 26) / 2, sw, 26, ch.options, ch.value);
 			controlX = x + w - sw;
 			if (v != ch.value) {

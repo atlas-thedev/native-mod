@@ -92,7 +92,7 @@ final class OverlayModules {
 		@Override
 		protected boolean hidden(Setting s) {
 			if (vanilla()) {
-				return s != look && s != scale;
+				return s != look;
 			}
 			return s == opacity ? style.value == STYLE_TEXT : super.hidden(s);
 		}
@@ -342,7 +342,7 @@ final class OverlayModules {
 		@Override
 		protected boolean hidden(Setting s) {
 			if (vanilla()) {
-				return s != look && s != scale;
+				return s != look;
 			}
 			return super.hidden(s);
 		}

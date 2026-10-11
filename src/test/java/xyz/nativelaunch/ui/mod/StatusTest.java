@@ -87,7 +87,7 @@ class StatusTest {
 				assertTrue(m.allSettings().contains(s), m.id + " lists a setting it does not own: " + s.id);
 			}
 		}
-		for (String id : new String[] {"effects", "armor", "health", "target", "inventory", "crosshair"}) {
+		for (String id : new String[] {"effects", "armor", "inventory", "healthindicator", "crosshair"}) {
 			assertTrue(ids.contains(id), "missing module " + id);
 		}
 	}

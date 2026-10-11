@@ -670,7 +670,187 @@ public final class IntermediaryMc implements McBridge {
 				g.hasTarget = true;
 			}
 		}
+		g.tagCount = 0;
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_TAGS) != 0) {
+			try {
+				tags(g);
+			} catch (Throwable t) {
+				g.tagCount = 0;
+			}
+		}
 		return true;
+	}
+
+	private Method fovMethod;
+	private boolean fovLooked;
+
+	/** The partial tick the world was drawn with this frame. */
+	private float partialTick() {
+		Object d = call(client(), "method_1488"); // MinecraftClient.getTickDelta (1.16 - 1.21.1)
+		if (d instanceof Number) {
+			return ((Number) d).floatValue();
+		}
+		Object counter = call(client(), "method_61966"); // getRenderTickCounter (1.21.2+)
+		if (counter != null) {
+			Method m = method(counter.getClass(), "method_60637", boolean.class); // getTickDelta / getTickProgress(false)
+			try {
+				Object v = m == null ? null : m.invoke(counter, Boolean.FALSE);
+				if (v instanceof Number) {
+					return ((Number) v).floatValue();
+				}
+			} catch (Throwable ignored) {
+				// falls through
+			}
+		}
+		return 1f;
+	}
+
+	/** The vertical field of view the world is drawn with (dynamic sprint / potion changes included), in degrees. */
+	private float fov(Object camera, float tick) {
+		try {
+			Object renderer = get(client(), "field_1773");
+			if (!fovLooked) {
+				fovLooked = true;
+				fovMethod = named(renderer.getClass(), "method_3196", 3);
+			}
+			if (fovMethod != null) {
+				Object v = fovMethod.invoke(renderer, camera, tick, Boolean.TRUE);
+				if (v instanceof Number && ((Number) v).floatValue() > 1f) {
+					return ((Number) v).floatValue();
+				}
+			}
+		} catch (Throwable ignored) {
+			// falls back to the setting
+		}
+		Object opt = get(client().field_1690, "field_1826"); // GameOptions.fov (a double before 1.19, an option after)
+		Object v = opt instanceof Number ? opt : call(opt, "method_41753");
+		return v instanceof Number ? ((Number) v).floatValue() : 70f;
+	}
+
+	/** Everything the Health Indicator reads, resolved once (intermediary names, checked 1.16.5 - 1.21.11). */
+	private static final class TagApi {
+		final Class<?> living, player, armorStand, monster;
+		final Method getEntities, getCamera, camPos, camYaw, camPitch, camThird, cameraEntity, health, maxHealth, invisible, spectator, getX, getY, getZ, height, canSee;
+		final java.lang.reflect.Field lastX, lastY, lastZ, vx, vy, vz;
+
+		TagApi() throws Exception {
+			Class<?> entity = Class.forName("net.minecraft.class_1297");
+			living = Class.forName("net.minecraft.class_1309");
+			player = Class.forName("net.minecraft.class_1657");
+			armorStand = Class.forName("net.minecraft.class_1531");
+			monster = Class.forName("net.minecraft.class_1569");
+			Class<?> world = Class.forName("net.minecraft.class_638"), renderer = Class.forName("net.minecraft.class_757");
+			Class<?> camera = Class.forName("net.minecraft.class_4184"), vec = Class.forName("net.minecraft.class_243");
+			getEntities = m(world, "method_18112");
+			getCamera = m(renderer, "method_19418");
+			camPos = m(camera, "method_19326");
+			camYaw = m(camera, "method_19330");
+			camPitch = m(camera, "method_19329");
+			camThird = m(camera, "method_19333");
+			cameraEntity = m(class_310.class, "method_1560");
+			health = m(living, "method_6032");
+			maxHealth = m(living, "method_6063");
+			invisible = m(entity, "method_5767");
+			spectator = m(entity, "method_7325");
+			getX = m(entity, "method_23317");
+			getY = m(entity, "method_23318");
+			getZ = m(entity, "method_23321");
+			height = m(entity, "method_17682");
+			canSee = m(living, "method_6057", entity);
+			lastX = f(entity, "field_6038");
+			lastY = f(entity, "field_5971");
+			lastZ = f(entity, "field_5989");
+			vx = f(vec, "field_1352");
+			vy = f(vec, "field_1351");
+			vz = f(vec, "field_1350");
+		}
+
+		private static Method m(Class<?> c, String name, Class<?>... params) throws Exception {
+			Method x = c.getMethod(name, params);
+			x.setAccessible(true);
+			return x;
+		}
+
+		private static java.lang.reflect.Field f(Class<?> c, String name) throws Exception {
+			java.lang.reflect.Field x = c.getField(name);
+			x.setAccessible(true);
+			return x;
+		}
+	}
+
+	private TagApi tagApi;
+	private boolean tagApiFailed;
+
+	/** Finds the players and mobs near the camera and projects the spot above their heads onto the screen. */
+	private void tags(xyz.nativelaunch.ui.mod.Game g) throws Exception {
+		if (tagApiFailed) {
+			return;
+		}
+		if (tagApi == null) {
+			try {
+				tagApi = new TagApi();
+			} catch (Throwable t) {
+				tagApiFailed = true;
+				return;
+			}
+		}
+		TagApi a = tagApi;
+		class_310 mc = client();
+		Object world = get(mc, "field_1687"), renderer = get(mc, "field_1773");
+		if (world == null || renderer == null || mc.method_22683() == null) {
+			return;
+		}
+		Object cam = a.getCamera.invoke(renderer);
+		if (cam == null) {
+			return;
+		}
+		Object cp = a.camPos.invoke(cam);
+		double cx = a.vx.getDouble(cp), cy = a.vy.getDouble(cp), cz = a.vz.getDouble(cp);
+		float tick = partialTick();
+		class_1041 w = win();
+		float aspect = w.method_4489() / (float) Math.max(1, w.method_4506());
+		xyz.nativelaunch.ui.mod.Projector pr = g.projector;
+		pr.set(cx, cy, cz, ((Number) a.camYaw.invoke(cam)).floatValue(), ((Number) a.camPitch.invoke(cam)).floatValue(), fov(cam, tick), aspect);
+		Object self = a.cameraEntity.invoke(mc), me = get(mc, "field_1724");
+		boolean third = Boolean.TRUE.equals(a.camThird.invoke(cam));
+		float r2 = g.tagRange * g.tagRange;
+		for (Object e : (Iterable<?>) a.getEntities.invoke(world)) {
+			if (!a.living.isInstance(e) || a.armorStand.isInstance(e)) {
+				continue;
+			}
+			int kind;
+			if (e == self || e == me) {
+				if (!third || (g.tagKinds & 8) == 0) {
+					continue;
+				}
+				kind = 8;
+			} else {
+				kind = a.player.isInstance(e) ? 1 : a.monster.isInstance(e) ? 2 : 4;
+				if ((g.tagKinds & kind) == 0) {
+					continue;
+				}
+			}
+			float hp = ((Number) a.health.invoke(e)).floatValue();
+			if (hp <= 0f || Boolean.TRUE.equals(a.invisible.invoke(e)) || Boolean.TRUE.equals(a.spectator.invoke(e))) {
+				continue;
+			}
+			double lx = a.lastX.getDouble(e), ly = a.lastY.getDouble(e), lz = a.lastZ.getDouble(e);
+			double x = lx + (((Number) a.getX.invoke(e)).doubleValue() - lx) * tick;
+			double y = ly + (((Number) a.getY.invoke(e)).doubleValue() - ly) * tick;
+			double z = lz + (((Number) a.getZ.invoke(e)).doubleValue() - lz) * tick;
+			double dx = x - cx, dy = y - cy, dz = z - cz;
+			if (dx * dx + dy * dy + dz * dz > r2) {
+				continue;
+			}
+			if (g.tagSight && e != self && a.living.isInstance(self) && !Boolean.TRUE.equals(a.canSee.invoke(self, e))) {
+				continue;
+			}
+			double top = y + ((Number) a.height.invoke(e)).doubleValue() + (kind == 4 || kind == 2 ? 0.34 : 0.8);
+			if (!pr.project(x, top, z)) {
+				continue;
+			}
+			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, ((Number) a.maxHealth.invoke(e)).floatValue()), kind);
+		}
 	}
 
 	private Class<?> livingClass;

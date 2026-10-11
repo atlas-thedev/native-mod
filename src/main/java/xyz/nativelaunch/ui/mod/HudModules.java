@@ -33,6 +33,7 @@ public final class HudModules {
 		Modules.register(new Fullbright());
 		Modules.register(new PerformanceModules.BackgroundFps());
 		StatusModules.register();
+		Modules.register(new HealthIndicator());
 		Modules.register(new CrosshairModule());
 	}
 
