@@ -66,12 +66,37 @@ public final class Avatars {
 			c.outline(x, y, size, size, radius, 1, 0x1FFFFFFF);
 			return;
 		}
-		int color = Theme.nameColor(name);
-		c.round(x, y, size, size, radius, Theme.mix(color, 0xFF000000, 0.35f));
-		String letter = name == null || name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase();
-		float fs = size * 0.46f;
-		float w = c.textWidth(Fonts.SEMIBOLD, fs, letter);
-		c.text(Fonts.SEMIBOLD, fs, letter, x + (size - w) / 2, y + (size - c.lineHeight(Fonts.SEMIBOLD, fs)) / 2, 0xFFFFFFFF);
+		// no skin (yet, or none at all): the default Steve face rather than a letter
+		Image steve = steveFace();
+		c.round(x, y, size, size, radius, 0xFF1A1B20);
+		c.stamp("face:steve", steve, x, y, size, size, false, 0xFFFFFFFF);
+		c.outline(x, y, size, size, radius, 1, 0x1FFFFFFF);
+	}
+
+	private static Image steve;
+
+	/** Steve's face: cut from the game's own default skin, with a drawn copy for when the assets can't be read. */
+	private static synchronized Image steveFace() {
+		if (steve == null) {
+			Image skin = xyz.nativelaunch.ui.mod.Vanilla.steve();
+			if (skin != null && skin.width >= 64) {
+				steve = crop(skin);
+			} else {
+				int H = 0xFF4A3322, S = 0xFFB98B66, W = 0xFFFFFFFF, E = 0xFF4B3A8C, B = 0xFF6B4A33, M = 0xFF8A5A3B;
+				int[] px = {
+						H, H, H, H, H, H, H, H,
+						H, H, H, H, H, H, H, H,
+						H, S, S, S, S, S, S, H,
+						S, S, S, S, S, S, S, S,
+						S, W, E, S, S, E, W, S,
+						S, S, S, S, S, S, S, S,
+						S, S, B, B, B, B, S, S,
+						S, S, B, M, M, B, S, S};
+				steve = new Image(8, 8, px);
+				steve.linear = false;
+			}
+		}
+		return steve;
 	}
 
 	private static Image face(final String api, final String skin) {

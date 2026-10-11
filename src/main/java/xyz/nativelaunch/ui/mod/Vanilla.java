@@ -66,6 +66,12 @@ public final class Vanilla {
 		return null;
 	}
 
+	/** The default Steve skin from the running game (64 x 64, or 64 x 32 on old packs); null when it can't be read. */
+	public static Image steve() {
+		Image img = texture("entity/player/wide/steve"); // 1.19.3+
+		return img != null ? img : texture("entity/steve");
+	}
+
 	// ── effects ──────────────────────────────────────────────────────────
 
 	/** The game's icon for a potion effect ("speed", "instant_health", ...). */

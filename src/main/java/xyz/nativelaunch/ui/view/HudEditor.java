@@ -45,7 +45,8 @@ public final class HudEditor {
 	private boolean backdropLoaded;
 	private Image logo;
 	private boolean drawerOpen, helpOpen;
-	private float drawerScroll;
+	private float drawerScroll, drawerX, drawerY, grabDX, grabDY;
+	private boolean drawerMoved;
 	private final float[] drawerRect = new float[4], helpRect = new float[4], hubRect = new float[4], noticeRect = new float[4];
 	private String notice;
 	private HudModule removed;
@@ -126,10 +127,15 @@ public final class HudEditor {
 		float dt = ui.anim("hud:drawer", drawerOpen, 14f);
 		float dw = Math.min(310, W * 0.34f);
 		if (dt > 0.01f) {
-			drawerRect[0] = W - dw - 16 + (1 - dt) * (dw + 30);
-			drawerRect[1] = 16;
+			float dh = H - 32;
+			if (drawerMoved) {
+				drawerX = Math.max(0, Math.min(W - dw, drawerX));
+				drawerY = Math.max(0, Math.min(H - dh, drawerY));
+			}
+			drawerRect[0] = (drawerMoved ? drawerX : W - dw - 16) + (1 - dt) * (dw + 30);
+			drawerRect[1] = drawerMoved ? drawerY : 16;
 			drawerRect[2] = dw;
-			drawerRect[3] = H - 32;
+			drawerRect[3] = dh;
 		} else {
 			drawerRect[2] = 0;
 		}
@@ -362,6 +368,18 @@ public final class HudEditor {
 			}
 		}
 
+		boolean under = ui.interactive;
+		ui.interactive = under && !overPop; // the settings card sits on top of the hub and the drawer
+		if (hub(ui, screen, in, shown.isEmpty())) {
+			ui.interactive = under;
+			return;
+		}
+		if (dt > 0.01f) {
+			drawer(ui, dt, W, H);
+		}
+		help(ui, W, H, in);
+		notice(ui, W, H);
+		ui.interactive = under;
 		if (popover != null) {
 			int pi = shown.indexOf(popover);
 			if (pi < 0) {
@@ -370,15 +388,6 @@ public final class HudEditor {
 				drawPopover(ui, popover, rects.get(pi), W, H);
 			}
 		}
-
-		if (hub(ui, screen, in, shown.isEmpty())) {
-			return;
-		}
-		if (dt > 0.01f) {
-			drawer(ui, dt);
-		}
-		help(ui, W, H, in);
-		notice(ui, W, H);
 	}
 
 	// ── hub ──────────────────────────────────────────────────────────────
@@ -491,9 +500,28 @@ public final class HudEditor {
 
 	// ── drawer: every HUD module, switch them on and off ─────────────────
 
-	private void drawer(Ui ui, float t) {
+	private void drawer(Ui ui, float t, float W, float H) {
 		Canvas c = ui.c;
 		float x = drawerRect[0], y = drawerRect[1], w = drawerRect[2], h = drawerRect[3];
+		// grab the header to move the drawer anywhere on the screen
+		boolean overHead = ui.hover(x, y, w - 60, 58);
+		ui.clicked("hud:drawer:grab", x, y, w - 60, 58);
+		if (ui.isPressing("hud:drawer:grab")) {
+			if (ui.pressed || !drawerMoved) {
+				grabDX = ui.mx - x;
+				grabDY = ui.my - y;
+			}
+			drawerMoved = true;
+			drawerX = Math.max(0, Math.min(W - w, ui.mx - grabDX));
+			drawerY = Math.max(0, Math.min(H - h, ui.my - grabDY));
+			x = drawerX;
+			y = drawerY;
+			drawerRect[0] = x;
+			drawerRect[1] = y;
+		}
+		if (overHead || ui.isPressing("hud:drawer:grab")) {
+			ui.cursorHand = true;
+		}
 		c.pushAlpha(t);
 		c.shadow(x, y + 4, w, h, 14, 26, 0xAA000000);
 		c.round(x, y, w, h, 14, 0xF4090A0D);
@@ -504,6 +532,11 @@ public final class HudEditor {
 		}
 		c.text(Fonts.SEMIBOLD, 14.5f, "HUD modules", x + 18, y + 16, Theme.TEXT_STRONG);
 		c.text(Fonts.REGULAR, 11, on + " of " + Modules.hud().size() + " on screen", x + 18, y + 36, Theme.TEXT_MUTED);
+		for (int gx = 0; gx < 2; gx++) { // a grip: the header drags the drawer
+			for (int gy = 0; gy < 3; gy++) {
+				c.circle(x + w - 18 - 26 - 18 + gx * 5, y + 20 + gy * 5, 1.1f, Theme.alpha(0xFFFFFFFF, overHead ? 0.55f : 0.3f));
+			}
+		}
 		if (ui.iconButton("hud:drawer:close", x + w - 18 - 26, y + 14, 26, Theme.I_X, null)) {
 			drawerOpen = false;
 			c.popAlpha();

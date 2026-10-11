@@ -14,7 +14,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Status modules: potion effects, armour, inventory, health and food, and the health of whatever you are looking at. They
+ * Status modules: potion effects, armour and inventory. They
  * draw the game's own textures (mob effect icons, item icons, heart / food / armour sprites), read straight from the
  * running game's assets, so they follow the resource pack the player uses.
  */
@@ -25,8 +25,6 @@ public final class StatusModules {
 	static void register() {
 		Modules.register(new Effects());
 		Modules.register(new Armor());
-		Modules.register(new Vitals());
-		Modules.register(new Target());
 		Modules.register(new InventoryGrid());
 	}
 
@@ -115,7 +113,6 @@ public final class StatusModules {
 		final Setting.Bool beacon = add(new Setting.Bool("beacon", "Show beacon effects", true));
 		final Setting.Bool flash = add(new Setting.Bool("flash", "Flash when about to run out", true));
 		final Setting.Choice sort = add(new Setting.Choice("sort", "Sort by", 0, "Time left", "Level", "Name"));
-		final Setting.Num max = add(new Setting.Num("max", "Most effects shown", 8, 1, 16, 1, ""));
 		final Setting.Bool hide = add(new Setting.Bool("hide", "Hide the vanilla effect icons", true));
 		private final ArrayList<Game.Effect> view = new ArrayList<Game.Effect>();
 		/** id -> {longest time seen, frame it was last seen}: the bar shows time left against the full length. */
@@ -191,7 +188,7 @@ public final class StatusModules {
 			if (view.size() > 1) {
 				Collections.sort(view, sort.value == 1 ? BY_LEVEL : sort.value == 2 ? BY_NAME : BY_TIME);
 			}
-			while (view.size() > (int) max.value) {
+			while (view.size() > 12) {
 				view.remove(view.size() - 1);
 			}
 			return view.size();
@@ -546,298 +543,6 @@ public final class StatusModules {
 				}
 			}
 			done(w, h);
-		}
-	}
-
-	// ── health + food (AppleSkin style) ──────────────────────────────────
-
-	static final class Vitals extends Box {
-		final Setting.Choice display = add(new Setting.Choice("display", "Show as", 0, "Icons", "Numbers", "Icons + numbers"));
-		final Setting.Bool health = add(new Setting.Bool("health", "Health", true));
-		final Setting.Bool absorb = add(new Setting.Bool("absorption", "Absorption (golden hearts)", true));
-		final Setting.Bool food = add(new Setting.Bool("food", "Hunger", true));
-		final Setting.Bool armor = add(new Setting.Bool("armor", "Armour points", true));
-		final Setting.Bool saturation = add(new Setting.Bool("saturation", "Saturation bar", true));
-		final Setting.Bool preview = add(new Setting.Bool("preview", "Preview the food in your hand", true));
-		final Setting.Bool low = add(new Setting.Bool("low", "Pulse hearts when low", true));
-		final Setting.Num perRow = add(new Setting.Num("row", "Hearts per row", 10, 5, 20, 1, ""));
-
-		Vitals() {
-			super("health", "Health & Food", "Hearts, hunger with saturation, armour and absorption. Hover a food item to see what eating it restores.",
-					Theme.I_HEART_PULSE, false, 0.5f, 0.78f);
-		}
-
-		@Override
-		public int needs() {
-			return Game.NEED_VITALS | Game.NEED_EFFECTS | (preview.value ? Game.NEED_ARMOR : 0);
-		}
-
-		private static boolean has(Game g, String id) {
-			for (int i = 0; i < g.effectCount; i++) {
-				if (id.equals(g.effects[i].id)) {
-					return true;
-				}
-			}
-			return false;
-		}
-
-		private static void pip(Canvas c, String name, float x, float y, float size, int tint, int fallback) {
-			Image img = Vanilla.pip(name);
-			if (img != null) {
-				Vanilla.draw(c, img, x, y, size, size, tint);
-			} else if (!name.endsWith("empty") && !name.endsWith("container")) {
-				c.round(x + 1, y + 1, size - 2, size - 2, size * 0.3f, Theme.alpha(fallback, (tint >>> 24) / 255f));
-			}
-		}
-
-		private float rowW;
-
-		@Override
-		void render(Canvas c, Ui ui, Game g, float x, float y) {
-			float s = scale.value, pad = pad();
-			float ps = 10.5f * s, pitch = 8.8f * s, gap = 3.5f * s, tf = 11.5f * s;
-			boolean icons = display.value != 1, nums = display.value != 0, draw = ui != null;
-			long now = draw ? ui.now : 0;
-			float lh = c.lineHeight(Fonts.SEMIBOLD, tf);
-			float cy = y + pad;
-			rowW = 0;
-			boolean any = false;
-			if (armor.value && (g.armorValue > 0 || g.sample)) {
-				cy += rowArmor(c, draw, x + pad, cy, g, ps, pitch, tf, lh, icons, nums);
-				any = true;
-			}
-			if (health.value) {
-				cy += any ? gap : 0;
-				cy += rowHealth(c, draw, x + pad, cy, g, ps, pitch, gap, tf, lh, icons, nums, now);
-				any = true;
-			}
-			if (food.value) {
-				cy += any ? gap : 0;
-				cy += rowFood(c, draw, x + pad, cy, g, ps, pitch, tf, lh, icons, nums, now);
-			}
-			done(rowW + 2 * pad, cy - y + pad);
-		}
-
-		private float rowArmor(Canvas c, boolean draw, float x, float y, Game g, float ps, float pitch, float tf, float lh, boolean icons, boolean nums) {
-			int pts = g.armorValue;
-			float w = 0, h = icons ? ps : lh;
-			if (icons) {
-				for (int i = 0; i < 10; i++) {
-					if (draw) {
-						pip(c, "armor_empty", x + i * pitch, y, ps, 0xFFFFFFFF, 0xFF71717A);
-						if (pts >= 2 * i + 2) {
-							pip(c, "armor_full", x + i * pitch, y, ps, 0xFFFFFFFF, 0xFFD4D4D8);
-						} else if (pts == 2 * i + 1) {
-							pip(c, "armor_half", x + i * pitch, y, ps, 0xFFFFFFFF, 0xFFD4D4D8);
-						}
-					}
-				}
-				w = pitch * 9 + ps;
-			}
-			if (nums) {
-				String t = labels.value ? "Armor " + pts : String.valueOf(pts);
-				if (draw) {
-					text(c, Fonts.SEMIBOLD, tf, t, x + (icons ? w + 5 * scale.value : 0), y + (h - lh) / 2, color.value);
-				}
-				w += (icons ? 5 * scale.value : 0) + c.textWidth(Fonts.SEMIBOLD, tf, t);
-			}
-			rowW = Math.max(rowW, w);
-			return nums ? Math.max(h, lh) : h;
-		}
-
-		private float rowHealth(Canvas c, boolean draw, float x, float y, Game g, float ps, float pitch, float gap, float tf, float lh, boolean icons, boolean nums, long now) {
-			float w = 0, h = 0;
-			int per = (int) perRow.value;
-			int hearts = Math.max(1, Math.min(60, (int) Math.ceil(g.maxHealth / 2f)));
-			int gold = absorb.value ? (int) Math.ceil(g.absorption / 2f) : 0;
-			String kind = has(g, "wither") ? "wither" : has(g, "poison") ? "poison" : null;
-			int alpha = low.value && g.health <= 4 && !g.sample ? pulse(now, 120, 0.55f) : 255;
-			int tint = alpha << 24 | 0xFFFFFF;
-			if (icons) {
-				int rows = (hearts + per - 1) / per, gRows = (gold + per - 1) / per;
-				float rowStep = ps * 0.95f;
-				float oy = 0;
-				// golden absorption hearts first (above), then health, row 0 at the bottom like the game
-				for (int r = gRows - 1; r >= 0; r--) {
-					for (int i = r * per; i < Math.min(gold, (r + 1) * per); i++) {
-						if (draw) {
-							float hx = x + (i % per) * pitch;
-							pip(c, "heart_container", hx, y + oy, ps, 0xFFFFFFFF, 0xFF3F3F46);
-							pip(c, g.absorption >= 2 * i + 2 ? "heart_absorb_full" : "heart_absorb_half", hx, y + oy, ps, 0xFFFFFFFF, GOLD);
-						}
-					}
-					oy += rowStep;
-				}
-				for (int r = rows - 1; r >= 0; r--) {
-					for (int i = r * per; i < Math.min(hearts, (r + 1) * per); i++) {
-						if (draw) {
-							float hx = x + (i % per) * pitch;
-							pip(c, "heart_container", hx, y + oy, ps, 0xFFFFFFFF, 0xFF3F3F46);
-							if (g.health >= 2 * i + 2) {
-								pip(c, kind == null ? "heart_full" : "heart_" + kind + "_full", hx, y + oy, ps, tint, 0xFFEF4444);
-							} else if (g.health > 2 * i) {
-								pip(c, kind == null ? "heart_half" : "heart_" + kind + "_half", hx, y + oy, ps, tint, 0xFFEF4444);
-							}
-						}
-					}
-					oy += rowStep;
-				}
-				w = pitch * (Math.min(Math.max(hearts, gold), per) - 1) + ps;
-				h = oy - rowStep + ps;
-			}
-			if (nums) {
-				String t = (labels.value ? "Health " : "") + Status.hp(g.health) + "/" + Status.hp(g.maxHealth);
-				if (absorb.value && g.absorption > 0) {
-					t += " +" + Status.hp(g.absorption);
-				}
-				float tx = x + (icons ? w + 5 * scale.value : 0);
-				float ty = y + (icons ? (h - lh) / 2 : 0);
-				if (draw) {
-					text(c, Fonts.SEMIBOLD, tf, t, tx, ty, color.value);
-				}
-				w += (icons ? 5 * scale.value : 0) + c.textWidth(Fonts.SEMIBOLD, tf, t);
-				h = Math.max(h, lh);
-			}
-			rowW = Math.max(rowW, w);
-			return h;
-		}
-
-		private float rowFood(Canvas c, boolean draw, float x, float y, Game g, float ps, float pitch, float tf, float lh, boolean icons, boolean nums, long now) {
-			float w = 0, h = icons ? ps : lh;
-			String hand = g.sample ? "golden_apple" : g.hand.id;
-			int restore = preview.value ? Status.foodHunger(hand) : 0;
-			int after = Math.min(20, g.food + restore);
-			boolean hunger = has(g, "hunger");
-			if (icons) {
-				for (int i = 0; i < 10; i++) {
-					int cur = g.food >= 2 * i + 2 ? 2 : g.food == 2 * i + 1 ? 1 : 0;
-					int nxt = after >= 2 * i + 2 ? 2 : after == 2 * i + 1 ? 1 : 0;
-					if (draw) {
-						float fx = x + i * pitch;
-						pip(c, "food_empty", fx, y, ps, 0xFFFFFFFF, 0xFF3F3F46);
-						if (cur > 0) {
-							pip(c, (hunger ? "food_hunger_" : "food_") + (cur == 2 ? "full" : "half"), fx, y, ps, 0xFFFFFFFF, 0xFFD97706);
-						}
-						if (nxt > cur) {
-							pip(c, (nxt == 2 ? "food_full" : "food_half"), fx, y, ps, pulse(now, 170, 0.25f) / 2 << 24 | 0xFFFFFF, 0xFFD97706);
-						}
-					}
-				}
-				w = pitch * 9 + ps;
-				if (saturation.value) {
-					float bh = Math.max(1.5f, 2 * scale.value), by = y + ps + 1.5f * scale.value;
-					if (draw) {
-						c.round(x, by, w, bh, bh / 2, 0x26FFFFFF);
-						c.round(x, by, Math.max(bh, w * Math.min(1f, g.saturation / 20f)), bh, bh / 2, GOLD);
-					}
-					h += 1.5f * scale.value + bh;
-				}
-			}
-			if (nums) {
-				String t = (labels.value ? "Food " : "") + g.food + (restore > 0 ? " +" + (after - g.food) : "");
-				if (saturation.value) {
-					t += "  Sat " + Status.hp(g.saturation);
-				}
-				if (draw) {
-					text(c, Fonts.SEMIBOLD, tf, t, x + (icons ? w + 5 * scale.value : 0), y + ((icons ? ps : lh) - lh) / 2, color.value);
-				}
-				w += (icons ? 5 * scale.value : 0) + c.textWidth(Fonts.SEMIBOLD, tf, t);
-				h = Math.max(h, lh);
-			}
-			rowW = Math.max(rowW, w);
-			return h;
-		}
-	}
-
-	// ── target health ────────────────────────────────────────────────────
-
-	static final class Target extends Box {
-		final Setting.Choice display = add(new Setting.Choice("display", "Show as", 0, "Hearts", "Bar"));
-		final Setting.Bool name = add(new Setting.Bool("name", "Show the name", true));
-		final Setting.Bool numbers = add(new Setting.Bool("numbers", "Show health numbers", true));
-		final Setting.Bool colour = add(new Setting.Bool("colour", "Colour the bar by health", true));
-		final Setting.Num perRow = add(new Setting.Num("row", "Hearts per row", 10, 5, 20, 1, ""));
-		final Setting.Num hold = add(new Setting.Num("hold", "Keep showing after looking away", 2, 0, 10, 0.5f, "s"));
-		private String seenName = "";
-		private float seenHealth, seenMax = 20;
-		private long seenAt = -1_000_000;
-
-		Target() {
-			super("target", "Health Indicator", "Shows the name and health of the mob or player you are looking at.", Theme.I_HEART, false, 0.5f, 0.2f);
-			drop(labels);
-		}
-
-		@Override
-		public int needs() {
-			return Game.NEED_TARGET;
-		}
-
-		@Override
-		public void frame(Game g) {
-			if (g.hasTarget) {
-				seenName = g.targetName;
-				seenHealth = g.targetHealth;
-				seenMax = g.targetMax;
-				seenAt = System.currentTimeMillis();
-			}
-		}
-
-		@Override
-		public boolean visible(Game g) {
-			return g.sample || g.hasTarget || System.currentTimeMillis() - seenAt <= hold.value * 1000;
-		}
-
-		@Override
-		void render(Canvas c, Ui ui, Game g, float x, float y) {
-			float s = scale.value, pad = pad();
-			String nm = g.sample ? g.targetName : seenName;
-			float hp = g.sample ? g.targetHealth : seenHealth, mx = Math.max(1f, g.sample ? g.targetMax : seenMax);
-			boolean bar = display.value == 1 || mx > 40f;
-			float nf = 12f * s, lh = c.lineHeight(Fonts.SEMIBOLD, nf);
-			String num = Status.hp(hp) + " / " + Status.hp(mx);
-			boolean top = name.value || numbers.value;
-			float nameW = name.value ? c.textWidth(Fonts.SEMIBOLD, nf, nm) : 0;
-			float numW = numbers.value ? c.textWidth(Fonts.MEDIUM, 11 * s, num) : 0;
-			float ps = 10.5f * s, pitch = 8.8f * s, per = Math.min(perRow.value, Math.max(1, (float) Math.ceil(mx / 2)));
-			int hearts = (int) Math.ceil(mx / 2);
-			float dispW = bar ? Math.max(110 * s, nameW + numW + 14 * s) : pitch * (per - 1) + ps;
-			float w = Math.max(dispW, nameW + (name.value && numbers.value ? 14 * s : 0) + numW);
-			int rows = bar ? 1 : (int) Math.ceil(hearts / per);
-			float dispH = bar ? 6 * s : ps + (rows - 1) * ps * 0.95f;
-			float h = (top ? lh + 3 * s : 0) + dispH;
-			if (ui != null) {
-				float ty = y + pad;
-				if (top) {
-					if (name.value) {
-						text(c, Fonts.SEMIBOLD, nf, nm, x + pad, ty, color.value);
-					}
-					if (numbers.value) {
-						text(c, Fonts.MEDIUM, 11 * s, num, x + pad + w - numW, ty + (lh - c.lineHeight(Fonts.MEDIUM, 11 * s)) / 2, Theme.alpha(color.value, 0.75f));
-					}
-					ty += lh + 3 * s;
-				}
-				if (bar) {
-					float f = Math.max(0f, Math.min(1f, hp / mx));
-					int col = colour.value ? Status.wear(f) : 0xFFEF4444;
-					c.round(x + pad, ty, w, 6 * s, 3 * s, 0x40FFFFFF);
-					c.round(x + pad, ty, Math.max(6 * s * (f > 0 ? 1 : 0), w * f), 6 * s, 3 * s, col);
-				} else {
-					int pr = (int) per;
-					for (int r = rows - 1; r >= 0; r--) {
-						float oy = (rows - 1 - r) * ps * 0.95f;
-						for (int i = r * pr; i < Math.min(hearts, (r + 1) * pr); i++) {
-							float hx = x + pad + (i % pr) * pitch;
-							Vitals.pip(c, "heart_container", hx, ty + oy, ps, 0xFFFFFFFF, 0xFF3F3F46);
-							if (hp >= 2 * i + 2) {
-								Vitals.pip(c, "heart_full", hx, ty + oy, ps, 0xFFFFFFFF, 0xFFEF4444);
-							} else if (hp > 2 * i) {
-								Vitals.pip(c, "heart_half", hx, ty + oy, ps, 0xFFFFFFFF, 0xFFEF4444);
-							}
-						}
-					}
-				}
-			}
-			done(w + 2 * pad, h + 2 * pad);
 		}
 	}
 }

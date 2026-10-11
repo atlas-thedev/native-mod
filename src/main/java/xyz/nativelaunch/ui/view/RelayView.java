@@ -44,6 +44,17 @@ public final class RelayView {
 	private Object lastScreen;
 	private boolean settingsOpen, bindingKey;
 	private int lastCount = -1;
+	// reply / edit / react (the launcher's message actions)
+	private Model.Message replyTo;
+	private String editingId, reactFor, jumpTo, flashId;
+	private int jumpTries;
+	private long flashAt;
+	private float jumpContentY = Float.NaN;
+	private float[] pickerRect, toolbarRect;
+	private final float[] pickRow = new float[4];
+	private boolean pickRowSet;
+	private final Map<String, xyz.nativelaunch.ui.gfx.Image> emojiImages = new HashMap<String, xyz.nativelaunch.ui.gfx.Image>();
+	private static final String[] PALETTE = {"\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDD25", "\uD83D\uDC4D", "\uD83D\uDE2E", "\uD83D\uDE22", "\uD83C\uDF89", "\uD83D\uDC80"};
 	// pasted picture waiting to be sent
 	private byte[] staged;
 	private String stagedMime, stagedKey;
@@ -81,6 +92,19 @@ public final class RelayView {
 
 	/** Esc: closes popovers / clears search first; false = close the chat. */
 	public boolean consumeEscape(Ui ui) {
+		if (reactFor != null) {
+			reactFor = null;
+			return true;
+		}
+		if (editingId != null) {
+			editingId = null;
+			input.clear();
+			return true;
+		}
+		if (replyTo != null) {
+			replyTo = null;
+			return true;
+		}
 		if (viewer != null) {
 			viewer = null;
 			return true;
@@ -159,6 +183,10 @@ public final class RelayView {
 			drafts.put(selected, input.value());
 		}
 		selected = key;
+		replyTo = null;
+		editingId = null;
+		reactFor = null;
+		jumpTo = null;
 		String draft = drafts.get(key);
 		input.set(draft == null ? "" : draft);
 		lastCount = -1;
@@ -355,7 +383,8 @@ public final class RelayView {
 
 		// messages
 		float inputH = 46;
-		float my0 = y + 65, mh = h - 65 - inputH - 34;
+		float barH = replyTo != null || editingId != null ? 36 : 0;
+		float my0 = y + 65, mh = h - 65 - inputH - 34 - barH;
 		Scroll sc = chatScrolls.get(selected);
 		if (sc == null) {
 			sc = new Scroll();
@@ -393,7 +422,14 @@ public final class RelayView {
 		float lh = 19;
 		nextAnchorId = null;
 		anchorNow = Float.NaN;
+		pickRowSet = false;
+		jumpContentY = Float.NaN;
+		boolean canModerate = group && grp != null && grp.canModerate();
+		boolean pickerHover = pickerRect != null && ui.hover(pickerRect[0], pickerRect[1], pickerRect[2], pickerRect[3]);
 		for (Model.Message m : messages) {
+			if (jumpTo != null && jumpTo.equals(m.id)) {
+				jumpContentY = cy + off;
+			}
 			if (m.id != null) {
 				if (m.id.equals(anchorId)) {
 					anchorNow = cy + off; // where the anchor message starts now, in content space
@@ -445,18 +481,53 @@ public final class RelayView {
 					Avatars.draw(c, client.api(), sf != null ? sf.name : who, skin, x + pad, cy + 1, 34, 10);
 					boolean mine = eq(m.senderId, client.meId);
 					float nw = c.text(Fonts.SEMIBOLD, 13, who, textX, cy, mine ? Theme.TEXT_STRONG : Theme.mix(Theme.nameColor(who), 0xFFFFFFFF, 0.55f));
-					c.text(Fonts.REGULAR, 10.5f, timeFmt.format(new Date(m.createdAt)), textX + nw + 8, cy + 2.5f, Theme.TEXT_MUTED);
+					String stamp = timeFmt.format(new Date(m.createdAt));
+					float tw2 = c.text(Fonts.REGULAR, 10.5f, stamp, textX + nw + 8, cy + 2.5f, Theme.TEXT_MUTED);
+					if (!group && mine && !m.pending && !m.failed && !m.deleted) { // delivered / read, like the launcher
+						c.icon(m.read ? Theme.I_CHECKS : Theme.I_CHECK, 12, textX + nw + 8 + tw2 + 12, cy + 8, m.read ? 0xFF60A5FA : Theme.TEXT_MUTED);
+					}
 				}
 				cy += 20;
+			}
+			boolean mineMsg = eq(m.senderId, client.meId);
+			if (m.reply != null) { // the message this one answers; click to jump to it
+				if (visible(cy, 18, my0, mh)) {
+					Model.Reply r = m.reply;
+					String qn = r.senderName == null ? "Someone" : r.senderName;
+					String snip = r.deleted ? "Original message was deleted" : (r.content.isEmpty() ? (r.media ? "Picture" : "") : r.content.replace('\n', ' '));
+					boolean qOver = ui.hover(textX, cy - 1, textW, 17);
+					int qc = qOver ? Theme.TEXT : Theme.TEXT_MUTED;
+					c.fill(textX, cy + 1, 2, 12, Theme.HAIRLINE_STRONG);
+					c.icon(Theme.I_REPLY_ARROW, 11, textX + 11, cy + 7, qc);
+					float qw = c.text(Fonts.SEMIBOLD, 11.5f, c.ellipsize(Fonts.SEMIBOLD, 11.5f, qn, Math.max(40, textW * 0.35f)), textX + 21, cy, Theme.mix(Theme.nameColor(qn), 0xFFFFFFFF, 0.55f));
+					c.text(Fonts.REGULAR, 11.5f, c.ellipsize(Fonts.REGULAR, 11.5f, snip, Math.max(20, textW - 21 - qw - 8)), textX + 21 + qw + 6, cy, qc);
+					if (qOver) {
+						ui.cursorHand = true;
+					}
+					if (ui.clicked("relay:quote:" + m.id, textX, cy - 1, textW, 17) && r.id != null) {
+						jumpTo = r.id;
+						jumpTries = 0;
+					}
+				}
+				cy += 19;
 			}
 			boolean hasMedia = m.mediaUrl != null || m.localKey != null;
 			boolean autoText = hasMedia && (m.content == null || m.content.trim().isEmpty() || m.content.startsWith("["));
 			int color = m.deleted ? Theme.TEXT_MUTED : (m.pending ? Theme.alpha(Theme.TEXT, 0.5f) : Theme.TEXT);
-			if (!autoText) {
+			if (m.deleted) {
+				if (visible(cy, lh, my0, mh)) {
+					c.text(Fonts.REGULAR, 12.5f, "This message was deleted", textX, cy, Theme.alpha(Theme.TEXT_MUTED, 0.85f));
+				}
+				cy += lh;
+			} else if (!autoText) {
 				List<String> lines = wrapped(c, m, textW, Fonts.REGULAR, 13);
-				for (String line : lines) {
+				for (int li = 0; li < lines.size(); li++) {
+					String line = lines.get(li);
 					if (visible(cy, lh, my0, mh)) {
-						c.text(Fonts.REGULAR, 13, line, textX, cy, color);
+						float lw2 = c.text(Fonts.REGULAR, 13, line, textX, cy, color);
+						if (m.edited && li == lines.size() - 1) {
+							c.text(Fonts.REGULAR, 10, "(edited)", textX + lw2 + 6, cy + 3, Theme.TEXT_MUTED);
+						}
 					}
 					cy += lh;
 				}
@@ -468,9 +539,24 @@ public final class RelayView {
 				c.text(Fonts.MEDIUM, 10.5f, "Not sent \u2014 check your connection", textX, cy, 0xFFF87171);
 				cy += 16;
 			}
+			if (!m.reactions.isEmpty() && !m.deleted) {
+				cy = reactions(ui, client, m, textX, cy + 1, textW, my0, mh) + 2;
+			}
 			cy += 2;
-			if (ui.interactive && viewer == null && !gifOpen && ui.my >= my0 && ui.my <= my0 + mh && ui.hover(x, rowTop, w - 10, cy - rowTop)) {
+			if (m.id != null && m.id.equals(flashId)) {
+				float fa = 1f - Math.min(1f, (ui.now - flashAt) / 1600f);
+				if (fa > 0) {
+					c.fill(x, rowTop - 2, w - 10, cy - rowTop + 3, Theme.alpha(0xFF60A5FA, 0.16f * fa));
+				} else {
+					flashId = null;
+				}
+			}
+			boolean rowHover = ui.interactive && viewer == null && !gifOpen && !pickerHover && ui.my >= my0 && ui.my <= my0 + mh && ui.hover(x, rowTop, w - 10, cy - rowTop);
+			if (rowHover) {
 				c.fill(x, rowTop - 1, w - 10, cy - rowTop + 1, 0x0AFFFFFF);
+			}
+			if ((rowHover || m.id != null && m.id.equals(reactFor)) && !m.system && visible(rowTop, 24, my0, mh)) {
+				tools(ui, client, m, group, mineMsg, canModerate, x + w - 22, rowTop - 4, my0, mh);
 			}
 			prev = m;
 		}
@@ -495,6 +581,29 @@ public final class RelayView {
 		sc.end(ui, content);
 		if (prevFirst == null && firstId != null) {
 			sc.snapBottom(); // first messages in: open at the latest one, no glide from the top
+		}
+		if (jumpTo != null) {
+			if (!Float.isNaN(jumpContentY)) {
+				sc.target = Math.max(0, jumpContentY - my0 - mh * 0.25f);
+				flashId = jumpTo;
+				flashAt = ui.now;
+				jumpTo = null;
+			} else if (conv.hasMore && jumpTries < 12) {
+				if (!conv.loading) {
+					jumpTries++;
+					client.loadOlder(selected);
+				}
+			} else {
+				jumpTo = null; // the original is too far back (or gone)
+			}
+		}
+		pickerRect = null;
+		if (reactFor != null) {
+			if (pickRowSet) {
+				picker(ui, client, pickRow[0], pickRow[1], pickRow[2], my0, mh);
+			} else {
+				reactFor = null;
+			}
 		}
 		jumpRect = null;
 		if (!sc.atBottom() && sc.content > mh + 40) {
@@ -528,6 +637,31 @@ public final class RelayView {
 			String t = typers.size() == 1 ? typers.get(0) + " is typing" : typers.size() + " people are typing";
 			ui.dots(x + pad + 12, iy - 12, Theme.TEXT_SECONDARY);
 			c.text(Fonts.MEDIUM, 11, t, x + pad + 30, iy - 12 - c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.TEXT_SECONDARY);
+		}
+		if (barH > 0) {
+			float by = my0 + mh + 3, bw = w - pad * 2;
+			c.round(x + pad, by, bw, barH - 8, 9, 0xFF121318);
+			c.outline(x + pad, by, bw, barH - 8, 9, 1, Theme.HAIRLINE);
+			float bm = by + (barH - 8) / 2;
+			if (editingId != null) {
+				c.icon(Theme.I_PENCIL, 13, x + pad + 18, bm, Theme.TEXT_SECONDARY);
+				float ew = c.text(Fonts.SEMIBOLD, 12, "Editing message", x + pad + 34, bm - c.lineHeight(Fonts.SEMIBOLD, 12) / 2, Theme.TEXT_STRONG);
+				c.text(Fonts.REGULAR, 11.5f, "Enter to save, Esc to cancel", x + pad + 34 + ew + 10, bm - c.lineHeight(Fonts.REGULAR, 11.5f) / 2, Theme.TEXT_MUTED);
+			} else if (replyTo != null) {
+				Model.Reply q = RelayClient.quote(replyTo);
+				String qn = q.senderName == null ? "Someone" : q.senderName;
+				String snip = q.deleted ? "" : (q.content.isEmpty() ? (q.media ? "Picture" : "") : q.content.replace('\n', ' '));
+				c.icon(Theme.I_REPLY_ARROW, 13, x + pad + 18, bm, Theme.TEXT_SECONDARY);
+				float rw = c.text(Fonts.SEMIBOLD, 12, "Replying to " + qn, x + pad + 34, bm - c.lineHeight(Fonts.SEMIBOLD, 12) / 2, Theme.TEXT_STRONG);
+				c.text(Fonts.REGULAR, 11.5f, c.ellipsize(Fonts.REGULAR, 11.5f, snip, Math.max(20, bw - 34 - rw - 70)), x + pad + 34 + rw + 10, bm - c.lineHeight(Fonts.REGULAR, 11.5f) / 2, Theme.TEXT_MUTED);
+			}
+			if (ui.iconButton("relay:barx", x + pad + bw - 30, by + (barH - 8 - 24) / 2, 24, Theme.I_X, "Cancel (Esc)")) {
+				if (editingId != null) {
+					input.clear();
+				}
+				editingId = null;
+				replyTo = null;
+			}
 		}
 		byte[] got = pasted;
 		if (got != null) {
@@ -574,7 +708,7 @@ public final class RelayView {
 		}
 		String before2 = input.value();
 		float btn = 46;
-		boolean send = input.draw(ui, x + pad, iy, w - pad * 2 - btn * 3 - 24, inputH, staged != null ? "Add a caption (optional)" : "Message " + (group ? "#" + name : "@" + name), 13.5f);
+		boolean send = input.draw(ui, x + pad, iy, w - pad * 2 - btn * 3 - 24, inputH, editingId != null ? "Edit your message" : staged != null ? "Add a caption (optional)" : "Message " + (group ? "#" + name : "@" + name), 13.5f);
 		if (input.pasteMiss && pasting.compareAndSet(false, true)) {
 			new Thread(() -> {
 				try {
@@ -648,12 +782,20 @@ public final class RelayView {
 		c.round(sx, iy, btn, inputH, 12, canSend ? Theme.mix(0xFFE4E4E7, 0xFFFFFFFF, hv) : Theme.SUBTLE);
 		c.icon(Theme.I_SEND, 18, sx + btn / 2, iy + inputH / 2, canSend ? Theme.SOLID_FG : Theme.TEXT_MUTED);
 		if ((send || click) && canSend) {
-			if (staged != null) {
-				client.sendImage(selected, staged, stagedMime);
-				staged = null;
-			}
-			if (!input.value().trim().isEmpty()) {
-				client.send(selected, input.value());
+			if (editingId != null) {
+				if (!input.value().trim().isEmpty()) {
+					client.edit(selected, editingId, input.value());
+				}
+				editingId = null;
+			} else {
+				if (staged != null) {
+					client.sendImage(selected, staged, stagedMime);
+					staged = null;
+				}
+				if (!input.value().trim().isEmpty()) {
+					client.send(selected, input.value(), replyTo);
+					replyTo = null;
+				}
 			}
 			input.clear();
 			drafts.remove(selected);
@@ -662,6 +804,182 @@ public final class RelayView {
 		}
 		if (gifOpen) {
 			gifPicker(ui, client, x + w - pad - 372, iy - 360 - 8, 372, 360);
+		}
+	}
+
+	// ── message actions: reactions, hover tools, reaction picker ──────────
+
+	private xyz.nativelaunch.ui.gfx.Image emoji(String e) {
+		String hex = Integer.toHexString(e.codePointAt(0));
+		if (!emojiImages.containsKey(hex)) {
+			emojiImages.put(hex, xyz.nativelaunch.ui.gfx.Image.resource("/assets/native/ui/emoji-" + hex + ".png"));
+		}
+		return emojiImages.get(hex);
+	}
+
+	private void drawEmoji(Canvas c, String e, float x, float y, float size) {
+		xyz.nativelaunch.ui.gfx.Image img = emoji(e);
+		if (img != null) {
+			c.stamp("emoji:" + Integer.toHexString(e.codePointAt(0)), img, x, y, size, size, true, 0xFFFFFFFF);
+		} else {
+			c.icon(Theme.I_SMILE, size * 0.9f, x + size / 2, y + size / 2, Theme.TEXT_SECONDARY);
+		}
+	}
+
+	/** The reaction chips under a message ({emoji + count}, yours lit up); click one to toggle it. Returns the y below them. */
+	private float reactions(Ui ui, RelayClient client, Model.Message m, float x, float y, float width, float top, float viewH) {
+		Canvas c = ui.c;
+		java.util.LinkedHashMap<String, int[]> counts = new java.util.LinkedHashMap<String, int[]>();
+		for (String[] r : m.reactions) {
+			int[] n = counts.get(r[1]);
+			if (n == null) {
+				n = new int[2];
+				counts.put(r[1], n);
+			}
+			n[0]++;
+			if (r[0] != null && r[0].equals(client.meId)) {
+				n[1] = 1;
+			}
+		}
+		float cx = x, cy = y, ch = 22;
+		for (Map.Entry<String, int[]> en : counts.entrySet()) {
+			String label = String.valueOf(en.getValue()[0]);
+			float cw = 10 + 14 + 5 + c.textWidth(Fonts.SEMIBOLD, 11.5f, label) + 10;
+			if (cx + cw > x + width && cx > x) {
+				cx = x;
+				cy += ch + 4;
+			}
+			if (visible(cy, ch, top, viewH)) {
+				boolean mine = en.getValue()[1] == 1;
+				boolean over = ui.hover(cx, cy, cw, ch);
+				c.round(cx, cy, cw, ch, 11, mine ? Theme.alpha(0xFF60A5FA, over ? 0.3f : 0.2f) : (over ? 0xFF26272D : Theme.SUBTLE));
+				c.outline(cx, cy, cw, ch, 11, 1, mine ? Theme.alpha(0xFF60A5FA, 0.6f) : Theme.HAIRLINE);
+				drawEmoji(c, en.getKey(), cx + 8, cy + 4, 14);
+				c.text(Fonts.SEMIBOLD, 11.5f, label, cx + 27, cy + (ch - c.lineHeight(Fonts.SEMIBOLD, 11.5f)) / 2, mine ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
+				if (over) {
+					ui.cursorHand = true;
+				}
+				if (ui.clicked("relay:re:" + m.id + ":" + en.getKey(), cx, cy, cw, ch)) {
+					client.react(selected, m.id, en.getKey());
+				}
+			}
+			cx += cw + 6;
+		}
+		return cy + ch;
+	}
+
+	/** The pill of tools at the top right of the hovered message: react (groups), reply, edit (yours), delete. */
+	private void tools(Ui ui, RelayClient client, Model.Message m, boolean group, boolean mine, boolean moderator, float right, float y, float top, float viewH) {
+		Canvas c = ui.c;
+		boolean sent = m.id != null && !m.id.startsWith("local-") && !m.pending;
+		boolean hasMedia = m.mediaUrl != null || m.localKey != null;
+		List<int[]> buttons = new ArrayList<int[]>(); // {action, icon}
+		if (!m.deleted) {
+			if (group && sent) {
+				buttons.add(new int[] {0, Theme.I_SMILE});
+			}
+			if (sent) {
+				buttons.add(new int[] {1, Theme.I_REPLY_ARROW});
+			}
+			if (mine && sent && !hasMedia) {
+				buttons.add(new int[] {2, Theme.I_PENCIL});
+			}
+		}
+		if ((mine || moderator) && !m.deleted && !m.pending || mine && m.failed) {
+			buttons.add(new int[] {3, Theme.I_TRASH});
+		}
+		if (buttons.isEmpty()) {
+			return;
+		}
+		float bs = 24, pad = 3, w = buttons.size() * bs + pad * 2, x = right - w;
+		c.shadow(x, y + 2, w, bs + pad * 2 - 2, 9, 10, 0x77000000);
+		c.round(x, y, w, bs + 2, 9, 0xFF17181D);
+		c.outline(x, y, w, bs + 2, 9, 1, Theme.HAIRLINE_STRONG);
+		toolbarRect = new float[] {x, y, w, bs + 2};
+		if (m.id != null && m.id.equals(reactFor)) {
+			pickRow[0] = x;
+			pickRow[1] = y;
+			pickRow[2] = w;
+			pickRowSet = true;
+		}
+		String[] tips = {"Add reaction", "Reply", "Edit message", "Delete message"};
+		for (int i = 0; i < buttons.size(); i++) {
+			int a = buttons.get(i)[0];
+			float bx = x + pad + i * bs;
+			boolean over = ui.hover(bx, y + 1, bs, bs);
+			boolean click = ui.clicked("relay:tool:" + m.id + ":" + a, bx, y + 1, bs, bs);
+			float hv = ui.anim("relay:tool:" + m.id + ":" + a + "#h", over, 16f);
+			c.round(bx + 1, y + 2, bs - 2, bs - 2, 7, Theme.alpha(a == 3 ? 0xFFEF4444 : 0xFFFFFFFF, hv * (a == 3 ? 0.18f : 0.1f)));
+			c.icon(buttons.get(i)[1], 13.5f, bx + bs / 2, y + 1 + bs / 2, a == 3 ? Theme.mix(Theme.TEXT_SECONDARY, 0xFFF87171, hv) : Theme.mix(Theme.TEXT_SECONDARY, Theme.TEXT_STRONG, hv));
+			if (over) {
+				ui.cursorHand = true;
+				ui.tip(tips[a]);
+			}
+			if (click) {
+				if (a == 0) {
+					reactFor = m.id.equals(reactFor) ? null : m.id;
+					if (reactFor != null) { // the picker opens in this same frame, so it needs the row now
+						pickRow[0] = x;
+						pickRow[1] = y;
+						pickRow[2] = w;
+						pickRowSet = true;
+					}
+				} else if (a == 1) {
+					replyTo = m;
+					editingId = null;
+					input.focus(ui);
+				} else if (a == 2) {
+					editingId = m.id;
+					replyTo = null;
+					input.set(m.content == null ? "" : m.content);
+					input.focus(ui);
+				} else {
+					if (m.id.equals(editingId)) {
+						editingId = null;
+						input.clear();
+					}
+					client.delete(selected, m.id);
+				}
+			}
+		}
+	}
+
+	/** The row of emoji above a message's tools; picking one toggles your reaction. */
+	private void picker(Ui ui, RelayClient client, float tx, float ty, float tw, float top, float viewH) {
+		Canvas c = ui.c;
+		float cell = 32, pad = 6, w = PALETTE.length * cell + pad * 2, h = cell + pad * 2;
+		float x = tx + tw - w, y = ty - h - 6;
+		if (y < top + 2) {
+			y = ty + 30;
+		}
+		x = Math.max(8, x);
+		pickerRect = new float[] {x, y, w, h};
+		c.shadow(x, y + 4, w, h, 14, 18, 0x99000000);
+		c.round(x, y, w, h, 14, 0xFF14151A);
+		c.outline(x, y, w, h, 14, 1, Theme.HAIRLINE_STRONG);
+		boolean outside = true;
+		for (int i = 0; i < PALETTE.length; i++) {
+			float bx = x + pad + i * cell;
+			boolean over = ui.hover(bx, y + pad, cell, cell);
+			if (over) {
+				outside = false;
+			}
+			float hv = ui.anim("relay:pick:" + i + "#h", over, 18f);
+			float size = 20 + 5 * Math.round(hv * 3) / 3f;
+			c.round(bx + 1, y + pad + 1, cell - 2, cell - 2, 9, Theme.alpha(0xFFFFFFFF, 0.08f * hv));
+			drawEmoji(c, PALETTE[i], bx + (cell - size) / 2, y + pad + (cell - size) / 2 - hv, size);
+			if (over) {
+				ui.cursorHand = true;
+			}
+			if (ui.clicked("relay:pick:" + i, bx, y + pad, cell, cell)) {
+				client.react(selected, reactFor, PALETTE[i]);
+				reactFor = null;
+				return;
+			}
+		}
+		boolean inTools = toolbarRect != null && ui.hover(toolbarRect[0], toolbarRect[1], toolbarRect[2], toolbarRect[3]);
+		if (ui.pressed && outside && !ui.hover(x, y, w, h) && !inTools) {
+			reactFor = null;
 		}
 	}
 

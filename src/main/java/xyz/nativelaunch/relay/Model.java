@@ -68,6 +68,8 @@ public final class Model {
 		public final long lastAt;
 		public final int unread, members;
 		public final List<String[]> memberList; // {id, name}
+		/** Your role here: "owner", "admin" or "member" (owners and admins can delete anyone's message). */
+		public String role = "member";
 
 		public Group(String id, String name, String lastText, String lastSender, long lastAt, int unread, int members, List<String[]> memberList) {
 			this.id = id;
@@ -81,11 +83,19 @@ public final class Model {
 		}
 
 		Group withUnread(int unread) {
-			return new Group(id, name, lastText, lastSender, lastAt, unread, members, memberList);
+			Group g = new Group(id, name, lastText, lastSender, lastAt, unread, members, memberList);
+			g.role = role;
+			return g;
 		}
 
 		Group withLast(String text, String sender, long at, int unread) {
-			return new Group(id, name, text, sender, at, unread, members, memberList);
+			Group g = new Group(id, name, text, sender, at, unread, members, memberList);
+			g.role = role;
+			return g;
+		}
+
+		public boolean canModerate() {
+			return "owner".equals(role) || "admin".equals(role);
 		}
 	}
 
@@ -97,6 +107,11 @@ public final class Model {
 		public final String mediaUrl, mediaName;
 		/** Locally pasted picture shown while it uploads. */
 		public final String localKey;
+		/** The message this one answers (null when it is not a reply). */
+		public Reply reply;
+		/** Reactions: {userId, emoji} pairs, groups only. */
+		public List<String[]> reactions = Collections.emptyList();
+		public boolean edited, read;
 
 		public Message(String id, String senderId, String senderName, String content, long createdAt, boolean pending, boolean failed, boolean system, boolean deleted) {
 			this(id, senderId, senderName, content, createdAt, pending, failed, system, deleted, null, null, null);
@@ -117,6 +132,30 @@ public final class Model {
 			this.system = system;
 			this.deleted = deleted;
 		}
+	}
+
+	/** What a reply points at: enough to draw the quote and to jump to the original. */
+	public static final class Reply {
+		public final String id, senderName, content;
+		public final boolean deleted, media;
+
+		public Reply(String id, String senderName, String content, boolean media, boolean deleted) {
+			this.id = id;
+			this.senderName = senderName;
+			this.content = content == null ? "" : content;
+			this.media = media;
+			this.deleted = deleted;
+		}
+	}
+
+	/** A copy of {@code m} with its sending state changed (keeps the reply, reactions and the rest). */
+	public static Message withState(Message m, boolean pending, boolean failed) {
+		Message n = new Message(m.id, m.senderId, m.senderName, m.content, m.createdAt, pending, failed, m.system, m.deleted, m.mediaUrl, m.mediaName, m.localKey);
+		n.reply = m.reply;
+		n.reactions = m.reactions;
+		n.edited = m.edited;
+		n.read = m.read;
+		return n;
 	}
 
 	/** One chat (a DM or a group) and the messages loaded so far, oldest first. */
