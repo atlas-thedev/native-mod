@@ -58,6 +58,9 @@ public class Probe implements ModInitializer {
 			Class<?> gp = Class.forName("com.mojang.authlib.GameProfile");
 			Object alice = gp.getConstructor(UUID.class, String.class).newInstance(UUID.nameUUIDFromBytes("OfflinePlayer:TestAlice".getBytes(StandardCharsets.UTF_8)), "TestAlice");
 			Object nobody = gp.getConstructor(UUID.class, String.class).newInstance(UUID.nameUUIDFromBytes("OfflinePlayer:Nobody".getBytes(StandardCharsets.UTF_8)), "Nobody");
+			// A dedicated server never runs the mod's client entrypoint, so the skin sync only starts with the first
+			// lookup, and lookups no longer wait for the network. Start it now, then let the first snapshot arrive.
+			try { Class.forName("xyz.nativelaunch.NativeBoot").getMethod("ensure").invoke(null); } catch (Throwable e) { System.out.println("PROBE boot " + e); }
 			Thread.sleep(2500); // let the first directory snapshot arrive
 			String[] outcome = new String[2];
 			for (int round = 0; round < 2; round++) {
