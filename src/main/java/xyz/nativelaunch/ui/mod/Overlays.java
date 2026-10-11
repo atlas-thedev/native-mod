@@ -13,6 +13,26 @@ public final class Overlays {
 	private Overlays() {
 	}
 
+	/** When a module last asked for the vanilla crosshair / potion icons to be skipped (it draws its own instead). */
+	private static volatile long crosshairAt = Long.MIN_VALUE / 2, effectsAt = Long.MIN_VALUE / 2;
+
+	/** Called every frame by a module that replaces the vanilla crosshair. Skipped a moment after the calls stop. */
+	public static void replaceCrosshair() {
+		crosshairAt = System.nanoTime();
+	}
+
+	public static void replaceEffects() {
+		effectsAt = System.nanoTime();
+	}
+
+	public static boolean hideCrosshair() {
+		return System.nanoTime() - crosshairAt < 250_000_000L;
+	}
+
+	public static boolean hideEffects() {
+		return System.nanoTime() - effectsAt < 250_000_000L;
+	}
+
 	private static Class<?> stackClass, graphicsClass;
 	private static java.lang.reflect.Method pose, push, pop, translate, scale, jPush, jPop, jTranslate, jScale;
 

@@ -210,10 +210,11 @@ public final class UiRuntime {
 		}
 		game.playing = inWorld && screen == null;
 		playing = game.playing;
+		game.hudAllowed = kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !mc.hudHidden() && !mc.debugOpen();
 		modulesFrame();
 		Modules.tick();
 		watchLogin();
-		if (kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !mc.hudHidden() && !mc.debugOpen()) {
+		if (game.hudAllowed) {
 			hud = HudOverlay.any(game);
 		}
 		boolean overlay = mc.overlay();
@@ -351,6 +352,11 @@ public final class UiRuntime {
 	/** Opens the Native menu (mods, cosmetics, settings). */
 	public static void openMenu(Object parent) {
 		mc.setScreen(mc.newHost(McBridge.MENU, parent));
+	}
+
+	/** The screen the menu key opens: the HUD editor with the Native hub in the middle. */
+	public static void openHub() {
+		mc.setScreen(mc.newHost(McBridge.HUD, null));
 	}
 
 	/** Opens the Native menu straight on a tab: 0 mods, 1 cosmetics (the locker), 2 settings. */
@@ -517,13 +523,28 @@ public final class UiRuntime {
 				}
 				return true;
 			}
+			if (action == 1 && key == config.menuKey && (mods & (Ui.MOD_CONTROL | Ui.MOD_ALT | Ui.MOD_SUPER)) == 0 && Widgets.listening == null
+					&& ui != null && ui.focus == null) {
+				// the menu key also closes the hub / menu it opened
+				try {
+					Object s = mc.screen();
+					int k = mc.hostKind(s);
+					if (k == McBridge.HUD || k == McBridge.MENU) {
+						Modules.save();
+						closeHost(s);
+						return true;
+					}
+				} catch (Throwable t) {
+					fail(t);
+				}
+			}
 			Input.key(key, action, mods);
 			return true;
 		}
 		if (action == 1 && key == config.menuKey && (mods & (Ui.MOD_CONTROL | Ui.MOD_ALT | Ui.MOD_SUPER)) == 0) {
 			try {
 				if (mc.screen() == null && mc.inWorld()) {
-					openMenu(null);
+					openHub();
 					return true;
 				}
 			} catch (Throwable t) {

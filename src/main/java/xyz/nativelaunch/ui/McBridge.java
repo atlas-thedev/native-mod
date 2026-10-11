@@ -130,6 +130,14 @@ public interface McBridge {
 		return false;
 	}
 
+	/**
+	 * Fills the player state the status modules show: health, food, effects, armour, inventory and the entity under the
+	 * crosshair, limited to the parts in {@code needs} (Game.NEED_* bits). False when this version cannot be read.
+	 */
+	default boolean vitals(xyz.nativelaunch.ui.mod.Game g, int needs) {
+		return false;
+	}
+
 	/** Reads the scoreboard sidebar; false when this version can't be read (the vanilla one then stays). */
 	default boolean sidebar(xyz.nativelaunch.ui.mod.Overlays.Sidebar out) {
 		return false;

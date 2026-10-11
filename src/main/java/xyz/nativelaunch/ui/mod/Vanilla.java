@@ -1,0 +1,304 @@
+package xyz.nativelaunch.ui.mod;
+
+import xyz.nativelaunch.ui.gfx.Canvas;
+import xyz.nativelaunch.ui.gfx.Image;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Map;
+
+/**
+ * The game's own icons for the status modules: item and block textures, potion effect icons and the heart / food /
+ * armour pips. They are read from the vanilla assets on the class path (1.16 - 26.x all ship them at the same paths),
+ * decoded once and cached; anything the game doesn't have simply comes back null and the module draws a plain tile.
+ */
+public final class Vanilla {
+	private Vanilla() {
+	}
+
+	private static final Image NONE = new Image(1, 1, new int[1]);
+	private static final Map<String, Image> cache = new HashMap<String, Image>();
+	private static final Map<Image, Map<Long, Image>> sized = new IdentityHashMap<Image, Map<Long, Image>>();
+	private static int sizedCount;
+
+	/** A vanilla texture (e.g. "item/apple"); animated strips come back as their first frame. Null when missing. */
+	public static synchronized Image texture(String name) {
+		Image img = cache.get(name);
+		if (img == null) {
+			img = load("assets/minecraft/textures/" + name + ".png");
+			if (img != null && img.height > img.width && img.width > 0 && img.height % img.width == 0) {
+				int w = img.width;
+				int[] px = new int[w * w];
+				System.arraycopy(img.argb, 0, px, 0, px.length);
+				img = new Image(w, w, px);
+			}
+			cache.put(name, img == null ? NONE : img);
+		}
+		return img == NONE || img == null ? null : img;
+	}
+
+	private static Image load(String path) {
+		ClassLoader[] loaders = {Vanilla.class.getClassLoader(), Thread.currentThread().getContextClassLoader(), ClassLoader.getSystemClassLoader()};
+		for (ClassLoader cl : loaders) {
+			if (cl == null) {
+				continue;
+			}
+			try (InputStream in = cl.getResourceAsStream(path)) {
+				if (in == null) {
+					continue;
+				}
+				ByteArrayOutputStream out = new ByteArrayOutputStream();
+				byte[] buf = new byte[8192];
+				int n;
+				while ((n = in.read(buf)) > 0) {
+					out.write(buf, 0, n);
+				}
+				Image img = Image.decode(out.toByteArray());
+				if (img != null) {
+					return img;
+				}
+			} catch (Throwable ignored) {
+				// try the next loader
+			}
+		}
+		return null;
+	}
+
+	// ── effects ──────────────────────────────────────────────────────────
+
+	/** The game's icon for a potion effect ("speed", "instant_health", ...). */
+	public static Image effect(String id) {
+		return id == null || id.indexOf(':') >= 0 ? null : texture("mob_effect/" + id);
+	}
+
+	// ── items ────────────────────────────────────────────────────────────
+
+	private static final Map<String, Image> items = new HashMap<String, Image>();
+
+	/**
+	 * The icon of an item id: its flat item texture, or for blocks a small isometric cube built from the block's own
+	 * textures (the way the inventory shows them). Null when the game has neither.
+	 */
+	public static synchronized Image item(String id) {
+		if (id == null) {
+			return null;
+		}
+		Image img = items.get(id);
+		if (img == null) {
+			img = texture("item/" + id);
+			if (img == null) {
+				img = cube(id);
+			}
+			if (img == null && id.endsWith("_spawn_egg")) {
+				img = texture("item/template_spawn_egg") == null ? null : texture("item/template_spawn_egg");
+			}
+			items.put(id, img == null ? NONE : img);
+		}
+		return img == NONE ? null : img;
+	}
+
+	private static Image firstOf(String... names) {
+		for (String n : names) {
+			Image i = texture("block/" + n);
+			if (i != null) {
+				return i;
+			}
+		}
+		return null;
+	}
+
+	private static int tintFor(String id, boolean top) {
+		if (id.contains("leaves") && !id.contains("azalea") && !id.contains("cherry") && !id.contains("pale_oak")) {
+			return 0xFF48B518;
+		}
+		if (id.equals("grass_block") && top || id.equals("short_grass") || id.equals("tall_grass") || id.equals("fern") || id.equals("large_fern")) {
+			return 0xFF79C05A;
+		}
+		return 0;
+	}
+
+	/** An isometric cube of a block, 32 x 32, or null when the block has no textures. */
+	private static Image cube(String id) {
+		Image top = firstOf(id + "_top", id + "_top_open", id + "_end", id);
+		Image side = firstOf(id + "_side", id + "_front", id + "_side1", id);
+		if (side == null) {
+			side = firstOf(id + "_side", id + "_top", id + "_end");
+		}
+		if (top == null && side == null) {
+			Image flat = firstOf(id);
+			return flat;
+		}
+		if (top == null) {
+			top = side;
+		}
+		if (side == null) {
+			side = top;
+		}
+		int tt = tintFor(id, true), st = tintFor(id, false);
+		final int n = 32;
+		int[] out = new int[n * n];
+		for (int y = 0; y < n; y++) {
+			for (int x = 0; x < n; x++) {
+				float px = x + 0.5f, py = y + 0.5f;
+				// top face: A(16,1) B(30,8) C(16,15) D(2,8)
+				float s = ((px - 16) / 14f + (py - 1) / 7f) / 2f, t = ((py - 1) / 7f - (px - 16) / 14f) / 2f;
+				int c = 0;
+				if (s >= 0 && s < 1 && t >= 0 && t < 1) {
+					c = shade(sample(top, s, t), tt, 1f);
+				} else {
+					float u = (px - 2) / 14f, v = (py - 8 - 7 * u) / 15f;
+					if (u >= 0 && u < 1 && v >= 0 && v < 1) {
+						c = shade(sample(side, u, v), st, 0.82f);
+					} else {
+						u = (px - 16) / 14f;
+						v = (py - 15 + 7 * u) / 15f;
+						if (u >= 0 && u < 1 && v >= 0 && v < 1) {
+							c = shade(sample(side, u, v), st, 0.62f);
+						}
+					}
+				}
+				out[y * n + x] = c;
+			}
+		}
+		return new Image(n, n, out);
+	}
+
+	private static int sample(Image img, float u, float v) {
+		int x = Math.min(img.width - 1, Math.max(0, (int) (u * img.width)));
+		int y = Math.min(img.height - 1, Math.max(0, (int) (v * img.width))); // textures are square (strips were cropped)
+		if (y >= img.height) {
+			y = img.height - 1;
+		}
+		return img.argb[y * img.width + x];
+	}
+
+	private static int shade(int argb, int tint, float k) {
+		int a = argb >>> 24;
+		if (a == 0) {
+			return 0;
+		}
+		int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+		if (tint != 0) {
+			r = r * ((tint >> 16) & 0xFF) / 255;
+			g = g * ((tint >> 8) & 0xFF) / 255;
+			b = b * (tint & 0xFF) / 255;
+		}
+		return (a << 24) | ((int) (r * k) << 16) | ((int) (g * k) << 8) | (int) (b * k);
+	}
+
+	// ── heart / food / armour pips ───────────────────────────────────────
+
+	/** Names the pips can be asked for; each is {gui sprite (1.20.2+), x, y in gui/icons.png (older versions)}. */
+	private static final Map<String, Object[]> HUD = new HashMap<String, Object[]>();
+
+	static {
+		pip("heart_container", "heart/container", 16, 0);
+		pip("heart_full", "heart/full", 52, 0);
+		pip("heart_half", "heart/half", 61, 0);
+		pip("heart_absorb_full", "heart/absorbing_full", 160, 0);
+		pip("heart_absorb_half", "heart/absorbing_half", 169, 0);
+		pip("heart_poison_full", "heart/poisoned_full", 88, 0);
+		pip("heart_poison_half", "heart/poisoned_half", 97, 0);
+		pip("heart_wither_full", "heart/withered_full", 124, 0);
+		pip("heart_wither_half", "heart/withered_half", 133, 0);
+		pip("food_empty", "food_empty", 16, 27);
+		pip("food_full", "food_full", 52, 27);
+		pip("food_half", "food_half", 61, 27);
+		pip("food_hunger_full", "food_full_hunger", 88, 27);
+		pip("food_hunger_half", "food_half_hunger", 97, 27);
+		pip("armor_empty", "armor_empty", 16, 9);
+		pip("armor_half", "armor_half", 25, 9);
+		pip("armor_full", "armor_full", 34, 9);
+	}
+
+	private static void pip(String name, String sprite, int x, int y) {
+		HUD.put(name, new Object[] {sprite, x, y});
+	}
+
+	/** One of the 9 x 9 HUD pips ("heart_full", "food_half", "armor_full", ...), from the game's own assets. */
+	public static synchronized Image pip(String name) {
+		Image img = cache.get("pip:" + name);
+		if (img == null) {
+			Object[] d = HUD.get(name);
+			if (d != null) {
+				img = texture("gui/sprites/hud/" + d[0]);
+				if (img == null) {
+					Image sheet = texture("gui/icons");
+					if (sheet != null) {
+						img = crop(sheet, (Integer) d[1], (Integer) d[2], 9, 9);
+					}
+				}
+			}
+			cache.put("pip:" + name, img == null ? NONE : img);
+		}
+		return img == NONE ? null : img;
+	}
+
+	private static Image crop(Image src, int x, int y, int w, int h) {
+		// gui/icons.png is 256 x 256; scale the coordinates when a pack ships a bigger sheet
+		float k = src.width / 256f;
+		int X = Math.round(x * k), Y = Math.round(y * k), W = Math.round(w * k), H = Math.round(h * k);
+		if (X + W > src.width || Y + H > src.height) {
+			return null;
+		}
+		int[] out = new int[W * H];
+		for (int j = 0; j < H; j++) {
+			System.arraycopy(src.argb, (Y + j) * src.width + X, out, j * W, W);
+		}
+		return new Image(W, H, out);
+	}
+
+	// ── drawing ──────────────────────────────────────────────────────────
+
+	/**
+	 * Draws a texture in a box at exactly its on-screen pixel size, nearest-neighbour when it grows (pixel art stays crisp)
+	 * and area-averaged when it shrinks.
+	 */
+	public static void draw(Canvas c, Image img, float x, float y, float w, float h, int argb) {
+		if (img == null) {
+			return;
+		}
+		int pw = c.px(x + w) - c.px(x), ph = c.px(y + h) - c.px(y);
+		if (pw <= 0 || ph <= 0) {
+			return;
+		}
+		Image s = fit(img, pw, ph);
+		c.stamp(s, s, x, y, w, h, false, argb);
+	}
+
+	private static Image fit(Image src, int pw, int ph) {
+		if (src.width == pw && src.height == ph) {
+			return src;
+		}
+		long key = ((long) pw << 20) | ph;
+		Map<Long, Image> m = sized.get(src);
+		if (m == null) {
+			if (sizedCount > 1500) {
+				sized.clear();
+				sizedCount = 0;
+			}
+			m = new HashMap<Long, Image>();
+			sized.put(src, m);
+		}
+		Image s = m.get(key);
+		if (s == null) {
+			if (pw < src.width || ph < src.height) {
+				s = src.scaled(pw, ph);
+			} else {
+				int[] out = new int[pw * ph];
+				for (int y = 0; y < ph; y++) {
+					int sy = Math.min(src.height - 1, y * src.height / ph);
+					for (int x = 0; x < pw; x++) {
+						out[y * pw + x] = src.argb[sy * src.width + Math.min(src.width - 1, x * src.width / pw)];
+					}
+				}
+				s = new Image(pw, ph, out);
+			}
+			m.put(key, s);
+			sizedCount++;
+		}
+		return s;
+	}
+}

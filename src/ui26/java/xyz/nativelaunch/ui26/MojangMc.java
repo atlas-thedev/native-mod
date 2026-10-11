@@ -598,6 +598,81 @@ public final class MojangMc implements McBridge {
 		return true;
 	}
 
+
+	// ── player state for the status modules ──
+
+	private static void stack(net.minecraft.world.item.ItemStack st, xyz.nativelaunch.ui.mod.Game.Slot out) {
+		if (st == null || st.isEmpty()) {
+			out.clear();
+			return;
+		}
+		String id = xyz.nativelaunch.ui.mod.Game.bareId(st.getItem().toString());
+		if (id == null || id.isEmpty()) {
+			out.clear();
+			return;
+		}
+		boolean worn = st.isDamageableItem();
+		out.set(id, st.getCount(), worn ? st.getDamageValue() : 0, worn ? st.getMaxDamage() : 0);
+	}
+
+	@Override
+	public boolean vitals(xyz.nativelaunch.ui.mod.Game g, int needs) {
+		LocalPlayer p = client().player;
+		if (p == null) {
+			return false;
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_VITALS) != 0) {
+			g.health = p.getHealth();
+			g.maxHealth = Math.max(1f, p.getMaxHealth());
+			g.absorption = p.getAbsorptionAmount();
+			g.armorValue = p.getArmorValue();
+			g.food = p.getFoodData().getFoodLevel();
+			g.saturation = p.getFoodData().getSaturationLevel();
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_EFFECTS) != 0) {
+			int n = 0;
+			for (net.minecraft.world.effect.MobEffectInstance e : p.getActiveEffects()) {
+				if (n >= g.effects.length) {
+					break;
+				}
+				xyz.nativelaunch.ui.mod.Game.Effect fx = g.effects[n++];
+				fx.id = xyz.nativelaunch.ui.mod.Game.effectId(e.getDescriptionId());
+				fx.amp = e.getAmplifier();
+				fx.ticks = e.getDuration();
+				fx.ambient = e.isAmbient();
+				fx.infinite = e.isInfiniteDuration() || fx.ticks < 0;
+			}
+			g.effectCount = n;
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_ARMOR) != 0) {
+			stack(p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD), g.armor[0]);
+			stack(p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST), g.armor[1]);
+			stack(p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.LEGS), g.armor[2]);
+			stack(p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.FEET), g.armor[3]);
+			stack(p.getMainHandItem(), g.hand);
+			stack(p.getOffhandItem(), g.offhand);
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_INVENTORY) != 0) {
+			net.minecraft.world.entity.player.Inventory inv = p.getInventory();
+			for (int i = 0; i < g.inv.length; i++) {
+				stack(inv.getItem(i), g.inv[i]);
+			}
+			g.selected = Math.max(0, Math.min(8, inv.getSelectedSlot()));
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_TARGET) != 0) {
+			net.minecraft.world.entity.Entity t = client().crosshairPickEntity;
+			g.hasTarget = false;
+			if (t instanceof net.minecraft.world.entity.LivingEntity && !((net.minecraft.world.entity.LivingEntity) t).isDeadOrDying()) {
+				net.minecraft.world.entity.LivingEntity l = (net.minecraft.world.entity.LivingEntity) t;
+				g.targetName = l.getName().getString();
+				g.targetHealth = l.getHealth();
+				g.targetMax = Math.max(1f, l.getMaxHealth());
+				g.hasTarget = true;
+			}
+		}
+		return true;
+	}
+
 	@Override
 	public int ping() {
 		Minecraft c = client();

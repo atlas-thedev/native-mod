@@ -29,6 +29,86 @@ public final class Game {
 	public long window;
 	public boolean playing;
 
+	// ── player state for the status modules (filled by McBridge.vitals while a module needs it) ──
+
+	/** Bits of {@link Module#needs()}: which parts of the player to read this frame. */
+	public static final int NEED_VITALS = 1, NEED_EFFECTS = 2, NEED_ARMOR = 4, NEED_INVENTORY = 8, NEED_TARGET = 16;
+	public int needs;
+	/** The HUD is being drawn this frame (no screen, F1 / F3 off). */
+	public boolean hudAllowed;
+	/** The last {@code McBridge.vitals} read worked on this game version. */
+	public boolean vitalsOk;
+	public float health = 20, maxHealth = 20, absorption;
+	public int armorValue, food = 20;
+	public float saturation = 5;
+	public int effectCount;
+	public final Effect[] effects = new Effect[48];
+	/** head, chest, legs, feet */
+	public final Slot[] armor = new Slot[4];
+	/** 0 - 8 hotbar, 9 - 35 main inventory */
+	public final Slot[] inv = new Slot[36];
+	public final Slot hand = new Slot(), offhand = new Slot();
+	public int selected;
+	/** The living thing under the crosshair. */
+	public boolean hasTarget;
+	public String targetName = "";
+	public float targetHealth, targetMax;
+
+	/** An active potion effect. {@code id} is the bare vanilla id ("speed"), or "namespace:name" for modded ones. */
+	public static final class Effect {
+		public String id = "";
+		public int amp, ticks;
+		public boolean ambient, infinite;
+	}
+
+	/** One item stack: {@code id} is the bare item id ("diamond_sword"), null when empty. */
+	public static final class Slot {
+		public String id;
+		public int count, damage, max;
+
+		public boolean empty() {
+			return id == null;
+		}
+
+		public void clear() {
+			id = null;
+			count = damage = max = 0;
+		}
+
+		public void set(String id, int count, int damage, int max) {
+			this.id = id;
+			this.count = count;
+			this.damage = damage;
+			this.max = max;
+		}
+
+		/** Remaining durability fraction (1 = new); 1 for things that do not wear. */
+		public float durability() {
+			return max <= 0 ? 1f : Math.max(0f, Math.min(1f, (max - damage) / (float) max));
+		}
+	}
+
+	/** Strips the "minecraft:" namespace of a registry id. */
+	public static String bareId(String id) {
+		if (id == null) {
+			return null;
+		}
+		return id.startsWith("minecraft:") ? id.substring(10) : id;
+	}
+
+	/** "effect.minecraft.speed" -> "speed", "effect.mymod.bless" -> "mymod:bless". */
+	public static String effectId(String translationKey) {
+		if (translationKey == null) {
+			return "";
+		}
+		String k = translationKey.startsWith("effect.") ? translationKey.substring(7) : translationKey;
+		if (k.startsWith("minecraft.")) {
+			return k.substring(10);
+		}
+		int dot = k.indexOf('.');
+		return dot < 0 ? k : k.substring(0, dot) + ":" + k.substring(dot + 1);
+	}
+
 	// fps / cps bookkeeping
 	private static int frameCount;
 	private static long frameWindow;
@@ -42,6 +122,15 @@ public final class Game {
 
 	public Game() {
 		java.util.Arrays.fill(keys, -1);
+		for (int i = 0; i < effects.length; i++) {
+			effects[i] = new Effect();
+		}
+		for (int i = 0; i < armor.length; i++) {
+			armor[i] = new Slot();
+		}
+		for (int i = 0; i < inv.length; i++) {
+			inv[i] = new Slot();
+		}
 	}
 
 	/** Called at the start of every frame. */
@@ -112,6 +201,16 @@ public final class Game {
 			lastPosAt = 0;
 			speed = 0;
 		}
+		needs = inWorld ? Modules.needs() : 0;
+		if (needs != 0) {
+			vitalsOk = mc.vitals(this, needs);
+			if (!vitalsOk) {
+				effectCount = 0;
+				hasTarget = false;
+			}
+		} else {
+			vitalsOk = false;
+		}
 		// the rest changes slowly: every 10th frame is plenty
 		if (slow++ % 10 == 0) {
 			Runtime rt = Runtime.getRuntime();
@@ -157,7 +256,47 @@ public final class Game {
 		g.down[FORWARD] = true;
 		g.down[ATTACK] = t % 3 == 0;
 		g.down[JUMP] = t % 7 == 0;
+		g.fillSample();
 		return g;
+	}
+
+	private void fillSample() {
+		health = 17f;
+		maxHealth = 20f;
+		absorption = 4f;
+		armorValue = 15;
+		food = 15;
+		saturation = 4.2f;
+		long now = System.currentTimeMillis();
+		String[] ids = {"speed", "strength", "regeneration", "night_vision", "fire_resistance"};
+		int[] amp = {1, 2, 0, 0, 0};
+		int[] ticks = {20 * 134, 20 * 61, 20 * 7 - (int) (now / 50 % 100), 20 * 480, 20 * 193};
+		effectCount = ids.length;
+		for (int i = 0; i < ids.length; i++) {
+			effects[i].id = ids[i];
+			effects[i].amp = amp[i];
+			effects[i].ticks = ticks[i];
+			effects[i].ambient = false;
+			effects[i].infinite = false;
+		}
+		armor[0].set("diamond_helmet", 1, 53, 363);
+		armor[1].set("diamond_chestplate", 1, 120, 528);
+		armor[2].set("iron_leggings", 1, 31, 225);
+		armor[3].set("netherite_boots", 1, 17, 481);
+		String[] items = {"diamond_sword", "bow", "golden_apple", "cooked_beef", "ender_pearl", "oak_planks", "cobblestone", "torch", "water_bucket",
+				"diamond_pickaxe", "arrow", "oak_log", "iron_ingot", "diamond", "bread", "grass_block", "tnt", "shield"};
+		int[] counts = {1, 1, 6, 24, 12, 64, 48, 32, 1, 1, 128, 22, 31, 9, 16, 7, 8, 1};
+		for (int i = 0; i < items.length; i++) {
+			int slot = i < 9 ? i : 9 + (i - 9) * 1;
+			inv[slot].set(items[i], counts[i], i == 0 ? 120 : i == 9 ? 300 : 0, i == 0 ? 1561 : i == 9 ? 1561 : 0);
+		}
+		selected = 0;
+		hand.set("diamond_sword", 1, 120, 1561);
+		offhand.set("shield", 1, 12, 336);
+		hasTarget = true;
+		targetName = "Zombie";
+		targetHealth = 13f;
+		targetMax = 20f;
 	}
 
 	/** Facing as a compass word (N, NE, ...), from the vanilla yaw (0 = south, 90 = west). */

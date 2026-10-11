@@ -10,7 +10,7 @@ import xyz.nativelaunch.ui.mod.Setting;
 public final class Widgets {
 	/** Id of the keybind button waiting for a key, or null. */
 	public static String listening;
-	public static final int[] SWATCHES = {0xFFFFFFFF, 0xFFD9A6DA, 0xFF60A5FA, 0xFF22C55E, 0xFFF59E0B, 0xFFEF4444, 0xFFA78BFA, 0xFF2DD4BF};
+	public static final int[] SWATCHES = {0xFFFFFFFF, 0xFFD9A6DA, 0xFF60A5FA, 0xFF22C55E, 0xFFF59E0B, 0xFFEF4444, 0xFFA78BFA, 0xFF2DD4BF, 0xFF000000};
 	public static final float ROW = 40;
 
 	private Widgets() {
@@ -101,7 +101,7 @@ public final class Widgets {
 		return SWATCHES.length * 22 - 4;
 	}
 
-	/** Eight preset colours; true when one was picked. */
+	/** Preset colours; true when one was picked. */
 	public static boolean swatches(Ui ui, String id, float x, float y, Setting.Color col) {
 		Canvas c = ui.c;
 		boolean changed = false;
@@ -119,6 +119,7 @@ public final class Widgets {
 				c.circle(sx + 9, y + 9, 9 + 2 * hv, Theme.alpha(0xFFFFFFFF, sel ? 0.9f : 0.25f * hv));
 				c.circle(sx + 9, y + 9, 9 + 0.5f * hv, 0xFF08090C);
 			}
+			c.circle(sx + 9, y + 9, 7.6f, 0x33FFFFFF);
 			c.circle(sx + 9, y + 9, 7, sw);
 		}
 		return changed;

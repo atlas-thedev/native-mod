@@ -32,6 +32,8 @@ public final class HudModules {
 		Modules.register(new ZoomModule());
 		Modules.register(new Fullbright());
 		Modules.register(new PerformanceModules.BackgroundFps());
+		StatusModules.register();
+		Modules.register(new CrosshairModule());
 	}
 
 	static McBridge mc() {
@@ -127,6 +129,7 @@ public final class HudModules {
 
 		Clock() {
 			super("clock", "Clock", "The time on your computer.", Theme.I_CLOCK, false, 1f, 0f);
+			drop(labels);
 		}
 
 		@Override
@@ -188,6 +191,7 @@ public final class HudModules {
 	static final class ServerIp extends HudModule {
 		ServerIp() {
 			super("server", "Server IP", "The server you are playing on.", Theme.I_SERVER, false, 1f, 0.21f);
+			drop(labels);
 		}
 
 		@Override
@@ -237,6 +241,7 @@ public final class HudModules {
 
 		Keystrokes() {
 			super("keystrokes", "Keystrokes", "Shows the movement keys and mouse buttons you press.", Theme.I_KEYBOARD, true, 0f, 0.5f);
+			drop(shadow);
 		}
 
 		@Override
@@ -295,12 +300,15 @@ public final class HudModules {
 			return n.length() > 5 ? def : n;
 		}
 
+		/** Card: filled keys. Text: no key shapes, just the letters (a pressed key lights up). Brackets: outlined keys. */
 		private void box(Canvas c, float s, float x, float y, float w, float h, float t) {
-			float a = opacity.value / 100f;
+			float a = style.value == STYLE_CARD ? opacity.value / 100f : 0f;
 			int bg = Theme.mix(Theme.alpha(0xFF08090C, a), Theme.alpha(pressed.value, 0.92f), t);
 			c.round(x, y, w, h, 5 * s, bg);
 			if (style.value == STYLE_CARD) {
 				c.outline(x, y, w, h, 5 * s, 1, Theme.alpha(Theme.HAIRLINE_STRONG, Math.max(0.3f, a)));
+			} else if (style.value == STYLE_BRACKETS) {
+				c.outline(x, y, w, h, 5 * s, 1, Theme.alpha(color.value, Math.max(0.35f, 0.7f * (1 - t))));
 			}
 		}
 
@@ -336,6 +344,7 @@ public final class HudModules {
 
 		Direction() {
 			super("direction", "Direction", "A compass strip that turns with you.", Theme.I_COMPASS, false, 0.5f, 0f);
+			drop(labels);
 		}
 
 		@Override
@@ -353,6 +362,8 @@ public final class HudModules {
 			float w = 200 * s, h = 22 * s;
 			if (style.value == STYLE_CARD) {
 				background(c, x, y, w, h, s);
+			} else if (style.value == STYLE_BRACKETS) {
+				brackets(c, x, y, w, h, s);
 			}
 			float heading = (((g.yaw + 180) % 360) + 360) % 360;
 			float span = 110; // degrees visible
@@ -398,6 +409,7 @@ public final class HudModules {
 		ToggleSprint() {
 			super("togglesprint", "Toggle Sprint", "Press sprint once to keep sprinting (optionally sneak too).", MECHANIC, Theme.I_FOOTPRINTS,
 					false, 0f, 1f);
+			drop(labels);
 		}
 
 		@Override
@@ -542,6 +554,7 @@ public final class HudModules {
 	}
 
 	static final class Fullbright extends Module {
+		final Setting.Num level = add(new Setting.Num("level", "Brightness", 16, 2, 16, 1, ""));
 		private double old = Double.NaN;
 		private int tick;
 
@@ -556,11 +569,11 @@ public final class HudModules {
 			}
 			McBridge mc = mc();
 			double now = mc.gamma();
-			if (now < 15) {
-				if (Double.isNaN(old)) {
-					old = now;
+			if (Math.abs(now - level.value) > 0.01) {
+				if (Double.isNaN(old) && now <= 1.5) {
+					old = now; // the player's own brightness, put back when this is switched off
 				}
-				mc.setGamma(16);
+				mc.setGamma(level.value);
 			}
 		}
 

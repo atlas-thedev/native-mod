@@ -23,6 +23,8 @@
     "ZoomMixin26",
     "BossBarMixin26",
     "SidebarMixin26",
+    "HudHideMixin",
+    "HudHideMixin26",
     "HoodHatMixin",
     "HoodSlotMixin",
     "HoodScopeMixin",

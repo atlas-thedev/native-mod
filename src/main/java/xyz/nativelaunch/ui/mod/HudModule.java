@@ -46,6 +46,13 @@ public abstract class HudModule extends Module {
 		labels = look(new Setting.Bool("labels", "Show labels", true));
 	}
 
+	/** Hides shared appearance settings this module does not use (so the menu never lists a setting that does nothing). */
+	protected final void drop(Setting... unused) {
+		for (Setting s : unused) {
+			appearance.remove(s);
+		}
+	}
+
 	private <T extends Setting> T look(T s) {
 		appearance.add(s);
 		return s;
@@ -62,6 +69,33 @@ public abstract class HudModule extends Module {
 		every.addAll(settings);
 		every.addAll(appearance);
 		return every;
+	}
+
+	private final List<Setting> shownLook = new ArrayList<Setting>(), shownEvery = new ArrayList<Setting>();
+
+	/** The shared appearance settings that currently do something. */
+	public List<Setting> shownAppearance() {
+		shownLook.clear();
+		for (int i = 0; i < appearance.size(); i++) {
+			if (!hidden(appearance.get(i))) {
+				shownLook.add(appearance.get(i));
+			}
+		}
+		return shownLook;
+	}
+
+	@Override
+	public List<Setting> shownAll() {
+		shownEvery.clear();
+		shownEvery.addAll(shownSettings());
+		shownEvery.addAll(shownAppearance());
+		return shownEvery;
+	}
+
+	/** The background opacity only matters behind a card. */
+	@Override
+	protected boolean hidden(Setting s) {
+		return s == opacity && style.value != STYLE_CARD;
 	}
 
 	/** Screen position (logical px) for an anchor fraction, a screen side and the module size. */
@@ -174,6 +208,20 @@ public abstract class HudModule extends Module {
 		}
 		c.round(x, y, w, h, 6 * s, Theme.alpha(0xFF08090C, a));
 		c.outline(x, y, w, h, 6 * s, 1, Theme.alpha(Theme.HAIRLINE, Math.min(1f, a * 1.6f)));
+	}
+
+	/** Corner brackets around a module (Brackets style). */
+	protected void brackets(Canvas c, float x, float y, float w, float h, float s) {
+		float t = Math.max(1f, s), l = 5 * s;
+		int col = Theme.alpha(color.value, 0.85f);
+		c.fill(x, y, l, t, col);
+		c.fill(x, y, t, l, col);
+		c.fill(x + w - l, y, l, t, col);
+		c.fill(x + w - t, y, t, l, col);
+		c.fill(x, y + h - t, l, t, col);
+		c.fill(x, y + h - l, t, l, col);
+		c.fill(x + w - l, y + h - t, l, t, col);
+		c.fill(x + w - t, y + h - l, t, l, col);
 	}
 
 	/** Text with the optional drop shadow; returns the x after it. */

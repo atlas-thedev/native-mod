@@ -563,6 +563,129 @@ public final class IntermediaryMc implements McBridge {
 		Object name = call(call(client(), "method_1548"), "method_1676");
 		return name instanceof String ? (String) name : null;
 	}
+
+	// ── player state for the status modules (intermediary names, stable 1.16.5 - 1.21.11) ──
+
+	private static int intOf(Object o, int def) {
+		return o instanceof Number ? ((Number) o).intValue() : def;
+	}
+
+	private static float floatOf(Object o, float def) {
+		return o instanceof Number ? ((Number) o).floatValue() : def;
+	}
+
+	private Object[] armorSlots;
+
+	private void stack(Object st, xyz.nativelaunch.ui.mod.Game.Slot out) {
+		if (st == null || Boolean.TRUE.equals(call(st, "method_7960"))) { // ItemStack.isEmpty
+			out.clear();
+			return;
+		}
+		Object item = call(st, "method_7909"); // getItem
+		String id = item == null ? null : xyz.nativelaunch.ui.mod.Game.bareId(item.toString());
+		if (id == null || id.isEmpty()) {
+			out.clear();
+			return;
+		}
+		int damage = 0, max = 0;
+		if (Boolean.TRUE.equals(call(st, "method_7963"))) { // isDamageable
+			damage = intOf(call(st, "method_7919"), 0);
+			max = intOf(call(st, "method_7936"), 0);
+		}
+		out.set(id, intOf(call(st, "method_7947"), 1), damage, max);
+	}
+
+	@Override
+	public boolean vitals(xyz.nativelaunch.ui.mod.Game g, int needs) {
+		Object p = localPlayer();
+		if (p == null) {
+			return false;
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_VITALS) != 0) {
+			g.health = floatOf(call(p, "method_6032"), g.health);
+			g.maxHealth = Math.max(1f, floatOf(call(p, "method_6063"), g.maxHealth));
+			g.absorption = floatOf(call(p, "method_6067"), 0f);
+			g.armorValue = intOf(call(p, "method_6096"), 0);
+			Object hunger = call(p, "method_7344"); // getHungerManager
+			g.food = intOf(call(hunger, "method_7586"), g.food);
+			g.saturation = floatOf(call(hunger, "method_7589"), g.saturation);
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_EFFECTS) != 0) {
+			int n = 0;
+			Object map = call(p, "method_6088"); // getActiveStatusEffects
+			if (map instanceof java.util.Map) {
+				for (Object e : ((java.util.Map<?, ?>) map).values()) {
+					if (n >= g.effects.length || e == null) {
+						break;
+					}
+					xyz.nativelaunch.ui.mod.Game.Effect fx = g.effects[n++];
+					Object key = call(e, "method_5586"); // getTranslationKey
+					fx.id = xyz.nativelaunch.ui.mod.Game.effectId(key instanceof String ? (String) key : null);
+					fx.amp = intOf(call(e, "method_5578"), 0);
+					fx.ticks = intOf(call(e, "method_5584"), 0);
+					fx.ambient = Boolean.TRUE.equals(call(e, "method_5591"));
+					fx.infinite = Boolean.TRUE.equals(call(e, "method_48559")) || fx.ticks < 0;
+				}
+			}
+			g.effectCount = n;
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_ARMOR) != 0) {
+			try {
+				if (armorSlots == null) {
+					Class<?> slot = Class.forName("net.minecraft.class_1304"); // EquipmentSlot
+					armorSlots = new Object[] {slot.getField("field_6169").get(null), slot.getField("field_6174").get(null),
+							slot.getField("field_6172").get(null), slot.getField("field_6166").get(null)};
+				}
+				Method equipped = method(p.getClass(), "method_6118", armorSlots[0].getClass());
+				for (int i = 0; i < 4 && equipped != null; i++) {
+					stack(equipped.invoke(p, armorSlots[i]), g.armor[i]);
+				}
+				stack(call(p, "method_6047"), g.hand); // getMainHandStack
+				stack(call(p, "method_6079"), g.offhand); // getOffHandStack
+			} catch (Throwable t) {
+				for (int i = 0; i < 4; i++) {
+					g.armor[i].clear();
+				}
+			}
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_INVENTORY) != 0) {
+			Object inv = get(p, "field_7514"); // PlayerEntity.inventory
+			Object main = get(inv, "field_7547"); // PlayerInventory.main
+			if (main instanceof java.util.List) {
+				java.util.List<?> list = (java.util.List<?>) main;
+				for (int i = 0; i < g.inv.length; i++) {
+					stack(i < list.size() ? list.get(i) : null, g.inv[i]);
+				}
+			}
+			g.selected = Math.max(0, Math.min(8, intOf(get(inv, "field_7545"), 0)));
+		}
+		if ((needs & xyz.nativelaunch.ui.mod.Game.NEED_TARGET) != 0) {
+			Object t = get(client(), "field_1692"); // MinecraftClient.targetedEntity
+			g.hasTarget = false;
+			if (t != null && t.getClass() != null && isLiving(t) && !Boolean.TRUE.equals(call(t, "method_29504"))) { // LivingEntity.isDead
+				Object name = call(call(t, "method_5477"), "getString"); // Entity.getName().getString() (an unobfuscated name)
+				g.targetName = name instanceof String ? (String) name : "";
+				g.targetHealth = floatOf(call(t, "method_6032"), 0f);
+				g.targetMax = Math.max(1f, floatOf(call(t, "method_6063"), 20f));
+				g.hasTarget = true;
+			}
+		}
+		return true;
+	}
+
+	private Class<?> livingClass;
+
+	private boolean isLiving(Object o) {
+		try {
+			if (livingClass == null) {
+				livingClass = Class.forName("net.minecraft.class_1309");
+			}
+			return livingClass.isInstance(o);
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
 	// ── scoreboard sidebar + boss bars (names checked against Mojang + intermediary mappings, 1.16.5 - 1.21.11) ──
 
 	private static final int RED_NUMBER = 0xFFFF5555;
