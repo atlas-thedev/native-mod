@@ -302,7 +302,16 @@ public final class TitleView {
 			if (client.state == RelayClient.State.OFFLINE) {
 				empty(c, x, listY, w, listH, Theme.I_WIFI_OFF, "Relay is offline", "Retrying in the background.");
 			} else {
-				ui.dots(x + w / 2, listY + listH / 2, Theme.TEXT_SECONDARY);
+				// friends on their way: skeleton rows shaped like the real ones
+				c.pushClip(x, listY, w, listH);
+				for (int i = 0; i * 50 < listH; i++) {
+					float ry = listY + i * 50;
+					c.skeleton(x + pad, ry + 8, 34, 34, 9);
+					float lw = 70 + (i * 37) % 60;
+					c.skeleton(x + pad + 46, ry + 13, Math.min(lw, w - pad * 2 - 56), 10, 5);
+					c.skeleton(x + pad + 46, ry + 30, Math.min(lw + 40, w - pad * 2 - 56), 8, 4);
+				}
+				c.popClip();
 			}
 		} else if (friends.isEmpty()) {
 			empty(c, x, listY, w, listH, Theme.I_USER_PLUS, "No friends yet", "Add friends in the Native launcher's Relay tab.");

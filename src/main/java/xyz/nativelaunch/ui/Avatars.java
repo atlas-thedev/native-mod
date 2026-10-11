@@ -54,6 +54,11 @@ public final class Avatars {
 	/** Draws a rounded avatar for a player. skin = texture hash (may be null). */
 	public static void draw(Canvas c, String api, String name, String skin, float x, float y, float size, float radius) {
 		Image face = skin == null ? null : face(api, skin);
+		if (skin != null && face == null) {
+			// still downloading: a skeleton instead of the letter, so the face doesn't pop from letter to skin
+			c.skeleton(x, y, size, size, radius);
+			return;
+		}
 		if (face != null && face != NONE) {
 			c.round(x, y, size, size, radius, 0xFF1A1B20);
 			// faces are pixel art: inset slightly so the rounded mask reads as rounded
@@ -75,7 +80,11 @@ public final class Avatars {
 			return f;
 		}
 		boolean mojang = skin.startsWith("mj:") && skin.substring(3).matches("[a-f0-9]{32}");
-		if (requested.putIfAbsent(skin, Boolean.TRUE) == null && (mojang || skin.matches("[a-f0-9]{64}"))) {
+		if (!mojang && !skin.matches("[a-f0-9]{64}")) {
+			faces.put(skin, NONE); // not a texture hash: nothing to load, show the letter
+			return NONE;
+		}
+		if (requested.putIfAbsent(skin, Boolean.TRUE) == null) {
 			Thread t = new Thread(() -> {
 				try {
 					String url = mojang ? mojangSkinUrl(skin.substring(3)) : api + "/csl/textures/" + skin;

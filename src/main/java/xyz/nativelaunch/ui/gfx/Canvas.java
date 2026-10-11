@@ -131,6 +131,15 @@ public final class Canvas {
 		quad(null, x0, y0, x1, y1, u, v, u, v, c0, c1, c2, c3);
 	}
 
+	/**
+	 * Skeleton placeholder: a rounded block that pulses softly while its content (avatar, chat, list) is still
+	 * loading. Every skeleton shares one clock, so a whole screen of them breathes together.
+	 */
+	public void skeleton(float x, float y, float w, float h, float r) {
+		float t = (float) ((Math.sin(System.nanoTime() / 1.0e6 / 420.0) + 1) / 2);
+		round(x, y, w, h, r, xyz.nativelaunch.ui.Theme.mix(0xFF16171C, 0xFF1F2026, t));
+	}
+
 	public void round(float x, float y, float w, float h, float r, int argb) {
 		nine(px(x), px(y), px(x + w), px(y + h), px(r), 0, 0, argb);
 	}

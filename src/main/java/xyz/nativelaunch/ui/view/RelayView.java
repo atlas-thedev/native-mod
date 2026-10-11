@@ -367,7 +367,10 @@ public final class RelayView {
 		float cy = my0 + 14 - off;
 		if (conv.hasMore) {
 			if (conv.loading) {
-				ui.dots(x + w / 2, cy + 8, Theme.TEXT_MUTED);
+				// older page on its way: one skeleton message in the space it already keeps (no jumping)
+				shimmer(ui, x + pad, cy - 2, 22, 22, 7);
+				shimmer(ui, x + pad + 32, cy + 1, 70, 8, 4);
+				shimmer(ui, x + pad + 32, cy + 13, Math.min(w - pad * 2 - 40, 190), 7, 3.5f);
 			} else if (firstIds.get(selected) != null && (sc.content <= mh || sc.offset < 30 && !sc.atBottom())) {
 				// only when the reader scrolled up to the top: not while the chat is still opening (that loaded
 				// page after page and the view jumped up and down)
@@ -810,8 +813,7 @@ public final class RelayView {
 	// ── skeletons ─────────────────────────────────────────────────────────
 
 	private static void shimmer(Ui ui, float x, float y, float w, float h, float r) {
-		float t = (float) ((Math.sin(ui.now / 420.0) + 1) / 2);
-		ui.c.round(x, y, w, h, r, Theme.mix(0xFF16171C, 0xFF1F2026, t));
+		ui.c.skeleton(x, y, w, h, r);
 	}
 
 	private void skeletonRows(Ui ui, float x, float y, float w, int n) {
