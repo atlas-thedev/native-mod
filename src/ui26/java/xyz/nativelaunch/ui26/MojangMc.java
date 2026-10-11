@@ -251,6 +251,66 @@ public final class MojangMc implements McBridge {
 		}
 	}
 
+	/** 26.3+ World Options screen, built directly: {@code new WorldOptionsScreen(Screen parent, Level level)}. */
+	private static Object worldOptions(Screen parent, Object level) {
+		if (level == null) {
+			return null;
+		}
+		try {
+			Class<?> cls = Class.forName("net.minecraft.client.gui.screens.WorldOptionsScreen");
+			for (Constructor<?> ctor : cls.getConstructors()) {
+				Class<?>[] t = ctor.getParameterTypes();
+				if (t.length == 2 && t[0].isAssignableFrom(Screen.class) && t[1].isInstance(level)) {
+					return ctor.newInstance(parent, level);
+				}
+			}
+		} catch (ClassNotFoundException e) {
+			return null; // before 26.3
+		} catch (Throwable t) {
+			xyz.nativelaunch.core.Log.warn("Couldn't open World Options directly: {}", String.valueOf(t.getCause() != null ? t.getCause() : t));
+		}
+		return null;
+	}
+
+	/** Opens the vanilla pause screen and presses the button with this label; false when it isn't there. */
+	private boolean pressVanillaPause(String label) {
+		xyz.nativelaunch.ui.UiRuntime.pauseBypass = true;
+		try {
+			Screen vanilla = new PauseScreen(true);
+			setScreen(vanilla);
+			Object target = null;
+			for (Object w : vanilla.children()) {
+				Object text = call(call(w, "getMessage"), "getString");
+				if (label.equals(text)) {
+					target = w;
+				}
+			}
+			if (target == null) {
+				return true; // the vanilla pause screen stays open: the player can press its button
+			}
+			Object nul = null;
+			for (Class<?> k = target.getClass(); k != null; k = k.getSuperclass()) {
+				for (Method m : k.getDeclaredMethods()) {
+					if (m.getName().equals("onPress") && m.getParameterCount() <= 1) {
+						m.setAccessible(true);
+						if (m.getParameterCount() == 0) {
+							m.invoke(target);
+						} else {
+							m.invoke(target, nul);
+						}
+						return true;
+					}
+				}
+			}
+			return true;
+		} catch (Throwable t) {
+			xyz.nativelaunch.core.Log.warn("Couldn't press the vanilla {} button: {}", label, String.valueOf(t));
+			return true;
+		} finally {
+			xyz.nativelaunch.ui.UiRuntime.pauseBypass = false;
+		}
+	}
+
 	@Override
 	public Object newVanillaTitle() {
 		return new TitleScreen();
@@ -300,10 +360,17 @@ public final class MojangMc implements McBridge {
 						: "stats".equals(action) ? "net.minecraft.client.gui.screens.achievement.StatsScreen"
 						: "net.minecraft.client.gui.screens.ShareToLanScreen";
 				Object level = client().level;
-				next = xyz.nativelaunch.ui.ScreenFactory.create(cls, p, Screen.class, player, connection, level);
-				if (next == null && "lan".equals(action)) {
+				if ("lan".equals(action)) {
 					// 26.3 replaced Open to LAN with World Options (Screen parent, Level)
-					next = xyz.nativelaunch.ui.ScreenFactory.create("net.minecraft.client.gui.screens.WorldOptionsScreen", p, Screen.class, player, connection, level);
+					next = worldOptions(p, level);
+				}
+				if (next == null) {
+					next = xyz.nativelaunch.ui.ScreenFactory.create(cls, p, Screen.class, player, connection, level);
+				}
+				if (next == null && "lan".equals(action)) {
+					// last resort: press the button on the vanilla pause screen, which knows how to build it
+					String label = tr("options.worldOptions.button", null);
+					return pressVanillaPause(label != null ? label : tr("menu.shareToLan", "Open to LAN"));
 				}
 			} else if ("mods".equals(action)) {
 				Constructor<?> ctor = mods();
