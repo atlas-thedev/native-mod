@@ -16,7 +16,11 @@ public abstract class Setting {
 
 	abstract void load(JsonElement e);
 
-	abstract void reset();
+	/** Back to the value the setting ships with. */
+	public abstract void reset();
+
+	/** True while the setting holds its shipped value (no reset button then). */
+	public abstract boolean isDefault();
 
 	public static final class Bool extends Setting {
 		public boolean value;
@@ -35,8 +39,12 @@ public abstract class Setting {
 			value = e.getAsBoolean();
 		}
 
-		void reset() {
+		public void reset() {
 			value = def;
+		}
+
+		public boolean isDefault() {
+			return value == def;
 		}
 	}
 
@@ -74,8 +82,12 @@ public abstract class Setting {
 			set(e.getAsFloat());
 		}
 
-		void reset() {
+		public void reset() {
 			value = def;
+		}
+
+		public boolean isDefault() {
+			return Math.abs(value - def) < 1e-4f;
 		}
 	}
 
@@ -97,8 +109,12 @@ public abstract class Setting {
 			value = (int) Long.parseLong(s.length() == 6 ? "FF" + s : s, 16);
 		}
 
-		void reset() {
+		public void reset() {
 			value = def;
+		}
+
+		public boolean isDefault() {
+			return value == def;
 		}
 	}
 
@@ -126,8 +142,12 @@ public abstract class Setting {
 			}
 		}
 
-		void reset() {
+		public void reset() {
 			value = def;
+		}
+
+		public boolean isDefault() {
+			return value == def;
 		}
 	}
 
@@ -148,8 +168,12 @@ public abstract class Setting {
 			value = e.getAsInt();
 		}
 
-		void reset() {
+		public void reset() {
 			value = def;
+		}
+
+		public boolean isDefault() {
+			return value == def;
 		}
 	}
 }

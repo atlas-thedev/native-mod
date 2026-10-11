@@ -90,12 +90,48 @@ public final class Keys {
 			case 344: return "RShift";
 			case 345: return "RCtrl";
 			case 346: return "RAlt";
+			case 260: return "Insert";
+			case 261: return "Delete";
 			case 262: return "Right";
 			case 263: return "Left";
 			case 264: return "Down";
 			case 265: return "Up";
+			case 266: return "PgUp";
+			case 267: return "PgDn";
+			case 268: return "Home";
+			case 269: return "End";
+			case 281: return "ScrLk";
+			case 282: return "NumLk";
+			case 283: return "PrtSc";
+			case 284: return "Pause";
+			case 330: return "Num .";
+			case 331: return "Num /";
+			case 332: return "Num *";
+			case 333: return "Num -";
+			case 334: return "Num +";
+			case 335: return "Num Enter";
+			case 336: return "Num =";
+			case 343: return "LWin";
+			case 347: return "RWin";
+			case 348: return "Menu";
+			case 39: return "'";
+			case 44: return ",";
+			case 45: return "-";
+			case 46: return ".";
+			case 47: return "/";
+			case 59: return ";";
+			case 61: return "=";
+			case 91: return "[";
+			case 92: return "\\";
+			case 93: return "]";
+			case 96: return "`";
+			case 161: return "World 1";
+			case 162: return "World 2";
 			default:
 				break;
+		}
+		if (code >= 5 && code <= 7) {
+			return "M" + (code + 1);
 		}
 		if (code >= 290 && code <= 314) {
 			return "F" + (code - 289);

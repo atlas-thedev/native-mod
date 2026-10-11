@@ -173,7 +173,9 @@ public final class Widgets {
 		float fs = 12.5f;
 		c.text(Fonts.MEDIUM, fs, s.label, x, y + (h - c.lineHeight(Fonts.MEDIUM, fs)) / 2, Theme.TEXT);
 		boolean changed = false;
+		float controlX = x + w; // left edge of the control, so the reset button can sit just before it
 		if (s instanceof Setting.Bool) {
+			controlX = x + w - 34;
 			Setting.Bool b = (Setting.Bool) s;
 			if (ui.toggle(id, x + w - 34, y + (h - 20) / 2, b.value)) {
 				b.value = !b.value;
@@ -187,6 +189,7 @@ public final class Widgets {
 			c.text(Fonts.SEMIBOLD, 11.5f, v, x + w - c.textWidth(Fonts.SEMIBOLD, 11.5f, v), y + (h - c.lineHeight(Fonts.SEMIBOLD, 11.5f)) / 2,
 					Theme.TEXT_SECONDARY);
 			changed = slider(ui, id, x + w - vw - sw, y + (h - 18) / 2, sw, n);
+			controlX = x + w - vw - sw - 6;
 		} else if (s instanceof Setting.Choice) {
 			Setting.Choice ch = (Setting.Choice) s;
 			float sw = 0;
@@ -195,17 +198,28 @@ public final class Widgets {
 			}
 			sw = Math.min(Math.max(sw, 90), Math.max(w * 0.68f, w - c.textWidth(Fonts.MEDIUM, fs, s.label) - 16));
 			int v = segmented(ui, id, x + w - sw, y + (h - 26) / 2, sw, 26, ch.options, ch.value);
+			controlX = x + w - sw;
 			if (v != ch.value) {
 				ch.value = v;
 				changed = true;
 			}
 		} else if (s instanceof Setting.Color) {
 			changed = swatches(ui, id, x + w - swatchesWidth(), y + (h - 18) / 2, (Setting.Color) s);
+			controlX = x + w - swatchesWidth();
 		} else if (s instanceof Setting.Key) {
 			Setting.Key k = (Setting.Key) s;
 			int v = keybind(ui, id, x + w - 110, y + (h - 28) / 2, 110, 28, k.value);
+			controlX = x + w - 110;
 			if (v != k.value) {
 				k.value = v;
+				changed = true;
+			}
+		}
+		// changed from what it ships with: a small reset button brings it back (UI size, keys, module options...)
+		if (!s.isDefault() && !ui.isPressing(id)) {
+			float rs = 22;
+			if (ui.iconButton(id + "#reset", controlX - rs - 6, y + (h - rs) / 2, rs, Theme.I_RESET, "Reset to default")) {
+				s.reset();
 				changed = true;
 			}
 		}
