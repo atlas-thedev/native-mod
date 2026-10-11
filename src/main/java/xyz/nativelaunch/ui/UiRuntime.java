@@ -286,7 +286,7 @@ public final class UiRuntime {
 		if (canvas != null) {
 			return;
 		}
-		canvas = new Canvas(new Atlas(1024), new Fonts());
+		canvas = new Canvas(new Atlas(2048), new Fonts());
 		gl = mc.renderer();
 		if (gl == null) {
 			gl = new GlRenderer();

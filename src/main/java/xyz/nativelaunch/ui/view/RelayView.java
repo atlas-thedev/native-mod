@@ -965,7 +965,7 @@ public final class RelayView {
 				outside = false;
 			}
 			float hv = ui.anim("relay:pick:" + i + "#h", over, 18f);
-			float size = 20 + 5 * hv;
+			float size = 20 + 5 * Math.round(hv * 3) / 3f;
 			c.round(bx + 1, y + pad + 1, cell - 2, cell - 2, 9, Theme.alpha(0xFFFFFFFF, 0.08f * hv));
 			drawEmoji(c, PALETTE[i], bx + (cell - size) / 2, y + pad + (cell - size) / 2 - hv, size);
 			if (over) {
