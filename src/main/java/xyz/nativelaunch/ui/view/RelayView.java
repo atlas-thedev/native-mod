@@ -46,9 +46,12 @@ public final class RelayView {
 	private int lastCount = -1;
 	// pasted picture waiting to be sent
 	private byte[] staged;
-	private String stagedMime, stagedKey, stagedNote;
+	private String stagedMime, stagedKey;
+	private volatile String stagedNote;
 	private final AtomicBoolean pasting = new AtomicBoolean();
 	private volatile byte[] pasted;
+	/** A file picker is open (one at a time). */
+	private final java.util.concurrent.atomic.AtomicBoolean picking = new java.util.concurrent.atomic.AtomicBoolean();
 	private ChatMedia.Media viewer;
 	// GIF picker
 	private boolean gifOpen;
@@ -571,7 +574,7 @@ public final class RelayView {
 		}
 		String before2 = input.value();
 		float btn = 46;
-		boolean send = input.draw(ui, x + pad, iy, w - pad * 2 - btn * 2 - 16, inputH, staged != null ? "Add a caption (optional)" : "Message " + (group ? "#" + name : "@" + name), 13.5f);
+		boolean send = input.draw(ui, x + pad, iy, w - pad * 2 - btn * 3 - 24, inputH, staged != null ? "Add a caption (optional)" : "Message " + (group ? "#" + name : "@" + name), 13.5f);
 		if (input.pasteMiss && pasting.compareAndSet(false, true)) {
 			new Thread(() -> {
 				try {
@@ -583,6 +586,40 @@ public final class RelayView {
 		}
 		if (!input.value().equals(before2) && !input.value().isEmpty()) {
 			client.typingPing(selected);
+		}
+		// attach button: pick a picture from disk, like the launcher's (Ctrl+V still pastes one)
+		float ax = x + w - pad - btn * 3 - 16;
+		boolean aOver = ui.hover(ax, iy, btn, inputH);
+		boolean busy = picking.get();
+		float aHv = ui.anim("relay:attach", aOver || busy, 14f);
+		boolean aClick = ui.clicked("relay:attach", ax, iy, btn, inputH);
+		c.round(ax, iy, btn, inputH, 12, Theme.mix(Theme.SUBTLE, 0xFF26272D, aHv));
+		if (busy) {
+			ui.dots(ax + btn / 2, iy + inputH / 2, Theme.TEXT_SECONDARY);
+		} else {
+			c.icon(Theme.I_PLUS, 18, ax + btn / 2, iy + inputH / 2, staged != null ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
+		}
+		if (aOver) {
+			ui.cursorHand = true;
+			ui.tip(busy ? "Choose a picture in the window that opened" : "Send a picture");
+		}
+		if (aClick && picking.compareAndSet(false, true)) {
+			gifOpen = false;
+			stagedNote = null;
+			Thread t = new Thread(() -> {
+				try {
+					xyz.nativelaunch.ui.FilePicker.Result r = xyz.nativelaunch.ui.FilePicker.pickImage();
+					if (r != null && r.bytes != null) {
+						pasted = r.bytes; // staged by the same path as a pasted picture (type + size checks)
+					} else if (r != null) {
+						stagedNote = r.note;
+					}
+				} finally {
+					picking.set(false);
+				}
+			}, "Native-Pick");
+			t.setDaemon(true);
+			t.start();
 		}
 		// GIF button
 		float gx = x + w - pad - btn * 2 - 8;
