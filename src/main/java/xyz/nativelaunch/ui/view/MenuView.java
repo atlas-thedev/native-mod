@@ -491,8 +491,15 @@ public final class MenuView {
 		float fav = ui.anim(id + "#f", m.favorite, 14f);
 		if (v > 0.01f) {
 			c.round(x, y, s, s, s / 2, Theme.alpha(Theme.SUBTLE_HOVER, hv * v));
-			c.icon(Theme.I_HEART, 13, x + s / 2, y + s / 2,
-					Theme.alpha(Theme.mix(Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_STRONG, hv), Theme.ACCENT, fav), v));
+			int col = Theme.alpha(Theme.mix(Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_STRONG, hv), Theme.TEXT_STRONG, fav), v);
+			// pinned: a solid white heart (the icon font only has outlines, so stack shrinking copies to fill it)
+			if (fav > 0.01f) {
+				int fill = Theme.alpha(Theme.TEXT_STRONG, fav * v);
+				for (float fs = 11.5f; fs >= 2.5f; fs -= 1.5f) {
+					c.icon(Theme.I_HEART, fs, x + s / 2, y + s / 2, fill);
+				}
+			}
+			c.icon(Theme.I_HEART, 13, x + s / 2, y + s / 2, col);
 		}
 		return click || (over && ui.pressed);
 	}
