@@ -56,6 +56,8 @@ public final class MenuView {
 	private final Setting.Bool sTitle = new Setting.Bool("title", "Native title screen", true);
 	private final Setting.Bool sNotify = new Setting.Bool("notify", "Message notifications in game", true);
 	private final Setting.Num sScale = new Setting.Num("scale", "UI size", 1f, 0.75f, 1.5f, 0.05f, "x");
+	/** The UI size slider was held last frame: its value is committed once it is let go. */
+	private boolean scaleDragged;
 	private final Setting.Key sMenu = new Setting.Key("menukey", "Menu key", 344);
 	private final Setting.Key sChat = new Setting.Key("chatkey", "Chat key", 89);
 	private boolean confirmReset;
@@ -920,7 +922,10 @@ public final class MenuView {
 		UiConfig cfg = UiRuntime.config();
 		sTitle.value = cfg.customTitle;
 		sNotify.value = cfg.notifications;
-		if (!ui.isPressing("menu:pref:scale")) {
+		// While the slider is held (and on the frame it is let go) the slider owns the value; reading the saved
+		// size back here on the release frame used to throw the new size away, so it always snapped back.
+		boolean scaleHeld = ui.isPressing("menu:pref:scale");
+		if (!scaleHeld && !scaleDragged) {
 			sScale.value = cfg.scale;
 		}
 		sMenu.value = cfg.menuKey;
@@ -961,8 +966,16 @@ public final class MenuView {
 			cfg.notifications = sNotify.value;
 			save = true;
 		}
-		if (!ui.isPressing("menu:pref:scale") && Math.abs(sScale.value - cfg.scale) > 0.001f) {
-			cfg.scale = sScale.value; // applied on release so the window doesn't jump under the cursor
+		if (scaleHeld) {
+			scaleDragged = true;
+		} else if (scaleDragged) {
+			scaleDragged = false;
+			if (Math.abs(sScale.value - cfg.scale) > 0.001f) {
+				cfg.scale = sScale.value; // applied on release so the window doesn't jump under the cursor
+				save = true;
+			}
+		} else if (Math.abs(sScale.value - cfg.scale) > 0.001f) {
+			cfg.scale = sScale.value; // reset button
 			save = true;
 		}
 		if (sMenu.value != cfg.menuKey && sMenu.value != -1) {
