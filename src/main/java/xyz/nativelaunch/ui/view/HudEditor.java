@@ -16,23 +16,25 @@ import xyz.nativelaunch.ui.mod.Setting;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Drag HUD modules around, with snapping guides; scroll to resize, right-click for settings. */
+/**
+ * The screen Right Shift opens: the game dimmed, every HUD module in place with a name tag, a gear (its settings) and a minus (take
+ * it off the screen), and a hub in the middle with the way into the rest of Native. Drag a module to move it (it snaps to the edges,
+ * the middle and other modules), drag a corner or scroll over it to resize, right-click for settings.
+ */
 public final class HudEditor {
 	private static final float SNAP = 6;
+	private static final int BLUE = 0xFF3B82F6, RED = 0xFFEF4444;
 	private HudModule drag, popover;
 	private HudModule sizing;
 	/** Corner being dragged (0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left) and the fixed opposite one. */
 	private int sizeCorner;
 	private float sizeStart, anchorX, anchorY, startW, startH;
-	/** The Done bar: where it is (centre x, top y as screen fractions; NaN = default) and whether it is being moved. */
-	private static float barFx = Float.NaN, barFy = Float.NaN;
-	private boolean barDrag;
-	private float barGrabX, barGrabY;
-	private float barX, barY, barW, barH;
 	private float grabX, grabY;
 	private float popX, popY, popW, popH;
 	private final List<HudModule> shown = new ArrayList<HudModule>();
 	private final List<float[]> rects = new ArrayList<float[]>();
+	/** Per shown module: {tag x, tag y, tag w, gear x, minus x}. */
+	private final List<float[]> tags = new ArrayList<float[]>();
 	private float guideX = Float.NaN, guideY = Float.NaN;
 	private Game sample = Game.sample();
 	private long sampleAt;
@@ -41,6 +43,13 @@ public final class HudEditor {
 	/** Real in-game shot, used as the backdrop when the editor is opened from the menus. */
 	private Image backdrop;
 	private boolean backdropLoaded;
+	private Image logo;
+	private boolean drawerOpen, helpOpen;
+	private float drawerScroll;
+	private final float[] drawerRect = new float[4], helpRect = new float[4], hubRect = new float[4], noticeRect = new float[4];
+	private String notice;
+	private HudModule removed;
+	private long noticeAt;
 
 	public boolean escape() {
 		if (Widgets.escape()) {
@@ -50,7 +59,21 @@ public final class HudEditor {
 			popover = null;
 			return true;
 		}
+		if (drawerOpen || helpOpen) {
+			drawerOpen = helpOpen = false;
+			return true;
+		}
 		return false;
+	}
+
+	private static boolean in(float[] r, Ui ui) {
+		return r[2] > 0 && ui.hover(r[0], r[1], r[2], r[3]);
+	}
+
+	private void say(Ui ui, String text, HudModule undo) {
+		notice = text;
+		removed = undo;
+		noticeAt = ui.now;
 	}
 
 	public void draw(Ui ui, Object screen, boolean inWorld, Game live) {
@@ -60,6 +83,9 @@ public final class HudEditor {
 			shownAt = ui.now;
 			popover = null;
 			drag = null;
+			sizing = null;
+			drawerOpen = helpOpen = false;
+			notice = null;
 		}
 		if (ui.now - sampleAt > 120) {
 			sample = Game.sample();
@@ -76,8 +102,10 @@ public final class HudEditor {
 				c.imageCover(backdrop, 0, 0, W, H, 1.02f, 0.5f, 0.5f, Theme.alpha(0xFFFFFFFF, in));
 			}
 		}
-		c.fill(0, 0, W, H, Theme.alpha(inWorld ? 0x66000000 : 0x4D000000, in));
-		if (drag != null) {
+		c.fill(0, 0, W, H, Theme.alpha(inWorld ? 0x80000000 : 0x59000000, in));
+		c.gradientV(0, 0, W, H * 0.25f, Theme.alpha(0x66000000, in), 0);
+		c.gradientV(0, H * 0.7f, W, H * 0.3f, 0, Theme.alpha(0x73000000, in));
+		if (drag != null || sizing != null) {
 			float step = 20;
 			for (float gx = step; gx < W; gx += step) {
 				c.fill(gx, 0, 1, H, 0x0CFFFFFF);
@@ -89,9 +117,35 @@ public final class HudEditor {
 			c.fill(0, H / 2, W, 1, 0x1AFFFFFF);
 		}
 
+		// where the hub, the drawer and the help card sit (they block the modules under them)
+		float hw = 280, hh = 172;
+		hubRect[0] = (W - hw) / 2;
+		hubRect[1] = (H - hh) / 2 - 18 + (1 - in) * 14;
+		hubRect[2] = hw;
+		hubRect[3] = hh;
+		float dt = ui.anim("hud:drawer", drawerOpen, 14f);
+		float dw = Math.min(310, W * 0.34f);
+		if (dt > 0.01f) {
+			drawerRect[0] = W - dw - 16 + (1 - dt) * (dw + 30);
+			drawerRect[1] = 16;
+			drawerRect[2] = dw;
+			drawerRect[3] = H - 32;
+		} else {
+			drawerRect[2] = 0;
+		}
+		helpRect[0] = 18;
+		helpRect[1] = H - 52;
+		helpRect[2] = 34;
+		helpRect[3] = 34;
+		boolean overHub = ui.hover(hubRect[0] - 10, hubRect[1] - 10, hubRect[2] + 20, hubRect[3] + 20);
+		boolean overDrawer = in(drawerRect, ui);
+		boolean overHelp = ui.hover(helpRect[0] - 4, helpRect[1] - 4, 42, 42) || helpOpen && ui.hover(18, H - 52 - 188, 340, 188 + 8);
+		boolean overNotice = notice != null && in(noticeRect, ui);
+
 		// modules and their boxes
 		shown.clear();
 		rects.clear();
+		tags.clear();
 		for (HudModule m : Modules.hud()) {
 			if (!m.enabled) {
 				continue;
@@ -102,15 +156,49 @@ public final class HudEditor {
 			shown.add(m);
 			rects.add(new float[] {HudModule.pos(m.fx, W, w), HudModule.pos(m.fy, H, h), w, h});
 		}
+		for (int i = 0; i < shown.size(); i++) {
+			float[] r = rects.get(i);
+			float lw = c.textWidth(Fonts.SEMIBOLD, 10.5f, shown.get(i).name) + 16;
+			float rowW = lw + 4 + 18 + 4 + 18;
+			float lx = Math.max(2, Math.min(W - rowW - 2, r[0] - 3));
+			float ly = r[1] - 3 - 22 < 2 ? r[1] + r[3] + 7 : r[1] - 3 - 22;
+			tags.add(new float[] {lx, ly, lw, lx + lw + 4, lx + lw + 26});
+		}
 		boolean overPop = popover != null && ui.hover(popX, popY, popW, popH);
-		boolean overBar = barDrag || ui.hover(barX, barY, barW, barH);
+		boolean blocked = overHub || overDrawer || overHelp || overNotice || overPop;
+
+		// the gear / minus badges first: they sit over the tag row, outside the box
+		HudModule tagHover = null;
+		if (!blocked && drag == null && sizing == null) {
+			for (int i = shown.size() - 1; i >= 0; i--) {
+				float[] t = tags.get(i);
+				if (ui.hover(t[0], t[1], t[4] + 18 - t[0], 18)) {
+					tagHover = shown.get(i);
+					ui.cursorHand = true;
+					if (ui.pressed && ui.hover(t[3], t[1], 18, 18)) {
+						popover = popover == tagHover ? null : tagHover;
+						ui.pressed = false;
+					} else if (ui.pressed && ui.hover(t[4], t[1], 18, 18)) {
+						HudModule gone = tagHover;
+						gone.setEnabled(false);
+						Modules.changed();
+						say(ui, gone.name + " removed", gone);
+						if (popover == gone) {
+							popover = null;
+						}
+						ui.pressed = false;
+					}
+					break;
+				}
+			}
+		}
 
 		// pick: a resize corner of the module under the cursor first
 		HudModule hover = null;
 		int hoverIndex = -1;
 		HudModule handle = null;
 		int handleCorner = -1;
-		if (!overPop && !overBar && drag == null && sizing == null) {
+		if (!blocked && drag == null && sizing == null && tagHover == null) {
 			for (int i = shown.size() - 1; i >= 0 && handle == null; i--) {
 				float[] r = rects.get(i);
 				for (int k = 0; k < 4; k++) {
@@ -169,7 +257,7 @@ public final class HudEditor {
 				ui.cursorHand = true;
 			}
 		}
-		if (!overPop && !overBar && drag == null && sizing == null && hover == null) {
+		if (!blocked && drag == null && sizing == null && hover == null && tagHover == null) {
 			for (int i = shown.size() - 1; i >= 0; i--) {
 				float[] r = rects.get(i);
 				if (ui.hover(r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6)) {
@@ -192,8 +280,9 @@ public final class HudEditor {
 			} else if (ui.scroll != 0) {
 				hover.scale.set(hover.scale.value + (ui.scroll > 0 ? 0.05f : -0.05f));
 				Modules.changed();
+				ui.scroll = 0;
 			}
-		} else if (ui.pressed && !overPop && !overBar) {
+		} else if (ui.pressed && !blocked && tagHover == null) {
 			popover = null;
 		}
 		guideX = guideY = Float.NaN;
@@ -217,6 +306,12 @@ public final class HudEditor {
 				drag.fy = HudModule.frac(ny, H, r[3]);
 				r[0] = HudModule.pos(drag.fx, W, r[2]);
 				r[1] = HudModule.pos(drag.fy, H, r[3]);
+				float[] t = tags.get(di);
+				float lw = t[2], rowW = lw + 4 + 18 + 4 + 18;
+				t[0] = Math.max(2, Math.min(W - rowW - 2, r[0] - 3));
+				t[1] = r[1] - 3 - 22 < 2 ? r[1] + r[3] + 7 : r[1] - 3 - 22;
+				t[3] = t[0] + lw + 4;
+				t[4] = t[0] + lw + 26;
 			}
 		}
 		if (!Float.isNaN(guideX)) {
@@ -228,18 +323,20 @@ public final class HudEditor {
 		for (int i = 0; i < shown.size(); i++) {
 			HudModule m = shown.get(i);
 			float[] r = rects.get(i);
+			float[] t = tags.get(i);
 			Game g = inWorld && live != null && m.visible(live) ? live : sample;
-			boolean active = m == hover || m == drag || m == popover || m == sizing;
+			boolean active = m == hover || m == drag || m == popover || m == sizing || m == tagHover;
 			float a = ui.anim("hud:" + m.id + "#h", active, 16f);
 			c.round(r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, 6, Theme.alpha(0x14FFFFFF, a));
 			m.paint(ui, r[0], r[1], g);
-			if (a > 0.5f) {
-				c.outline(r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, 6, 1, Theme.alpha(0xFFFFFFFF, 0.7f * a));
-				String label = m.name + "  " + Math.round(m.scale.value * 100) + "%";
-				float lw = c.textWidth(Fonts.SEMIBOLD, 10.5f, label) + 12;
-				float ly = r[1] - 24 < 0 ? r[1] + r[3] + 6 : r[1] - 24;
-				float lx = Math.max(2, Math.min(W - lw - 2, r[0] - 3));
-				c.round(lx, ly, lw, 18, 6, 0xF0141418);
+			c.outline(r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, 6, 1, Theme.mix(0x59FFFFFF, 0xE6FFFFFF, a));
+			// name tag with the gear and minus badges
+			c.round(t[0], t[1], t[2], 18, 9, Theme.mix(0xE60E0F13, 0xF2181A20, a));
+			c.outline(t[0], t[1], t[2], 18, 9, 1, Theme.alpha(0xFFFFFFFF, 0.1f + 0.2f * a));
+			c.text(Fonts.SEMIBOLD, 10.5f, m.name, t[0] + 8, t[1] + (18 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.mix(0xFFD4D4D8, 0xFFFFFFFF, a));
+			badge(ui, "hud:gear:" + m.id, t[3], t[1], BLUE, Theme.I_SETTINGS, m == popover);
+			badge(ui, "hud:minus:" + m.id, t[4], t[1], RED, Theme.I_MINUS, false);
+			if (a > 0.3f) {
 				// resize handles on all four corners: drag one, the opposite corner stays put
 				for (int k = 0; k < 4; k++) {
 					float hx = cornerX(r, k), hy = cornerY(r, k);
@@ -249,24 +346,19 @@ public final class HudEditor {
 					c.fill(hx - hs / 2, hy - hs / 2, hs, hs, Theme.alpha(0xFFFFFFFF, a));
 					c.fill(hx - hs / 2 + 1.5f, hy - hs / 2 + 1.5f, hs - 3, hs - 3, Theme.alpha(on ? Theme.ACCENT : 0xFF09090B, a));
 				}
-				c.text(Fonts.SEMIBOLD, 10.5f, label, lx + 6, ly + (18 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.TEXT_STRONG);
-			} else {
-				dashed(c, r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, 0x66FFFFFF);
-			}
-		}
-
-		if (shown.isEmpty()) {
-			float cw = 340, ch = 150, cx = (W - cw) / 2, cy = (H - ch) / 2;
-			c.round(cx, cy, cw, ch, 14, 0xE008090C);
-			c.outline(cx, cy, cw, ch, 14, 1, Theme.HAIRLINE_STRONG);
-			c.icon(Theme.I_LAYOUT, 22, cx + cw / 2, cy + 32, Theme.TEXT_SECONDARY);
-			String t = "No HUD modules are on";
-			c.text(Fonts.SEMIBOLD, 14, t, cx + (cw - c.textWidth(Fonts.SEMIBOLD, 14, t)) / 2, cy + 54, Theme.TEXT_STRONG);
-			String b = "Turn some on in the Mods tab first.";
-			c.text(Fonts.REGULAR, 11.5f, b, cx + (cw - c.textWidth(Fonts.REGULAR, 11.5f, b)) / 2, cy + 78, Theme.TEXT_MUTED);
-			if (ui.button("hud:empty:mods", cx + cw / 2 - 70, cy + ch - 46, 140, 34, "Open Mods", Theme.I_PUZZLE, Ui.BTN_PRIMARY)) {
-				openMenu(screen);
-				return;
+				if (m == hover || m == drag || m == sizing) {
+					String size = Math.round(m.scale.value * 100) + "%";
+					float sw = c.textWidth(Fonts.MEDIUM, 10, size) + 12;
+					float sx = r[0] + r[2] + 3 - sw, sy = r[1] + r[3] + 6;
+					if (sy + 16 > H) {
+						sy = r[1] - 22;
+					}
+					if (t[1] > r[1] && sy < r[1]) {
+						sy = r[1] + r[3] + 28;
+					}
+					c.round(sx, sy, sw, 16, 8, 0xE60E0F13);
+					c.text(Fonts.MEDIUM, 10, size, sx + 6, sy + (16 - c.lineHeight(Fonts.MEDIUM, 10)) / 2, Theme.TEXT_SECONDARY);
+				}
 			}
 		}
 
@@ -279,92 +371,258 @@ public final class HudEditor {
 			}
 		}
 
-		// Done bar: small, square-ish, and movable by its grip (it remembers where you put it)
-		float bh = 36, pad = 5, gripW = 22, bw0 = 0;
-		String[] labels = {"Done", "Mods", "Reset"};
-		int[] icons = {Theme.I_CHECK, Theme.I_PUZZLE, Theme.I_RESET};
-		float[] widths = new float[3];
-		for (int i = 0; i < 3; i++) {
-			widths[i] = c.textWidth(Fonts.SEMIBOLD, 12, labels[i]) + 36;
-			bw0 += widths[i];
+		if (hub(ui, screen, in, shown.isEmpty())) {
+			return;
 		}
-		float bw = pad + gripW + 4 + bw0 + 4 * 2 + pad;
-		if (barDrag) {
-			if (!ui.down) {
-				barDrag = false;
-			} else {
-				float nx = Math.max(4, Math.min(W - bw - 4, ui.mx - barGrabX));
-				float ny = Math.max(4, Math.min(H - bh - 4, ui.my - barGrabY));
-				barFx = (nx + bw / 2) / W;
-				barFy = ny / H;
-			}
+		if (dt > 0.01f) {
+			drawer(ui, dt);
 		}
-		float bx = Float.isNaN(barFx) ? (W - bw) / 2 : barFx * W - bw / 2;
-		float by = Float.isNaN(barFy) ? H - 130 : barFy * H;
-		bx = Math.max(4, Math.min(W - bw - 4, bx));
-		by = Math.max(4, Math.min(H - bh - 4, by)) + (1 - in) * 12;
-		barX = bx;
-		barY = by;
-		barW = bw;
-		barH = bh;
-		c.shadow(bx, by + 2, bw, bh, 6, 14, 0x77000000);
-		c.round(bx, by, bw, bh, 6, 0xF20A0B0E);
-		c.outline(bx, by, bw, bh, 6, 1, Theme.HAIRLINE_STRONG);
-		// grip
-		float gx = bx + pad, gy = by + pad, gh = bh - pad * 2;
-		boolean overGrip = ui.hover(gx, gy, gripW, gh);
-		float ga = ui.anim("hud:grip", overGrip || barDrag, 16f);
-		c.round(gx, gy, gripW, gh, 4, Theme.alpha(0x14FFFFFF, ga));
-		for (int row = 0; row < 3; row++) {
-			for (int col = 0; col < 2; col++) {
-				c.fill(gx + gripW / 2 - 3.5f + col * 5, gy + gh / 2 - 6 + row * 5, 2, 2, Theme.mix(0x66FFFFFF, 0xFFFFFFFF, ga));
-			}
-		}
-		if (overGrip) {
-			ui.cursorHand = true;
-			if (ui.pressed) {
-				barDrag = true;
-				barGrabX = ui.mx - bx;
-				barGrabY = ui.my - by;
-			}
-		}
-		float x0 = gx + gripW + 4;
-		for (int i = 0; i < 3; i++) {
-			if (barButton(ui, "hud:bar:" + i, x0, gy, widths[i], gh, labels[i], icons[i], i == 0)) {
-				if (i == 0) {
-					Modules.save();
-					UiRuntime.closeHost(screen);
-					return;
-				} else if (i == 1) {
-					openMenu(screen);
-					return;
-				} else {
-					Modules.resetPositions();
-				}
-			}
-			x0 += widths[i] + 4;
-		}
-		String tip = "Drag to move  \u00B7  Drag a corner or scroll to resize  \u00B7  Right-click for settings";
-		float tipY = by > H / 2 ? by - 20 : by + bh + 8;
-		float tipW = c.textWidth(Fonts.MEDIUM, 11, tip);
-		float tipX = Math.max(6, Math.min(W - tipW - 6, bx + (bw - tipW) / 2)); // follows the bar
-		c.text(Fonts.MEDIUM, 11, tip, tipX, tipY, Theme.alpha(0xFFFFFFFF, 0.6f * in));
+		help(ui, W, H, in);
+		notice(ui, W, H);
 	}
 
-	private static boolean barButton(Ui ui, String id, float x, float y, float w, float h, String label, int icon, boolean primary) {
+	// ── hub ──────────────────────────────────────────────────────────────
+
+	/** The middle of the screen: the Native mark, the way into the settings and a row of shortcuts. Returns true when it left the screen. */
+	private boolean hub(Ui ui, Object screen, float in, boolean empty) {
 		Canvas c = ui.c;
-		boolean over = ui.hover(x, y, w, h);
-		boolean click = ui.clicked(id, x, y, w, h);
-		float hv = ui.anim(id + "#h", over, 16f);
+		float W = c.width();
+		float x0 = hubRect[0], y0 = hubRect[1], hw = hubRect[2];
+		float a = in;
+		if (logo == null) {
+			logo = Image.resource("/assets/native/ui/logo.png");
+		}
+		if (logo != null) {
+			c.stamp("hud:logo", logo, W / 2 - 28, y0, 56, 56, true, Theme.alpha(0xFFFFFFFF, a));
+		}
+		// the big button
+		float bw = 236, bh = 42, bx = W / 2 - bw / 2, by = y0 + 70;
+		boolean over = ui.hover(bx, by, bw, bh);
+		boolean click = ui.clicked("hud:hub:settings", bx, by, bw, bh);
+		float hv = ui.anim("hud:hub:settings#h", over, 16f);
+		float pr = ui.anim("hud:hub:settings#p", ui.isPressing("hud:hub:settings"), 24f);
+		c.shadow(bx, by + 3, bw, bh, bh / 2, 18, Theme.alpha(0x99000000, a));
+		c.round(bx, by, bw, bh, bh / 2, Theme.alpha(Theme.mix(Theme.mix(0xFFF4F4F5, 0xFFFFFFFF, hv), 0xFFD4D4D8, pr), a));
+		String label = "NATIVE SETTINGS";
+		float fs = 12.5f, tw = c.textWidth(Fonts.SEMIBOLD, fs, label);
+		float tx = bx + (bw - tw - 24) / 2;
+		c.icon(Theme.I_SETTINGS, 15, tx + 7, by + bh / 2, Theme.alpha(Theme.SOLID_FG, a));
+		c.text(Fonts.SEMIBOLD, fs, label, tx + 24, by + (bh - c.lineHeight(Fonts.SEMIBOLD, fs)) / 2, Theme.alpha(Theme.SOLID_FG, a));
+		if (over) {
+			ui.cursorHand = true;
+		}
+		if (click) {
+			openMenu(screen, 2);
+			return true;
+		}
+		// round shortcuts
+		int[] icons = {Theme.I_PLUS, Theme.I_PUZZLE, Theme.I_SHIRT, Theme.I_MESSAGE, Theme.I_RESET};
+		String[] tips = {"HUD modules", "Mods", "Cosmetics", "Relay chat", "Reset layout"};
+		float d = 42, gap = 10, rowW = icons.length * d + (icons.length - 1) * gap;
+		float rx = W / 2 - rowW / 2, ry = by + bh + 16;
+		for (int i = 0; i < icons.length; i++) {
+			float cx = rx + i * (d + gap);
+			boolean on = i == 0 && drawerOpen;
+			if (round(ui, "hud:hub:" + i, cx, ry, d, icons[i], tips[i], on, a)) {
+				switch (i) {
+					case 0:
+						drawerOpen = !drawerOpen;
+						helpOpen = false;
+						break;
+					case 1:
+						openMenu(screen, 0);
+						return true;
+					case 2:
+						openMenu(screen, 1);
+						return true;
+					case 3:
+						Modules.save();
+						UiRuntime.openRelay(UiRuntime.mc().hostParent(screen));
+						return true;
+					default:
+						Modules.resetPositions();
+						say(ui, "Layout reset", null);
+						break;
+				}
+			}
+		}
+		if (empty) {
+			String t = "No HUD modules on screen";
+			String b = "Press + to add some.";
+			float ty = ry + d + 22;
+			c.text(Fonts.SEMIBOLD, 13, t, W / 2 - c.textWidth(Fonts.SEMIBOLD, 13, t) / 2, ty, Theme.alpha(Theme.TEXT_STRONG, a));
+			c.text(Fonts.REGULAR, 11.5f, b, W / 2 - c.textWidth(Fonts.REGULAR, 11.5f, b) / 2, ty + 20, Theme.alpha(Theme.TEXT_SECONDARY, a));
+		}
+		return false;
+	}
+
+	private boolean round(Ui ui, String id, float x, float y, float d, int icon, String tip, boolean on, float alpha) {
+		Canvas c = ui.c;
+		boolean over = ui.hover(x, y, d, d);
+		boolean click = ui.clicked(id, x, y, d, d);
+		float hv = ui.anim(id + "#h", over || on, 16f);
 		float pr = ui.anim(id + "#p", ui.isPressing(id), 24f);
-		int bg = primary ? Theme.mix(Theme.mix(0xFFF4F4F5, 0xFFFFFFFF, hv), 0xFFD4D4D8, pr) : Theme.alpha(0x1FFFFFFF, hv + pr * 0.5f);
-		int fg = primary ? Theme.SOLID_FG : Theme.mix(Theme.TEXT_SECONDARY, Theme.TEXT_STRONG, hv);
-		c.round(x, y, w, h, 4, bg);
-		float tw = c.textWidth(Fonts.SEMIBOLD, 12, label);
-		float tx = x + (w - tw - 18) / 2;
-		c.icon(icon, 13, tx + 6, y + h / 2, fg);
-		c.text(Fonts.SEMIBOLD, 12, label, tx + 18, y + (h - c.lineHeight(Fonts.SEMIBOLD, 12)) / 2, fg);
+		c.shadow(x, y + 2, d, d, d / 2, 12, Theme.alpha(0x88000000, alpha));
+		c.round(x, y, d, d, d / 2, Theme.alpha(Theme.mix(Theme.mix(0xF0111317, 0xFFF4F4F5, hv), 0xFFD4D4D8, pr), alpha));
+		if (hv < 0.98f) {
+			c.outline(x, y, d, d, d / 2, 1, Theme.alpha(Theme.mix(0x33FFFFFF, 0x00FFFFFF, hv), alpha));
+		}
+		c.icon(icon, 17, x + d / 2, y + d / 2, Theme.alpha(Theme.mix(0xFFE4E4E7, Theme.SOLID_FG, hv), alpha));
+		if (over) {
+			ui.cursorHand = true;
+			ui.tip(tip);
+		}
 		return click;
+	}
+
+	private void badge(Ui ui, String id, float x, float y, int color, int icon, boolean on) {
+		Canvas c = ui.c;
+		boolean over = ui.hover(x, y, 18, 18);
+		float hv = ui.anim(id + "#h", over || on, 18f);
+		float k = 18 + hv * 2;
+		float bx = x - (k - 18) / 2, by = y - (k - 18) / 2;
+		c.round(bx, by, k, k, k / 2, Theme.mix(color, Theme.mix(color, 0xFFFFFFFF, 0.22f), hv));
+		c.outline(bx, by, k, k, k / 2, 1, 0x40FFFFFF);
+		c.icon(icon, 11, x + 9, y + 9, 0xFFFFFFFF);
+		if (over) {
+			ui.tip(icon == Theme.I_SETTINGS ? "Settings" : "Remove from screen");
+		}
+	}
+
+	// ── drawer: every HUD module, switch them on and off ─────────────────
+
+	private void drawer(Ui ui, float t) {
+		Canvas c = ui.c;
+		float x = drawerRect[0], y = drawerRect[1], w = drawerRect[2], h = drawerRect[3];
+		c.pushAlpha(t);
+		c.shadow(x, y + 4, w, h, 14, 26, 0xAA000000);
+		c.round(x, y, w, h, 14, 0xF4090A0D);
+		c.outline(x, y, w, h, 14, 1, Theme.HAIRLINE_STRONG);
+		int on = 0;
+		for (HudModule m : Modules.hud()) {
+			on += m.enabled ? 1 : 0;
+		}
+		c.text(Fonts.SEMIBOLD, 14.5f, "HUD modules", x + 18, y + 16, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 11, on + " of " + Modules.hud().size() + " on screen", x + 18, y + 36, Theme.TEXT_MUTED);
+		if (ui.iconButton("hud:drawer:close", x + w - 18 - 26, y + 14, 26, Theme.I_X, null)) {
+			drawerOpen = false;
+			c.popAlpha();
+			return;
+		}
+		float ly = y + 62, lh = y + h - 12 - ly, rowH = 44;
+		float total = Modules.hud().size() * rowH;
+		float maxScroll = Math.max(0, total - lh);
+		if (ui.hover(x, y, w, h) && ui.scroll != 0) {
+			drawerScroll -= ui.scroll * 40;
+			ui.scroll = 0;
+		}
+		drawerScroll = Math.max(0, Math.min(maxScroll, drawerScroll));
+		c.fill(x + 14, ly - 4, w - 28, 1, Theme.HAIRLINE);
+		c.pushClip(x, ly, w, lh);
+		float ry = ly - drawerScroll;
+		for (HudModule m : Modules.hud()) {
+			if (ry + rowH > ly && ry < ly + lh) {
+				boolean over = ui.hover(x + 8, ry, w - 16 - 52, rowH - 4) && ui.hover(x, ly, w, lh);
+				boolean click = ui.clicked("hud:drawer:row:" + m.id, x + 8, ry, w - 16 - 52, rowH - 4);
+				float hv = ui.anim("hud:drawer:row:" + m.id + "#h", over, 16f);
+				c.round(x + 8, ry, w - 16, rowH - 4, 10, Theme.alpha(Theme.SUBTLE_HOVER, hv));
+				c.round(x + 16, ry + 6, 28, 28, 8, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
+				c.icon(m.icon, 14, x + 30, ry + 20, m.enabled ? Theme.SOLID_FG : Theme.TEXT_SECONDARY);
+				c.text(Fonts.MEDIUM, 12.5f, c.ellipsize(Fonts.MEDIUM, 12.5f, m.name, w - 16 - 52 - 44 - 8), x + 54, ry + (rowH - 4 - c.lineHeight(Fonts.MEDIUM, 12.5f)) / 2,
+						m.enabled ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
+				if (over) {
+					ui.cursorHand = true;
+				}
+				boolean tg = ui.toggle("hud:drawer:tg:" + m.id, x + w - 14 - 34, ry + 9, m.enabled);
+				if (click || tg) {
+					m.setEnabled(!m.enabled);
+					Modules.changed();
+					if (!m.enabled && popover == m) {
+						popover = null;
+					}
+				}
+			}
+			ry += rowH;
+		}
+		c.popClip();
+		c.popAlpha();
+	}
+
+	// ── help + notices ───────────────────────────────────────────────────
+
+	private void help(Ui ui, float W, float H, float in) {
+		Canvas c = ui.c;
+		float x = helpRect[0], y = helpRect[1];
+		if (round(ui, "hud:help", x, y, 34, Theme.I_HELP, "How this works", helpOpen, in)) {
+			helpOpen = !helpOpen;
+			if (helpOpen) {
+				drawerOpen = false;
+			}
+		}
+		float t = ui.anim("hud:help#card", helpOpen, 16f);
+		if (t < 0.01f) {
+			return;
+		}
+		String[] lines = {"Drag a module to move it", "Drag a corner, or scroll over it, to resize", "Gear: its settings. Right-click works too",
+				"Minus: take it off the screen (Undo is offered)", "Plus in the middle: bring modules back", "Esc or " + UiRuntime.keyName(UiRuntime.config().menuKey) + " closes this"};
+		float w = 340, h = 22 + lines.length * 22 + 14, cx = x, cy = y - h - 10 + (1 - t) * 8;
+		c.pushAlpha(t);
+		c.shadow(cx, cy + 3, w, h, 12, 20, 0x99000000);
+		c.round(cx, cy, w, h, 12, 0xF4090A0D);
+		c.outline(cx, cy, w, h, 12, 1, Theme.HAIRLINE_STRONG);
+		c.text(Fonts.SEMIBOLD, 12.5f, "Edit your HUD", cx + 16, cy + 14, Theme.TEXT_STRONG);
+		for (int i = 0; i < lines.length; i++) {
+			float ly = cy + 40 + i * 22;
+			c.circle(cx + 20, ly + 7, 2, Theme.ACCENT);
+			c.text(Fonts.REGULAR, 11.5f, lines[i], cx + 32, ly, Theme.TEXT_SECONDARY);
+		}
+		c.popAlpha();
+	}
+
+	private void notice(Ui ui, float W, float H) {
+		Canvas c = ui.c;
+		noticeRect[2] = 0;
+		if (notice == null) {
+			return;
+		}
+		float age = (ui.now - noticeAt) / 1000f;
+		if (age > 5f) {
+			notice = null;
+			removed = null;
+			return;
+		}
+		float t = Math.min(1f, age * 6f) * Math.min(1f, (5f - age) * 4f);
+		float tw = c.textWidth(Fonts.MEDIUM, 12, notice);
+		boolean undo = removed != null;
+		float uw = undo ? c.textWidth(Fonts.SEMIBOLD, 12, "Undo") + 20 : 0;
+		float w = tw + 32 + (undo ? uw + 6 : 0), h = 38, x = (W - w) / 2, y = H - 76 + (1 - t) * 10;
+		noticeRect[0] = x;
+		noticeRect[1] = y;
+		noticeRect[2] = w;
+		noticeRect[3] = h;
+		c.pushAlpha(t);
+		c.shadow(x, y + 3, w, h, h / 2, 18, 0x99000000);
+		c.round(x, y, w, h, h / 2, 0xF40B0C10);
+		c.outline(x, y, w, h, h / 2, 1, Theme.HAIRLINE_STRONG);
+		c.text(Fonts.MEDIUM, 12, notice, x + 16, y + (h - c.lineHeight(Fonts.MEDIUM, 12)) / 2, Theme.TEXT_STRONG);
+		if (undo) {
+			float ux = x + w - uw - 6, uy = y + 6;
+			boolean over = ui.hover(ux, uy, uw, h - 12);
+			boolean click = ui.clicked("hud:notice:undo", ux, uy, uw, h - 12);
+			float hv = ui.anim("hud:notice:undo#h", over, 16f);
+			c.round(ux, uy, uw, h - 12, (h - 12) / 2, Theme.mix(0xFFE4E4E7, 0xFFFFFFFF, hv));
+			c.text(Fonts.SEMIBOLD, 12, "Undo", ux + 10, uy + (h - 12 - c.lineHeight(Fonts.SEMIBOLD, 12)) / 2, Theme.SOLID_FG);
+			if (over) {
+				ui.cursorHand = true;
+			}
+			if (click) {
+				removed.setEnabled(true);
+				Modules.changed();
+				notice = null;
+				removed = null;
+			}
+		}
+		c.popAlpha();
 	}
 
 	private static float cornerX(float[] r, int k) {
@@ -375,15 +633,15 @@ public final class HudEditor {
 		return k == 0 || k == 1 ? r[1] - 3 : r[1] + r[3] + 3;
 	}
 
-	private void openMenu(Object screen) {
+	private void openMenu(Object screen, int tab) {
 		McBridge mc = UiRuntime.mc();
 		Modules.save();
-		mc.setScreen(mc.newHost(McBridge.MENU, mc.hostParent(screen)));
+		UiRuntime.openMenu(mc.hostParent(screen), tab);
 	}
 
 	private void drawPopover(Ui ui, HudModule m, float[] r, float W, float H) {
 		Canvas c = ui.c;
-		List<Setting> all = m.allSettings();
+		List<Setting> all = m.shownAll();
 		float w = 320, pad = 14;
 		float h = pad + 30 + Widgets.ROW * (all.size() + 1) + pad;
 		h = Math.min(h, H - 20);

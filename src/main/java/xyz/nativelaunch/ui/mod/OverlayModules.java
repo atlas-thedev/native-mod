@@ -59,6 +59,7 @@ final class OverlayModules {
 		Scoreboard() {
 			super("scoreboard", "Scoreboard", "The server sidebar. Move it, resize it, hide the red numbers.", Theme.I_LIST, true, 1f, 0.5f);
 			opacity.value = 40;
+			drop(labels);
 			demo.has = true;
 			demo.title.set("NATIVE", 0xFFFFFF55);
 			String[] n = {"", "Players: 128", "Map: Lighthouse", "", "Kills: 7", "Coins: 2,450", "", "playnative.fun"};
@@ -85,6 +86,15 @@ final class OverlayModules {
 
 		private boolean vanilla() {
 			return look.value == 0;
+		}
+
+		/** The game draws the vanilla look itself: only its position, size and the choice of look apply. */
+		@Override
+		protected boolean hidden(Setting s) {
+			if (vanilla()) {
+				return s != look && s != scale;
+			}
+			return s == opacity ? style.value == STYLE_TEXT : super.hidden(s);
 		}
 
 		/** Vanilla look: works out where the game draws it and the move/scale that puts it in our box. */
@@ -304,6 +314,7 @@ final class OverlayModules {
 		BossBars() {
 			super("bossbar", "Boss Bar", "Boss and event bars. Move them, resize them, restyle the bar.", Theme.I_ACTIVITY, true, 0.5f, 0f);
 			style.value = STYLE_TEXT;
+			drop(labels);
 			demo.count = 1;
 			demo.names[0].set("Ender Dragon", 0xFFFFFFFF);
 			demo.progress[0] = 0.62f;
@@ -325,6 +336,15 @@ final class OverlayModules {
 
 		private boolean vanilla() {
 			return look.value == 0;
+		}
+
+		/** The game draws the vanilla look itself: only its position, size and the choice of look apply. */
+		@Override
+		protected boolean hidden(Setting s) {
+			if (vanilla()) {
+				return s != look && s != scale;
+			}
+			return super.hidden(s);
 		}
 
 		private void place() {

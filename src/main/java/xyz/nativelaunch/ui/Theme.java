@@ -42,7 +42,9 @@ public final class Theme {
 			I_BACKPACK = 0xF117, I_HAND = 0xF118, I_HAT = 0xF119, I_GRID = 0xF11A, I_MAGNET = 0xF11B, I_TYPE = 0xF11C,
 			I_PERSON = 0xF11D, I_ACTIVITY = 0xF11E, I_CROSSHAIR = 0xF11F, I_FEATHER = 0xF120, I_ARROWS_UP = 0xF121,
 			I_GRID_3 = 0xF122, I_BRUSH = 0xF123,
-			I_HEART = 0xF124, I_STAR = 0xF125, I_LIST = 0xF126, I_STORE = 0xF127, I_BAN = 0xF128;
+			I_HEART = 0xF124, I_STAR = 0xF125, I_LIST = 0xF126, I_STORE = 0xF127, I_BAN = 0xF128,
+			I_FLASK = 0xF129, I_SHIELD = 0xF12A, I_HEART_PULSE = 0xF12B, I_MINUS = 0xF12C, I_HELP = 0xF12D, I_DRUMSTICK = 0xF12E,
+			I_SWORD = 0xF12F;
 
 	public static int alpha(int argb, float a) {
 		return xyz.nativelaunch.ui.gfx.Canvas.mulAlpha(argb, a);

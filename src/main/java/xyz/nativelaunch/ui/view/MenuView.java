@@ -586,17 +586,17 @@ public final class MenuView {
 		}
 		ry += heroH + 18;
 		// settings card(s)
-		if (!m.settings.isEmpty()) {
+		if (!m.shownSettings().isEmpty()) {
 			ry = section(c, "SETTINGS", x + 2, ry);
 			float ch = 0;
-			for (Setting s : m.settings) {
+			for (Setting s : m.shownSettings()) {
 				ch += Widgets.rowHeight(s);
 			}
 			c.round(x, ry, cardW, ch + 4, 14, CARD);
 			c.outline(x, ry, cardW, ch + 4, 14, 1, Theme.HAIRLINE);
 			float cy2 = ry + 2;
 			boolean first = true;
-			for (Setting s : m.settings) {
+			for (Setting s : m.shownSettings()) {
 				if (!first) {
 					c.fill(x + 16, cy2, cardW - 32, 1, Theme.HAIRLINE);
 				}
@@ -609,14 +609,14 @@ public final class MenuView {
 		if (m instanceof HudModule) {
 			ry = section(c, "APPEARANCE", x + 2, ry);
 			float ch = 0;
-			for (Setting s : ((HudModule) m).appearance) {
+			for (Setting s : ((HudModule) m).shownAppearance()) {
 				ch += Widgets.rowHeight(s);
 			}
 			c.round(x, ry, cardW, ch + 4, 14, CARD);
 			c.outline(x, ry, cardW, ch + 4, 14, 1, Theme.HAIRLINE);
 			float cy2 = ry + 2;
 			boolean first = true;
-			for (Setting s : ((HudModule) m).appearance) {
+			for (Setting s : ((HudModule) m).shownAppearance()) {
 				if (!first) {
 					c.fill(x + 16, cy2, cardW - 32, 1, Theme.HAIRLINE);
 				}
@@ -657,7 +657,7 @@ public final class MenuView {
 			c.popAlpha();
 			hm.scale.value = keep;
 			c.popClip();
-		} else {
+		} else if (!m.preview(ui, sample, px + 13, wy + 1, pw - 26, wh - 2)) {
 			c.circle(px + pw / 2, wy + wh / 2, 38, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
 			c.icon(m.icon, 30, px + pw / 2, wy + wh / 2, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
 		}

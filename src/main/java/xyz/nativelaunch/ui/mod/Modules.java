@@ -61,6 +61,18 @@ public final class Modules {
 		return hud;
 	}
 
+	/** The union of what the enabled modules read from the player (Game.NEED_* bits). */
+	public static int needs() {
+		int n = 0;
+		for (int i = 0; i < all.size(); i++) {
+			Module m = all.get(i);
+			if (m.enabled) {
+				n |= m.needs();
+			}
+		}
+		return n;
+	}
+
 	public static Module get(String id) {
 		for (Module m : all) {
 			if (m.id.equals(id)) {

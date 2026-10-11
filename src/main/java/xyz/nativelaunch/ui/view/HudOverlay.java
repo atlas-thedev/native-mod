@@ -4,6 +4,7 @@ import xyz.nativelaunch.ui.Ui;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.mod.Game;
 import xyz.nativelaunch.ui.mod.HudModule;
+import xyz.nativelaunch.ui.mod.Module;
 import xyz.nativelaunch.ui.mod.Modules;
 
 import java.util.List;
@@ -15,6 +16,13 @@ public final class HudOverlay {
 
 	/** True when at least one module would draw something. */
 	public static boolean any(Game g) {
+		List<Module> all = Modules.all();
+		for (int i = 0; i < all.size(); i++) {
+			Module m = all.get(i);
+			if (m.enabled && m.overlays(g)) {
+				return true;
+			}
+		}
 		List<HudModule> list = Modules.hud();
 		for (int i = 0; i < list.size(); i++) {
 			HudModule m = list.get(i);
@@ -28,6 +36,13 @@ public final class HudOverlay {
 	public static void draw(Ui ui, Game g) {
 		Canvas c = ui.c;
 		float W = c.width(), H = c.height();
+		List<Module> all = Modules.all();
+		for (int i = 0; i < all.size(); i++) {
+			Module m = all.get(i);
+			if (m.enabled && m.overlays(g)) {
+				m.overlay(ui, g, false);
+			}
+		}
 		List<HudModule> list = Modules.hud();
 		for (int i = 0; i < list.size(); i++) {
 			HudModule m = list.get(i);
