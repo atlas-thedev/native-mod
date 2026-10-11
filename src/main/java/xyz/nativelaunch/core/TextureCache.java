@@ -163,6 +163,25 @@ public final class TextureCache {
 		return bytes;
 	}
 
+	/** A texture by URL (a dyed cosmetic), kept on disk under the sha-256 of the URL so it shows instantly next time. */
+	public static byte[] getOrDownloadUrl(String url, int maxBytes) throws IOException {
+		String key = null;
+		try {
+			key = sha256(url.getBytes(StandardCharsets.UTF_8));
+		} catch (Exception ignored) {
+			// no key: just download
+		}
+		byte[] cached = key == null ? null : read(key);
+		if (cached != null) {
+			return cached;
+		}
+		byte[] bytes = Http.getBytes(url, maxBytes);
+		if (key != null) {
+			write(key, bytes);
+		}
+		return bytes;
+	}
+
 	static String sha256(byte[] bytes) throws Exception {
 		byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
 		StringBuilder out = new StringBuilder(64);

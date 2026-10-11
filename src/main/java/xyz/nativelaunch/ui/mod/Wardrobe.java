@@ -213,12 +213,49 @@ public final class Wardrobe {
 		}
 		sides = s;
 		dyes = map(me, "dyes");
+		saveDyes();
+	}
+
+	private static java.nio.file.Path dyesFile() {
+		try {
+			return net.fabricmc.loader.api.FabricLoader.getInstance().getGameDir().resolve(".native").resolve("dyes.json");
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	private static void saveDyes() {
+		try {
+			java.nio.file.Path f = dyesFile();
+			if (f == null) {
+				return;
+			}
+			JsonObject o = new JsonObject();
+			for (Map.Entry<String, String> e : dyes.entrySet()) {
+				o.addProperty(e.getKey(), e.getValue());
+			}
+			java.nio.file.Files.createDirectories(f.getParent());
+			java.nio.file.Files.write(f, o.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		} catch (Throwable ignored) {
+			// best-effort
+		}
+	}
+
+	static {
+		try {
+			java.nio.file.Path f = dyesFile();
+			if (f != null && java.nio.file.Files.isRegularFile(f) && java.nio.file.Files.size(f) < 64 * 1024) {
+				dyes = map(parse(new String(java.nio.file.Files.readAllBytes(f), java.nio.charset.StandardCharsets.UTF_8)), null);
+			}
+		} catch (Throwable ignored) {
+			// first run
+		}
 	}
 
 	private static Map<String, String> map(JsonObject o, String key) {
 		Map<String, String> m = new HashMap<String, String>();
-		if (o.has(key) && o.get(key).isJsonObject()) {
-			for (Map.Entry<String, JsonElement> e : o.getAsJsonObject(key).entrySet()) {
+		if (key == null || o.has(key) && o.get(key).isJsonObject()) {
+			for (Map.Entry<String, JsonElement> e : (key == null ? o : o.getAsJsonObject(key)).entrySet()) {
 				if (e.getValue().isJsonPrimitive()) {
 					m.put(e.getKey(), e.getValue().getAsString());
 				}
@@ -384,7 +421,8 @@ public final class Wardrobe {
 	public static Image cosmeticTexture(Item i) {
 		String dye = dyes.get(i.id);
 		if (dye != null && i.dyeUrl != null && dye.matches("#?[0-9a-fA-F]{6}")) {
-			return url(i.dyeUrl + dye.replace("#", "").toLowerCase(java.util.Locale.ROOT), true, 0);
+			final String dyed = i.dyeUrl + dye.replace("#", "").toLowerCase(java.util.Locale.ROOT);
+			return image(dyed, () -> xyz.nativelaunch.core.TextureCache.getOrDownloadUrl(dyed, 4 * 1024 * 1024), true, 0);
 		}
 		String h = i.textureHash();
 		return h != null ? hash(base(), h) : url(i.textureUrl, true, 0);
