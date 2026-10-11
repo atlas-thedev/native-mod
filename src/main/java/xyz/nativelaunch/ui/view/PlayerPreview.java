@@ -50,8 +50,9 @@ public final class PlayerPreview implements CosmeticSink {
 			}
 			float dx = ui.mx - lastMx;
 			lastMx = ui.mx;
-			yaw += dx * 0.012f;
-			vel = dx * 0.012f / Math.max(0.004f, ui.dt);
+			// grab-and-turn: dragging right turns the model's front to the right (it used to turn the other way)
+			yaw -= dx * 0.012f;
+			vel = -dx * 0.012f / Math.max(0.004f, ui.dt);
 			lastDrag = ui.now;
 		} else {
 			yaw += vel * ui.dt;

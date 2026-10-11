@@ -100,7 +100,11 @@ class SkinDirectoryTest {
 	@Test
 	void apiAddressMustBeHttpsOrLoopback() {
 		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi(null, null));
-		assertEquals("https://example.org", NativeState.chooseApi(null, "https://example.org/"));
+		// https alone is not enough: the game ticket only goes to Native's own domains
+		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi(null, "https://example.org/"));
+		assertEquals("https://beta.playnative.fun", NativeState.chooseApi(null, "https://beta.playnative.fun/"));
+		assertEquals("https://api.nativelaunch.xyz", NativeState.chooseApi(null, "https://api.nativelaunch.xyz"));
+		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi(null, "https://playnative.fun.evil.com"));
 		assertEquals("http://127.0.0.1:3418", NativeState.chooseApi("http://127.0.0.1:3418", "https://example.org"));
 		assertEquals(NativeState.DEFAULT_API, NativeState.chooseApi("http://evil.example", "ftp://x"));
 		assertFalse(NativeState.chooseApi("http://evil.example", null).contains("evil"));
