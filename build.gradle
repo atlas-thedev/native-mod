@@ -9,6 +9,12 @@ repositories {
 	mavenCentral()
 	maven { url = 'https://maven.fabricmc.net/' }
 	maven { url = 'https://libraries.minecraft.net/' }
+	maven {
+		name = 'Xander Maven'
+		url = 'https://maven.isxander.dev/releases'
+	}
+	maven { url = 'https://maven.terraformersmc.com/releases/' }
+	maven { url = 'https://oss.sonatype.org/content/repositories/snapshots' }
 }
 
 // One jar, five source sets:
@@ -137,6 +143,7 @@ def cosmeticEras = [
 	[name: 'cos117',  mc: '1.17.1', yarn: '1.17.1+build.65'],  // 1.17 - 1.21.1
 	[name: 'cos1212', mc: '1.21.2', yarn: '1.21.2+build.1'],   // 1.21.2 - 1.21.8 (render states)
 	[name: 'cos1219', mc: '1.21.9', yarn: '1.21.9+build.1'],   // 1.21.9 - 1.21.11 (render command queue)
+	[name: 'health',  mc: '1.21',   yarn: '1.21+build.2'],      // 1.21 3D health and armor indicators
 ]
 
 configurations {
@@ -244,9 +251,20 @@ cosmeticEras.each { era ->
 			output.delete()
 			args = [namedJar.get().archiveFile.get().asFile, output, new File(dir, 'yarn.tiny'), 'named', 'intermediary',
 					new File(dir, 'client-named.jar')] + libJars(dir).collect { it.absolutePath } +
-					sourceSets.main.output.classesDirs.files.collect { it.absolutePath }
+					sourceSets.main.output.classesDirs.files.collect { it.absolutePath } +
+					sourceSets[era.name].compileClasspath.files.findAll { it.exists() }.collect { it.absolutePath }
 		}
 	}
+}
+
+dependencies {
+	healthCompileOnly 'dev.isxander:yet-another-config-lib:3.5.0+1.21-fabric'
+	healthCompileOnly 'com.terraformersmc:modmenu:11.0.0-beta.1'
+	healthCompileOnly 'org.jetbrains:annotations:24.0.0'
+}
+
+tasks.named('compileHealthJava') {
+	options.release = 21
 }
 
 // 26.x: the official jar fetched for the animated-cape source set.

@@ -19,6 +19,15 @@ public final class NativeMod implements ClientModInitializer {
 		startCosmetics();
 		startPresence(gameDir);
 		startUi(gameDir);
+		startHealthIndicators();
+	}
+
+	private static void startHealthIndicators() {
+		try {
+			Class<?> clazz = Class.forName("io.github.adytech99.healthindicators.HealthIndicatorsMod");
+			clazz.getMethod("init").invoke(null);
+		} catch (Throwable ignored) {
+		}
 	}
 
 	/** The ticket read once at start, so presence, Relay and the account all use the same one. */
