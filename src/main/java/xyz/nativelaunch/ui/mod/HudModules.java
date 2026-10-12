@@ -34,6 +34,7 @@ public final class HudModules {
 		Modules.register(new PerformanceModules.BackgroundFps());
 		StatusModules.register();
 		Modules.register(new CrosshairModule());
+		Modules.register(new HealthModule());
 	}
 
 	static McBridge mc() {

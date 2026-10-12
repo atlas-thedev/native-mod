@@ -817,4 +817,41 @@ public final class MojangMc implements McBridge {
 	Object hudObject() {
 		return hud();
 	}
+
+	// ── health indicators ──
+
+	private HealthReader26 healthReader;
+
+	@Override
+	public boolean health(xyz.nativelaunch.health.HealthScene out) {
+		try {
+			if (healthReader == null) {
+				healthReader = new HealthReader26();
+			}
+			return healthReader.read(out);
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	@Override
+	public String healthTarget() {
+		try {
+			return healthReader == null ? new HealthReader26().target() : healthReader.target();
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	@Override
+	public void healthSay(String text, int rgb, boolean chat) {
+		try {
+			if (healthReader == null) {
+				healthReader = new HealthReader26();
+			}
+			healthReader.say(text, rgb, chat);
+		} catch (Throwable ignored) {
+			// no player / no chat yet
+		}
+	}
 }

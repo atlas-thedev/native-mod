@@ -30,7 +30,9 @@
     "HoodScopeMixin",
     "HoodHatMixin26",
     "HoodSlotMixin26",
-    "HoodScopeMixin26"
+    "HoodScopeMixin26",
+    "HealthDamageMixin26",
+    "HealthAttackMixin"
   ],
   "injectors": {
     "defaultRequire": 0
