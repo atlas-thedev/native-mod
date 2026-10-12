@@ -14,9 +14,17 @@ public final class Model {
 		public final int unread;
 		/** When they were last online (ms since epoch), 0 when unknown. */
 		public final long lastSeen;
+		/** When the last message in this chat was sent (ms since epoch), 0 when there is none: the list is ordered by it. */
+		public final long lastMsg;
 
 		public Friend(String id, String name, String nickname, String status, String activity, String serverAddress, String skin, boolean online, int unread,
 				boolean pinned, long lastSeen) {
+			this(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen, 0L);
+		}
+
+		public Friend(String id, String name, String nickname, String status, String activity, String serverAddress, String skin, boolean online, int unread,
+				boolean pinned, long lastSeen, long lastMsg) {
+			this.lastMsg = lastMsg;
 			this.pinned = pinned;
 			this.lastSeen = lastSeen;
 			this.id = id;
@@ -79,15 +87,19 @@ public final class Model {
 
 		Friend withPresence(String status, String activity, String serverAddress, long lastSeen) {
 			boolean on = !"offline".equals(status);
-			return new Friend(id, name, nickname, status, activity, serverAddress, skin, on, unread, pinned, on ? this.lastSeen : lastSeen > 0 ? lastSeen : System.currentTimeMillis());
+			return new Friend(id, name, nickname, status, activity, serverAddress, skin, on, unread, pinned, on ? this.lastSeen : lastSeen > 0 ? lastSeen : System.currentTimeMillis(), lastMsg);
 		}
 
 		Friend withUnread(int unread) {
-			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen);
+			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen, lastMsg);
 		}
 
 		Friend withPrefs(String nickname, boolean pinned) {
-			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen);
+			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen, lastMsg);
+		}
+
+		Friend withLastMsg(long at) {
+			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen, Math.max(lastMsg, at));
 		}
 	}
 
