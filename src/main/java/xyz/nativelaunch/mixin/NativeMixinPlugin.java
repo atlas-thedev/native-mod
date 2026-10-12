@@ -68,9 +68,6 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 		if (mixinClassName.endsWith("PackedTexturesMixin")) {
 			return modern && yggdrasil;
 		}
-		if (mixinClassName.contains("healthindicators")) {
-			return false; // the old 1.21-only port: replaced by the Native "Health Indicators" module (xyz.nativelaunch.health)
-		}
 		// Game hooks come in two flavours: "*26" for the unobfuscated 26.x names and
 		// the plain ones for intermediary names. Loading the wrong set only produces
 		// "Error loading class" noise (and confuses crash analysis), so skip it.
