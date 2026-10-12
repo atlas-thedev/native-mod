@@ -32,8 +32,16 @@ public final class Wardrobe {
 
 	public static final class Item {
 		public final String id, name, kind, slot, stillUrl, modelUrl, textureUrl, dyeUrl;
+		/** Animated capes: frames stacked top to bottom in one strip (null for still items). */
+		public final String stripUrl;
+		public final int frames;
+		public final float fps;
 
-		Item(String id, String name, String kind, String slot, String stillUrl, String modelUrl, String textureUrl, String dyeUrl) {
+		Item(String id, String name, String kind, String slot, String stillUrl, String modelUrl, String textureUrl, String dyeUrl,
+				String stripUrl, int frames, float fps) {
+			this.stripUrl = stripUrl;
+			this.frames = frames;
+			this.fps = fps;
 			this.id = id;
 			this.name = name;
 			this.kind = kind;
@@ -42,6 +50,15 @@ public final class Wardrobe {
 			this.modelUrl = modelUrl;
 			this.textureUrl = textureUrl;
 			this.dyeUrl = dyeUrl;
+		}
+
+		public boolean animated() {
+			return stripUrl != null && frames > 1 && fps > 0;
+		}
+
+		/** The strip frame showing right now. */
+		public int frame() {
+			return (int) ((System.nanoTime() / 1_000_000_000.0 * fps) % frames);
 		}
 
 		public boolean isCape() {
@@ -124,7 +141,9 @@ public final class Wardrobe {
 				for (JsonElement e : cat.getAsJsonArray("items")) {
 					JsonObject o = e.getAsJsonObject();
 					items.add(new Item(str(o, "id"), str(o, "name"), str(o, "kind"), str(o, "slot"), str(o, "stillUrl"), str(o, "modelUrl"),
-							str(o, "textureUrl"), str(o, "dyeUrl")));
+							str(o, "textureUrl"), str(o, "dyeUrl"), str(o, "stripUrl"),
+							o.has("frames") && !o.get("frames").isJsonNull() ? o.get("frames").getAsInt() : 1,
+							o.has("fps") && !o.get("fps").isJsonNull() ? o.get("fps").getAsFloat() : 0f));
 				}
 				catalog = Collections.unmodifiableList(items);
 				String ticket = ticket();
@@ -169,6 +188,9 @@ public final class Wardrobe {
 			Item cape = item(equipped);
 			if (cape != null) {
 				url(cape.stillUrl, true, 0);
+				if (cape.animated()) {
+					url(cape.stripUrl, true, 0);
+				}
 			}
 			int thumbs = 0;
 			for (Item i : catalog) {
@@ -176,6 +198,9 @@ public final class Wardrobe {
 					continue;
 				}
 				url(i.stillUrl, true, 0);
+				if (i.animated()) {
+					url(i.stripUrl, true, 0);
+				}
 				if (++thumbs >= 64) {
 					break; // a locker is small; never queue a whole store
 				}

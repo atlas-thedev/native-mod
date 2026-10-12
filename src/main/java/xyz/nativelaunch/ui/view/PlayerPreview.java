@@ -99,11 +99,20 @@ public final class PlayerPreview implements CosmeticSink {
 
 		// cape: the store cape worn (or the one being hovered), else the directory one
 		Image cape = null;
+		int capeFrames = 1, capeFrame = 0;
 		Wardrobe.Item capeItem = hover != null && hover.isCape() ? hover : Wardrobe.item(Wardrobe.equipped);
 		if ("capes".equals(bare)) {
 			capeItem = null;
 		} else if (capeItem != null) {
 			cape = Wardrobe.url(capeItem.stillUrl, true, 0);
+			if (capeItem.animated()) {
+				Image strip = Wardrobe.url(capeItem.stripUrl, true, 0);
+				if (strip != null && strip != Wardrobe.NONE) {
+					cape = strip; // the animated strip: the cube below picks the current frame
+					capeFrames = capeItem.frames;
+					capeFrame = capeItem.frame();
+				}
+			}
 		} else if (e != null && e.capeHash != null && Wardrobe.equipped == null && Wardrobe.state != Wardrobe.State.READY) {
 			cape = Wardrobe.hash(textureBase(), e.capeHash);
 		}
@@ -153,7 +162,7 @@ public final class PlayerPreview implements CosmeticSink {
 			b.translate(0, 0, 2);
 			b.rotate(0.1f + (float) Math.sin(time * 1.2) * 0.03f, 0, 0);
 			b.rotate(0, (float) Math.PI, 0);
-			b.cube(cape, 64, 32, -5, 0, -1, 10, 16, 1, 0, 0, 0, false, 0xFFFFFFFF);
+			b.cube(cape, 64, 32 * capeFrames, -5, 0, -1, 10, 16, 1, 0, 32 * capeFrame, 0, false, 0xFFFFFFFF);
 			b.pop();
 		}
 		b.pop();

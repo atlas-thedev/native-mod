@@ -55,6 +55,16 @@ public final class RelayView {
 	private boolean pickRowSet;
 	private final Map<String, xyz.nativelaunch.ui.gfx.Image> emojiImages = new HashMap<String, xyz.nativelaunch.ui.gfx.Image>();
 	private static final String[] PALETTE = {"\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDD25", "\uD83D\uDC4D", "\uD83D\uDE2E", "\uD83D\uDE22", "\uD83C\uDF89", "\uD83D\uDC80"};
+	// right-click menu on a chat row, nickname dialog
+	private String menuKey, nickFor;
+	private float menuX, menuY;
+	private boolean menuFresh;
+	private final TextField nick = new TextField("relay:nick");
+	private boolean rowTyping, rowPinned;
+	// screenshot picker (the attach button)
+	private boolean shotsOpen;
+	private volatile List<java.io.File> shots;
+	private final Map<String, xyz.nativelaunch.ui.gfx.Image> shotThumbs = new java.util.concurrent.ConcurrentHashMap<String, xyz.nativelaunch.ui.gfx.Image>();
 	// pasted picture waiting to be sent
 	private byte[] staged;
 	private String stagedMime, stagedKey;
@@ -92,6 +102,18 @@ public final class RelayView {
 
 	/** Esc: closes popovers / clears search first; false = close the chat. */
 	public boolean consumeEscape(Ui ui) {
+		if (nickFor != null) {
+			nickFor = null;
+			return true;
+		}
+		if (menuKey != null) {
+			menuKey = null;
+			return true;
+		}
+		if (shotsOpen) {
+			shotsOpen = false;
+			return true;
+		}
 		if (reactFor != null) {
 			reactFor = null;
 			return true;
@@ -160,7 +182,7 @@ public final class RelayView {
 				break;
 			}
 		}
-		ui.interactive = !settingsOpen;
+		ui.interactive = !settingsOpen && menuKey == null && nickFor == null;
 		float sw = Math.min(300, pw * 0.34f);
 		sidebar(ui, client, px, py, sw, ph, screen);
 		c.fill(px + sw, py, 1, ph, Theme.HAIRLINE);
@@ -168,6 +190,12 @@ public final class RelayView {
 		ui.interactive = true;
 		if (settingsOpen) {
 			settings(ui, px, py, sw);
+		}
+		if (menuKey != null) {
+			contextMenu(ui, client, W, H);
+		}
+		if (nickFor != null) {
+			nicknameDialog(ui, client, W, H);
 		}
 		if (viewer != null) {
 			lightbox(ui, W, H);
@@ -266,6 +294,8 @@ public final class RelayView {
 				String key = "dm:" + f.id;
 				if (ry + rh >= ty && ry <= ty + listH) {
 					String sub = f.line();
+					rowTyping = !client.typing(key).isEmpty();
+					rowPinned = f.pinned;
 					rowDot = f.dot();
 					if (row(ui, client, key, x + 8, ry, w - 16, rh, f.display(), f.name, f.skin, sub, f.unread, f.online ? 1 : 0)) {
 						select(key, client);
@@ -287,6 +317,8 @@ public final class RelayView {
 				if (ry + rh >= ty && ry <= ty + listH) {
 					String sub = g.lastText == null ? g.members + " members" : (g.lastSender == null ? "" : g.lastSender + ": ") + (g.lastText.isEmpty() ? "Sent a picture" : g.lastText);
 					rowDot = 0;
+					rowTyping = !client.typing(key).isEmpty();
+					rowPinned = g.pinned;
 					if (row(ui, client, key, x + 8, ry, w - 16, rh, g.name, g.name, null, sub, g.unread, -1)) {
 						select(key, client);
 						input.focus(ui);
@@ -314,6 +346,12 @@ public final class RelayView {
 		boolean sel = key.equals(selected);
 		boolean over = ui.hover(x, y, w, h);
 		boolean click = ui.clicked("row:" + key, x, y, w, h);
+		if (over && ui.rightPressed) {
+			menuKey = key;
+			menuX = ui.mx;
+			menuY = ui.my;
+			menuFresh = true;
+		}
 		float hv = ui.anim("row:" + key, over, 14f);
 		float sv = ui.anim("rowsel:" + key, sel, 14f);
 		c.round(x, y, w, h, 11, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv), 0xFF16171C, sv));
@@ -334,8 +372,18 @@ public final class RelayView {
 		}
 		float tx = ax + av + 11;
 		float maxW = x + w - tx - 10 - (unread > 0 ? 28 : 0);
-		c.text(Fonts.SEMIBOLD, 13, c.ellipsize(Fonts.SEMIBOLD, 13, title, maxW), tx, y + 9, presence == 0 ? Theme.TEXT_SECONDARY : Theme.TEXT_STRONG);
-		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, sub, maxW), tx, y + 29, unread > 0 ? Theme.TEXT : Theme.TEXT_MUTED);
+		float titleW = maxW - (rowPinned ? 18 : 0);
+		String shownTitle = c.ellipsize(Fonts.SEMIBOLD, 13, title, titleW);
+		c.text(Fonts.SEMIBOLD, 13, shownTitle, tx, y + 9, presence == 0 ? Theme.TEXT_SECONDARY : Theme.TEXT_STRONG);
+		if (rowPinned) {
+			c.icon(Theme.I_MAP_PIN, 11, tx + c.textWidth(Fonts.SEMIBOLD, 13, shownTitle) + 11, y + 9 + c.lineHeight(Fonts.SEMIBOLD, 13) / 2, Theme.TEXT_MUTED);
+		}
+		if (rowTyping) {
+			float tw2 = c.text(Fonts.MEDIUM, 11, "typing", tx, y + 29, Theme.ONLINE);
+			ui.dots(tx + tw2 + 14, y + 29 + c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.ONLINE);
+		} else {
+			c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, sub, maxW), tx, y + 29, unread > 0 ? Theme.TEXT : Theme.TEXT_MUTED);
+		}
 		if (unread > 0) {
 			TitleView.badge(c, x + w - 10, y + h / 2, unread);
 		}
@@ -392,6 +440,16 @@ public final class RelayView {
 			chatScrolls.put(selected, sc);
 		}
 		List<Model.Message> messages = conv.messages;
+		long clearedAt = client.clearedAt(selected);
+		if (clearedAt > 0 && !messages.isEmpty()) {
+			List<Model.Message> kept = new ArrayList<Model.Message>();
+			for (Model.Message m : messages) {
+				if (m.createdAt > clearedAt) {
+					kept.add(m);
+				}
+			}
+			messages = kept;
+		}
 		float off = sc.begin(ui, x, my0, w, mh);
 		float pad = 20;
 		float textX = x + pad + 46;
@@ -703,7 +761,7 @@ public final class RelayView {
 		} else if (stagedNote != null) {
 			c.text(Fonts.MEDIUM, 11, stagedNote, x + pad, iy - 26, 0xFFF87171);
 		}
-		if (!ui.focusClaimed && ui.focus == null && !settingsOpen && search.value().isEmpty() && !gifOpen) {
+		if (!ui.focusClaimed && ui.focus == null && !settingsOpen && search.value().isEmpty() && !gifOpen && nickFor == null && !shotsOpen) {
 			input.focus(ui);
 		}
 		String before2 = input.value();
@@ -725,7 +783,7 @@ public final class RelayView {
 		float ax = x + w - pad - btn * 3 - 16;
 		boolean aOver = ui.hover(ax, iy, btn, inputH);
 		boolean busy = picking.get();
-		float aHv = ui.anim("relay:attach", aOver || busy, 14f);
+		float aHv = ui.anim("relay:attach", aOver || busy || shotsOpen, 14f);
 		boolean aClick = ui.clicked("relay:attach", ax, iy, btn, inputH);
 		c.round(ax, iy, btn, inputH, 12, Theme.mix(Theme.SUBTLE, 0xFF26272D, aHv));
 		if (busy) {
@@ -735,25 +793,15 @@ public final class RelayView {
 		}
 		if (aOver) {
 			ui.cursorHand = true;
-			ui.tip(busy ? "Choose a picture in the window that opened" : "Send a picture");
+			ui.tip(busy ? "Choose a picture in the window that opened" : "Send a screenshot or picture");
 		}
-		if (aClick && picking.compareAndSet(false, true)) {
+		if (aClick && !busy) {
+			shotsOpen = !shotsOpen;
 			gifOpen = false;
 			stagedNote = null;
-			Thread t = new Thread(() -> {
-				try {
-					xyz.nativelaunch.ui.FilePicker.Result r = xyz.nativelaunch.ui.FilePicker.pickImage();
-					if (r != null && r.bytes != null) {
-						pasted = r.bytes; // staged by the same path as a pasted picture (type + size checks)
-					} else if (r != null) {
-						stagedNote = r.note;
-					}
-				} finally {
-					picking.set(false);
-				}
-			}, "Native-Pick");
-			t.setDaemon(true);
-			t.start();
+			if (shotsOpen) {
+				loadShots();
+			}
 		}
 		// GIF button
 		float gx = x + w - pad - btn * 2 - 8;
@@ -765,6 +813,7 @@ public final class RelayView {
 		c.text(Fonts.BOLD, 12, "GIF", gx + (btn - gw) / 2, iy + (inputH - c.lineHeight(Fonts.BOLD, 12)) / 2, gifOpen ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
 		if (gClick) {
 			gifOpen = !gifOpen;
+			shotsOpen = false;
 			if (gifOpen) {
 				gifQuery = null;
 				gifSearch.clear();
@@ -804,6 +853,244 @@ public final class RelayView {
 		}
 		if (gifOpen) {
 			gifPicker(ui, client, x + w - pad - 372, iy - 360 - 8, 372, 360);
+		}
+		if (shotsOpen) {
+			shotsPicker(ui, ax, iy, x + w - pad);
+		}
+	}
+
+	// ── screenshots: the newest pictures from the game's screenshots folder ─────────────────
+
+	private void browseFiles() {
+		if (!picking.compareAndSet(false, true)) {
+			return;
+		}
+		Thread t = new Thread(() -> {
+			try {
+				xyz.nativelaunch.ui.FilePicker.Result r = xyz.nativelaunch.ui.FilePicker.pickImage();
+				if (r != null && r.bytes != null) {
+					pasted = r.bytes; // staged by the same path as a pasted picture (type + size checks)
+				} else if (r != null) {
+					stagedNote = r.note;
+				}
+			} finally {
+				picking.set(false);
+			}
+		}, "Native-Pick");
+		t.setDaemon(true);
+		t.start();
+	}
+
+	private void loadShots() {
+		shots = null;
+		Thread t = new Thread(() -> {
+			List<java.io.File> out = new ArrayList<java.io.File>();
+			try {
+				java.nio.file.Path dir = xyz.nativelaunch.core.NativeState.get().gameDir();
+				java.io.File[] all = dir == null ? null : dir.resolve("screenshots").toFile().listFiles();
+				if (all != null) {
+					List<java.io.File> png = new ArrayList<java.io.File>();
+					for (java.io.File f : all) {
+						String n = f.getName().toLowerCase(Locale.ROOT);
+						if (f.isFile() && (n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg"))) {
+							png.add(f);
+						}
+					}
+					java.util.Collections.sort(png, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+					out.addAll(png.subList(0, Math.min(9, png.size())));
+				}
+			} catch (Throwable ignored) {
+				// no folder: the empty state shows
+			}
+			shots = out;
+			for (java.io.File f : out) {
+				String key = f.getAbsolutePath() + "|" + f.lastModified();
+				if (shotThumbs.containsKey(key)) {
+					continue;
+				}
+				try {
+					xyz.nativelaunch.ui.gfx.Image img = xyz.nativelaunch.ui.gfx.Image.decode(java.nio.file.Files.readAllBytes(f.toPath()));
+					if (img != null) {
+						float k = Math.min(1f, 240f / img.width);
+						img = img.scaled(Math.max(1, Math.round(img.width * k)), Math.max(1, Math.round(img.height * k)));
+						img.linear = true;
+						shotThumbs.put(key, img);
+					}
+				} catch (Throwable ignored) {
+					// unreadable file: its tile stays blank
+				}
+			}
+		}, "Native-Shots");
+		t.setDaemon(true);
+		t.start();
+	}
+
+	private void shotsPicker(Ui ui, float anchorX, float anchorY, float right) {
+		Canvas c = ui.c;
+		float pw = 388, cols = 3, tile = (pw - 24 - 16) / cols, th = tile * 9f / 16f;
+		List<java.io.File> list = shots;
+		int rows = list == null || list.isEmpty() ? 1 : (list.size() + 2) / 3;
+		float ph = 52 + (list == null || list.isEmpty() ? 96 : rows * (th + 8)) + 8;
+		float px = Math.max(8, right - pw), py = anchorY - ph - 8;
+		c.shadow(px, py + 6, pw, ph, 14, 28, 0x88000000);
+		c.round(px, py, pw, ph, 14, 0xFF121318);
+		c.outline(px, py, pw, ph, 14, 1, Theme.HAIRLINE_STRONG);
+		c.text(Fonts.SEMIBOLD, 13, "Screenshots", px + 14, py + 16, Theme.TEXT_STRONG);
+		if (ui.button("relay:shots:browse", px + pw - 14 - 108, py + 9, 108, 28, "Browse files", Theme.I_PLUS, Ui.BTN_GLASS)) {
+			shotsOpen = false;
+			browseFiles();
+			return;
+		}
+		float gy = py + 46;
+		if (list == null) {
+			ui.dots(px + pw / 2, gy + 40, Theme.TEXT_MUTED);
+		} else if (list.isEmpty()) {
+			c.text(Fonts.MEDIUM, 12, "No screenshots yet", px + 14, gy + 24, Theme.TEXT_SECONDARY);
+			c.text(Fonts.REGULAR, 11.5f, "Press F2 in game to take one, then pick it here.", px + 14, gy + 44, Theme.TEXT_MUTED);
+		} else {
+			for (int i = 0; i < list.size(); i++) {
+				java.io.File f = list.get(i);
+				float tx = px + 12 + (i % 3) * (tile + 8), ty = gy + (i / 3) * (th + 8);
+				boolean over = ui.hover(tx, ty, tile, th);
+				float hv = ui.anim("relay:shot:" + i, over, 16f);
+				c.round(tx, ty, tile, th, 8, 0xFF08090C);
+				xyz.nativelaunch.ui.gfx.Image img = shotThumbs.get(f.getAbsolutePath() + "|" + f.lastModified());
+				if (img != null) {
+					c.imageCover(img, tx, ty, tile, th, 1f, 0f, 0f, 0xFFFFFFFF);
+				} else {
+					ui.dots(tx + tile / 2, ty + th / 2, Theme.TEXT_MUTED);
+				}
+				c.outline(tx, ty, tile, th, 8, 1, Theme.mix(Theme.HAIRLINE, 0xCCFFFFFF, hv));
+				if (over) {
+					ui.tip(new SimpleDateFormat("d MMM, HH:mm", Locale.ENGLISH).format(new Date(f.lastModified())));
+				}
+				if (ui.clicked("relay:shot:" + i, tx, ty, tile, th)) {
+					shotsOpen = false;
+					final java.io.File pick = f;
+					Thread t = new Thread(() -> {
+						try {
+							pasted = java.nio.file.Files.readAllBytes(pick.toPath());
+						} catch (Throwable e) {
+							stagedNote = "Could not read that screenshot.";
+						}
+					}, "Native-Shot");
+					t.setDaemon(true);
+					t.start();
+				}
+			}
+		}
+		if (ui.pressed && !ui.hover(px, py, pw, ph) && !ui.hover(anchorX, anchorY, 46, 46)) {
+			shotsOpen = false;
+		}
+	}
+
+	// ── right-click menu + nickname ──────────────────────────────────────────────────────────
+
+	private void contextMenu(Ui ui, RelayClient client, float W, float H) {
+		Canvas c = ui.c;
+		String key = menuKey;
+		boolean group = key.startsWith("g:");
+		boolean pinned = false;
+		String who = null;
+		if (group) {
+			for (Model.Group g : client.groups) {
+				if (key.equals("g:" + g.id)) {
+					pinned = g.pinned;
+				}
+			}
+		} else {
+			for (Model.Friend f : client.friends) {
+				if (key.equals("dm:" + f.id)) {
+					pinned = f.pinned;
+					who = f.display();
+				}
+			}
+		}
+		String[] labels = group ? new String[] {pinned ? "Unpin chat" : "Pin chat", "Delete chat"}
+				: new String[] {pinned ? "Unpin chat" : "Pin chat", "Set nickname", "Delete chat"};
+		int[] icons = group ? new int[] {Theme.I_MAP_PIN, Theme.I_TRASH} : new int[] {Theme.I_MAP_PIN, Theme.I_PENCIL, Theme.I_TRASH};
+		float mw = 196, ih = 34, mh = labels.length * ih + 12;
+		float mx = Math.min(menuX, W - mw - 8), my = Math.min(menuY, H - mh - 8);
+		c.shadow(mx, my + 6, mw, mh, 12, 24, 0x99000000);
+		c.round(mx, my, mw, mh, 12, 0xFF121318);
+		c.outline(mx, my, mw, mh, 12, 1, Theme.HAIRLINE_STRONG);
+		int picked = -1;
+		for (int i = 0; i < labels.length; i++) {
+			float iy = my + 6 + i * ih;
+			boolean danger = i == labels.length - 1;
+			boolean over = ui.hover(mx + 6, iy, mw - 12, ih);
+			float hv = ui.anim("relay:ctx:" + i, over, 18f);
+			c.round(mx + 6, iy, mw - 12, ih, 8, Theme.alpha(danger ? 0xFFEF4444 : 0xFFFFFFFF, 0.1f * hv));
+			int col = danger ? Theme.mix(0xFFFCA5A5, 0xFFFFFFFF, hv * 0.3f) : Theme.mix(Theme.TEXT, Theme.TEXT_STRONG, hv);
+			c.icon(icons[i], 14, mx + 24, iy + ih / 2, col);
+			c.text(Fonts.MEDIUM, 12.5f, labels[i], mx + 40, iy + (ih - c.lineHeight(Fonts.MEDIUM, 12.5f)) / 2, col);
+			if (ui.clicked("relay:ctx:" + i, mx + 6, iy, mw - 12, ih)) {
+				picked = i;
+			}
+		}
+		if (picked >= 0) {
+			String k = key;
+			menuKey = null;
+			if (picked == 0) {
+				client.setPinned(k, !pinned);
+			} else if (!group && picked == 1) {
+				nickFor = k.substring(3);
+				String cur = null;
+				for (Model.Friend f : client.friends) {
+					if (f.id.equals(nickFor)) {
+						cur = f.nickname;
+					}
+				}
+				nick.maxLength = 28;
+				nick.set(cur == null ? "" : cur);
+				nick.focus(ui);
+				ui.focusClaimed = true;
+			} else {
+				client.clearChat(k);
+				chatScrolls.remove(k);
+				lastCount = -1;
+			}
+			return;
+		}
+		if (menuFresh) {
+			menuFresh = false;
+		} else if ((ui.pressed || ui.rightPressed) && !(ui.mx >= mx && ui.mx < mx + mw && ui.my >= my && ui.my < my + mh)) {
+			menuKey = null;
+		}
+	}
+
+	private void nicknameDialog(Ui ui, RelayClient client, float W, float H) {
+		Canvas c = ui.c;
+		String name = nickFor;
+		for (Model.Friend f : client.friends) {
+			if (f.id.equals(nickFor)) {
+				name = f.name;
+			}
+		}
+		c.fill(0, 0, W, H, 0x99000000);
+		float dw = 340, dh = 168, dx = (W - dw) / 2, dy = (H - dh) / 2;
+		c.shadow(dx, dy + 8, dw, dh, 16, 32, 0xAA000000);
+		c.round(dx, dy, dw, dh, 16, 0xFF121318);
+		c.outline(dx, dy, dw, dh, 16, 1, Theme.HAIRLINE_STRONG);
+		c.text(Fonts.BOLD, 15, "Set nickname", dx + 20, dy + 18, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 12, "Only you see this name for " + c.ellipsize(Fonts.REGULAR, 12, name, dw - 190) + ".", dx + 20, dy + 42, Theme.TEXT_MUTED);
+		boolean enter = nick.draw(ui, dx + 20, dy + 68, dw - 40, 38, "Nickname", 13.5f);
+		if (ui.focus == null) {
+			nick.focus(ui);
+		}
+		ui.focusClaimed = true;
+		boolean save = enter;
+		if (ui.button("relay:nick:save", dx + dw - 20 - 96, dy + dh - 20 - 34, 96, 34, "Save", Theme.I_CHECK, Ui.BTN_PRIMARY)) {
+			save = true;
+		}
+		if (ui.button("relay:nick:cancel", dx + dw - 20 - 96 - 8 - 96, dy + dh - 20 - 34, 96, 34, "Cancel", Theme.I_X, Ui.BTN_GLASS)) {
+			nickFor = null;
+			return;
+		}
+		if (save) {
+			client.setNickname(nickFor, nick.value());
+			nickFor = null;
+			input.focus(ui);
 		}
 	}
 

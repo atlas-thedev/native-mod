@@ -473,10 +473,22 @@ public final class Canvas {
 		return (al << 24) | (argb & 0xFFFFFF);
 	}
 
+	/**
+	 * Blends two ARGB colours in premultiplied space, so fading a translucent colour (a 6 % white wash) into an
+	 * opaque one does not pass through a bright grey on the way.
+	 */
 	public static int lerpColor(int a, int b, float t) {
-		int aa = a >>> 24, ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
-		int ba = b >>> 24, br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
-		return (Math.round(aa + (ba - aa) * t) << 24) | (Math.round(ar + (br - ar) * t) << 16)
-				| (Math.round(ag + (bg - ag) * t) << 8) | Math.round(ab + (bb - ab) * t);
+		float aa = a >>> 24, ba = b >>> 24;
+		float al = aa + (ba - aa) * t;
+		if (al <= 0.0001f) {
+			return 0;
+		}
+		int out = Math.round(al) << 24;
+		for (int sh = 16; sh >= 0; sh -= 8) {
+			float ca = ((a >> sh) & 0xFF) * aa, cb = ((b >> sh) & 0xFF) * ba;
+			int v = Math.round((ca + (cb - ca) * t) / al);
+			out |= Math.max(0, Math.min(255, v)) << sh;
+		}
+		return out;
 	}
 }

@@ -10,10 +10,15 @@ public final class Model {
 
 	public static final class Friend {
 		public final String id, name, nickname, status, activity, serverAddress, skin;
-		public final boolean online;
+		public final boolean online, pinned;
 		public final int unread;
+		/** When they were last online (ms since epoch), 0 when unknown. */
+		public final long lastSeen;
 
-		public Friend(String id, String name, String nickname, String status, String activity, String serverAddress, String skin, boolean online, int unread) {
+		public Friend(String id, String name, String nickname, String status, String activity, String serverAddress, String skin, boolean online, int unread,
+				boolean pinned, long lastSeen) {
+			this.pinned = pinned;
+			this.lastSeen = lastSeen;
 			this.id = id;
 			this.name = name;
 			this.nickname = nickname;
@@ -39,7 +44,7 @@ public final class Model {
 		/** One-line status: activity, else Online / Idle / Do not disturb / Offline. */
 		public String line() {
 			if (!online) {
-				return "Offline";
+				return lastSeen > 0 ? "Last seen " + ago(lastSeen) : "Offline";
 			}
 			if (activity != null && !activity.isEmpty()) {
 				return activity;
@@ -50,16 +55,39 @@ public final class Model {
 			return "dnd".equals(status) || "busy".equals(status) ? "Do not disturb" : "Online";
 		}
 
+		/** "just now", "5 min ago", "3 h ago", "2 d ago", else the date. */
+		public static String ago(long at) {
+			long s = Math.max(0, (System.currentTimeMillis() - at) / 1000);
+			if (s < 60) {
+				return "just now";
+			}
+			if (s < 3600) {
+				return (s / 60) + " min ago";
+			}
+			if (s < 86400) {
+				return (s / 3600) + " h ago";
+			}
+			if (s < 86400 * 7) {
+				return (s / 86400) + " d ago";
+			}
+			return new java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH).format(new java.util.Date(at));
+		}
+
 		public String display() {
 			return nickname != null && !nickname.isEmpty() ? nickname : name;
 		}
 
-		Friend withPresence(String status, String activity, String serverAddress) {
-			return new Friend(id, name, nickname, status, activity, serverAddress, skin, !"offline".equals(status), unread);
+		Friend withPresence(String status, String activity, String serverAddress, long lastSeen) {
+			boolean on = !"offline".equals(status);
+			return new Friend(id, name, nickname, status, activity, serverAddress, skin, on, unread, pinned, on ? this.lastSeen : lastSeen > 0 ? lastSeen : System.currentTimeMillis());
 		}
 
 		Friend withUnread(int unread) {
-			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread);
+			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen);
+		}
+
+		Friend withPrefs(String nickname, boolean pinned) {
+			return new Friend(id, name, nickname, status, activity, serverAddress, skin, online, unread, pinned, lastSeen);
 		}
 	}
 
@@ -70,6 +98,7 @@ public final class Model {
 		public final List<String[]> memberList; // {id, name}
 		/** Your role here: "owner", "admin" or "member" (owners and admins can delete anyone's message). */
 		public String role = "member";
+		public boolean pinned;
 
 		public Group(String id, String name, String lastText, String lastSender, long lastAt, int unread, int members, List<String[]> memberList) {
 			this.id = id;
@@ -85,12 +114,14 @@ public final class Model {
 		Group withUnread(int unread) {
 			Group g = new Group(id, name, lastText, lastSender, lastAt, unread, members, memberList);
 			g.role = role;
+			g.pinned = pinned;
 			return g;
 		}
 
 		Group withLast(String text, String sender, long at, int unread) {
 			Group g = new Group(id, name, text, sender, at, unread, members, memberList);
 			g.role = role;
+			g.pinned = pinned;
 			return g;
 		}
 
