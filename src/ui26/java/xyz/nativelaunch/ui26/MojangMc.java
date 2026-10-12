@@ -734,15 +734,20 @@ public final class MojangMc implements McBridge {
 			if (g.tagSight && e != self && self instanceof net.minecraft.world.entity.LivingEntity && !((net.minecraft.world.entity.LivingEntity) self).hasLineOfSight(e)) {
 				continue;
 			}
-			if (!pr.project(p.x, p.y + e.getBbHeight() + (kind == 4 || kind == 2 ? 0.34 : 0.8), p.z)) {
+			boolean hasLabel = e.hasCustomName() || (kind == 1);
+			double headExtra = hasLabel ? 0.65 : 0.35;
+			if (!pr.project(p.x, p.y + e.getBbHeight() + headExtra, p.z)) {
 				continue;
 			}
+			int armor = l.getArmorValue();
+			boolean targeted = e == mc.crosshairPickEntity;
+			boolean hurt = l.hurtTime > 0;
 			int fx = 0;
 			for (net.minecraft.world.effect.MobEffectInstance inst : l.getActiveEffects()) {
 				String id = xyz.nativelaunch.ui.mod.Game.effectId(inst.getDescriptionId());
 				fx |= "poison".equals(id) ? 1 : "wither".equals(id) ? 2 : "regeneration".equals(id) ? 4 : 0;
 			}
-			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, l.getMaxHealth()), kind, l.getAbsorptionAmount(), fx);
+			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, l.getMaxHealth()), kind, l.getAbsorptionAmount(), fx, armor, targeted, hurt, hasLabel);
 		}
 	}
 

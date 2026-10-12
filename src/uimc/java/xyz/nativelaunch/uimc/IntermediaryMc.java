@@ -845,11 +845,16 @@ public final class IntermediaryMc implements McBridge {
 			if (g.tagSight && e != self && a.living.isInstance(self) && !Boolean.TRUE.equals(a.canSee.invoke(self, e))) {
 				continue;
 			}
-			double top = y + ((Number) a.height.invoke(e)).doubleValue() + (kind == 4 || kind == 2 ? 0.34 : 0.8);
+			boolean hasLabel = Boolean.TRUE.equals(call(e, "method_16914")) || (kind == 1); // hasCustomName or player
+			double headExtra = hasLabel ? 0.65 : 0.35;
+			double top = y + ((Number) a.height.invoke(e)).doubleValue() + headExtra;
 			if (!pr.project(x, top, z)) {
 				continue;
 			}
 			float absorb = floatOf(call(e, "method_6067"), 0f); // getAbsorptionAmount
+			int armor = intOf(call(e, "method_6096"), 0); // getArmor
+			boolean targeted = e == get(mc, "field_1692"); // targetedEntity
+			boolean hurt = intOf(get(e, "field_6008"), 0) > 0; // hurtTime > 0
 			int fx = 0;
 			Object active = call(e, "method_6088"); // getActiveStatusEffects
 			if (active instanceof java.util.Map) {
@@ -859,7 +864,7 @@ public final class IntermediaryMc implements McBridge {
 					fx |= "poison".equals(id) ? 1 : "wither".equals(id) ? 2 : "regeneration".equals(id) ? 4 : 0;
 				}
 			}
-			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, ((Number) a.maxHealth.invoke(e)).floatValue()), kind, absorb, fx);
+			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, ((Number) a.maxHealth.invoke(e)).floatValue()), kind, absorb, fx, armor, targeted, hurt, hasLabel);
 		}
 	}
 
