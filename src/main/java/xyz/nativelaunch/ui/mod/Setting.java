@@ -121,7 +121,14 @@ public abstract class Setting {
 	public static final class Choice extends Setting {
 		public int value;
 		public final String[] options;
+		/** Shorter labels used when the full ones do not fit the row (the saved value always stays the full label). */
+		public String[] shorts;
 		private final int def;
+
+		public Choice shorts(String... s) {
+			this.shorts = s;
+			return this;
+		}
 
 		public Choice(String id, String label, int def, String... options) {
 			super(id, label);

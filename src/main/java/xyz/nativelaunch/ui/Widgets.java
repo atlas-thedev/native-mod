@@ -208,12 +208,21 @@ public final class Widgets {
 			controlX = x + w - vw - sw - 6;
 		} else if (s instanceof Setting.Choice) {
 			Setting.Choice ch = (Setting.Choice) s;
+			float avail = Math.max(w * 0.6f, w - labelW - 16);
+			String[] labels = ch.options;
 			float sw = 0;
-			for (String o : ch.options) {
+			for (String o : labels) {
 				sw += c.textWidth(Fonts.SEMIBOLD, 11.5f, o) + 24;
 			}
-			sw = Math.min(Math.max(sw, 90), Math.max(w * 0.6f, w - labelW - 16));
-			int v = segmented(ui, id, x + w - sw, y + (h - 26) / 2, sw, 26, ch.options, ch.value);
+			if (sw > avail && ch.shorts != null && ch.shorts.length == ch.options.length) {
+				labels = ch.shorts; // the full labels would be cut off: use the short ones
+				sw = 0;
+				for (String o : labels) {
+					sw += c.textWidth(Fonts.SEMIBOLD, 11.5f, o) + 24;
+				}
+			}
+			sw = Math.min(Math.max(sw, 90), avail);
+			int v = segmented(ui, id, x + w - sw, y + (h - 26) / 2, sw, 26, labels, ch.value);
 			controlX = x + w - sw;
 			if (v != ch.value) {
 				ch.value = v;

@@ -22,9 +22,11 @@ final class HealthIndicator extends Module {
 	final Setting.Num perRow = add(new Setting.Num("row", "Hearts per row", 10, 5, 20, 1, ""));
 	final Setting.Bool numbers = add(new Setting.Bool("numbers", "Also show the number", false));
 	final Setting.Bool hideFull = add(new Setting.Bool("hideFull", "Hide at full health", false));
-	final Setting.Bool sight = add(new Setting.Bool("sight", "Hide behind blocks", false));
+	final Setting.Bool sight = add(new Setting.Bool("occlude", "Hide behind blocks", true));
 	final Setting.Num range = add(new Setting.Num("range", "Range", 24, 8, 64, 2, " blocks"));
 	final Setting.Bool fade = add(new Setting.Bool("fade", "Fade out with distance", true));
+	final Setting.Num size = add(new Setting.Num("size", "Heart size", 11, 6, 24, 1, " px"));
+	final Setting.Bool shrink = add(new Setting.Bool("shrink", "Smaller when far away", false));
 
 	HealthIndicator() {
 		super("healthindicator", "Health Indicator", "Hearts above players and mobs, so you can see how hurt they are.", VISUAL, Theme.I_HEART, false);
@@ -70,7 +72,8 @@ final class HealthIndicator extends Module {
 			if (hideFull.value && t.health >= t.max - 0.01f) {
 				continue;
 			}
-			float px = Math.max(5f, Math.min(13f, 0.2f * t.perBlock * H));
+			// the same size at any distance, unless "Smaller when far away" is on
+			float px = shrink.value ? Math.min(size.value, Math.max(5f, 0.2f * t.perBlock * H)) : size.value;
 			float a = 1f;
 			if (fade.value) {
 				a = Math.max(0f, Math.min(1f, (R - t.depth) / (R * 0.25f)));
@@ -95,10 +98,12 @@ final class HealthIndicator extends Module {
 	/** One indicator with its bottom centre at (x, y); {@code ps} is the heart size in UI px. */
 	private void draw(Canvas c, float x, float y, float ps, float hp, float max) {
 		int mode = display.value;
+		String num = Status.hp(hp), maxNum = Status.hp(max);
 		if (mode == 0 && max > 40f) {
-			mode = 1; // a boss would need rows and rows of hearts
+			// a golem or a boss: still hearts like everyone else, just each one stands for more health (two rows at most)
+			hp = hp * 40f / max;
+			max = 40f;
 		}
-		String num = Status.hp(hp);
 		if (mode == 2) {
 			float nf = ps * 1.15f, gap = ps * 0.3f;
 			float tw = c.textWidth(Fonts.SEMIBOLD, nf, num), w = ps + gap + tw;
@@ -113,7 +118,7 @@ final class HealthIndicator extends Module {
 		float bottom = y;
 		if (numbers.value) {
 			float nf = ps * 1.05f, lh = c.lineHeight(Fonts.SEMIBOLD, nf);
-			String s = num + " / " + Status.hp(max);
+			String s = num + " / " + maxNum;
 			float tx = x - c.textWidth(Fonts.SEMIBOLD, nf, s) / 2;
 			c.text(Fonts.SEMIBOLD, nf, s, tx + 0.8f, bottom - lh + 0.8f, 0xB0000000);
 			c.text(Fonts.SEMIBOLD, nf, s, tx, bottom - lh, 0xFFFFFFFF);

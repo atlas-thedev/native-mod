@@ -373,6 +373,14 @@ public final class UiRuntime {
 		}
 	}
 
+	/** Opens the Native menu on one module's own page (its settings and live preview). */
+	public static void openMod(Object parent, xyz.nativelaunch.ui.mod.Module m) {
+		openMenu(parent);
+		if (menu != null) {
+			menu.openMod(m);
+		}
+	}
+
 	private static void drawPill(Ui ui) {
 		Canvas c = ui.c;
 		float w = 128, h = 30, x = 12, y = 12;

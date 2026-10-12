@@ -97,6 +97,15 @@ public final class MenuView {
 		}
 	}
 
+	/** Jumps to a module's own page (settings + live preview) in the mods tab. */
+	public void openMod(Module m) {
+		setTab(0);
+		selected = m;
+		detail.target = detail.offset = 0;
+		pageAt = System.currentTimeMillis();
+		Widgets.listening = null;
+	}
+
 	private void setTab(int t) {
 		if (tab == t) {
 			return;
@@ -633,17 +642,9 @@ public final class MenuView {
 		c.round(px, y, pw, h, 14, 0x66000000);
 		glow(c, px, y, pw, h * 0.5f, 14, 0x0CFFFFFF);
 		c.outline(px, y, pw, h, 14, 1, Theme.HAIRLINE);
-		c.circle(px + 20, y + 20, 3.5f, Theme.ONLINE);
-		c.text(Fonts.SEMIBOLD, 10.5f, "LIVE PREVIEW", px + 32, y + 14, Theme.TEXT_MUTED);
+		c.text(Fonts.SEMIBOLD, 10.5f, "LIVE PREVIEW", px + 16, y + 14, Theme.TEXT_MUTED);
 		float wy = y + 40, wh = Math.min(h * 0.5f, 200);
 		c.round(px + 12, wy, pw - 24, wh, 12, 0x55000000);
-		c.pushClip(px + 12, wy, pw - 24, wh);
-		for (float dx = 10; dx < pw - 24; dx += 16) {
-			for (float dy = 10; dy < wh; dy += 16) {
-				c.fill(px + 12 + dx, wy + dy, 1.5f, 1.5f, 0x1FFFFFFF);
-			}
-		}
-		c.popClip();
 		if (m instanceof HudModule) {
 			HudModule hm = (HudModule) m;
 			c.pushClip(px + 13, wy + 1, pw - 26, wh - 2);
