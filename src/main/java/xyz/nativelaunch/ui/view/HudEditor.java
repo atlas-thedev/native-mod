@@ -182,7 +182,9 @@ public final class HudEditor {
 					tagHover = shown.get(i);
 					ui.cursorHand = true;
 					if (ui.pressed && ui.hover(t[3], t[1], 18, 18)) {
-						popover = popover == tagHover ? null : tagHover;
+						// the gear goes straight to this module's page in the Native menu (right-click keeps the quick card)
+						Modules.save();
+						UiRuntime.openMod(UiRuntime.mc().hostParent(screen), tagHover);
 						ui.pressed = false;
 					} else if (ui.pressed && ui.hover(t[4], t[1], 18, 18)) {
 						HudModule gone = tagHover;
@@ -596,7 +598,7 @@ public final class HudEditor {
 		if (t < 0.01f) {
 			return;
 		}
-		String[] lines = {"Drag a module to move it", "Drag a corner, or scroll over it, to resize", "Gear: its settings. Right-click works too",
+		String[] lines = {"Drag a module to move it", "Drag a corner, or scroll over it, to resize", "Gear: its page in the Native menu. Right-click: quick settings",
 				"Minus: take it off the screen (Undo is offered)", "Plus in the middle: bring modules back", "Esc or " + UiRuntime.keyName(UiRuntime.config().menuKey) + " closes this"};
 		float w = 340, h = 22 + lines.length * 22 + 14, cx = x, cy = y - h - 10 + (1 - t) * 8;
 		c.pushAlpha(t);

@@ -334,7 +334,7 @@ public final class StatusModules {
 
 	static final class Armor extends Box {
 		final Setting.Choice layout = add(new Setting.Choice("layout", "Layout", 0, "List", "Row"));
-		final Setting.Choice text = add(new Setting.Choice("text", "Durability text", 0, "Remaining", "Percent", "Remaining / max", "Off"));
+		final Setting.Choice text = add(new Setting.Choice("text", "Durability text", 0, "Remaining", "Percent", "Remaining / max", "Off").shorts("Left", "Percent", "Left / max", "Off"));
 		final Setting.Bool bar = add(new Setting.Bool("bar", "Durability bar on the icon", true));
 		final Setting.Bool wear = add(new Setting.Bool("wear", "Colour text by wear", true));
 		final Setting.Num warn = add(new Setting.Num("warn", "Flash red below", 15, 0, 50, 5, "%"));

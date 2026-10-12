@@ -3,6 +3,10 @@ package xyz.nativelaunch.ui.mod;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Image;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -23,11 +27,28 @@ public final class Vanilla {
 	private static final Map<Image, Map<Long, Image>> sized = new IdentityHashMap<Image, Map<Long, Image>>();
 	private static int sizedCount;
 
-	/** A vanilla texture (e.g. "item/apple"); animated strips come back as their first frame. Null when missing. */
+	private static int seenPacks = -1;
+
+	/** Forgets everything decoded so far when the player switched resource packs. */
+	private static void sync() {
+		int g = ResourcePacks.generation();
+		if (g != seenPacks) {
+			seenPacks = g;
+			cache.clear();
+			items.clear();
+			sized.clear();
+			sizedCount = 0;
+			models.clear();
+		}
+	}
+
+	/** A texture by "name" (minecraft) or "namespace:name", from the enabled resource packs first. */
 	public static synchronized Image texture(String name) {
+		sync();
 		Image img = cache.get(name);
 		if (img == null) {
-			img = load("assets/minecraft/textures/" + name + ".png");
+			int colon = name.indexOf(':');
+			img = load("assets/" + (colon > 0 ? name.substring(0, colon) : "minecraft") + "/textures/" + (colon > 0 ? name.substring(colon + 1) : name) + ".png");
 			if (img != null && img.height > img.width && img.width > 0 && img.height % img.width == 0) {
 				int w = img.width;
 				int[] px = new int[w * w];
@@ -40,6 +61,16 @@ public final class Vanilla {
 	}
 
 	private static Image load(String path) {
+		byte[] b = bytes(path);
+		return b == null ? null : Image.decode(b);
+	}
+
+	/** A file from the enabled resource packs, else from the game's own assets on the class path. */
+	private static byte[] bytes(String path) {
+		byte[] packed = ResourcePacks.read(path);
+		if (packed != null) {
+			return packed;
+		}
 		ClassLoader[] loaders = {Vanilla.class.getClassLoader(), Thread.currentThread().getContextClassLoader(), ClassLoader.getSystemClassLoader()};
 		for (ClassLoader cl : loaders) {
 			if (cl == null) {
@@ -55,10 +86,7 @@ public final class Vanilla {
 				while ((n = in.read(buf)) > 0) {
 					out.write(buf, 0, n);
 				}
-				Image img = Image.decode(out.toByteArray());
-				if (img != null) {
-					return img;
-				}
+				return out.toByteArray();
 			} catch (Throwable ignored) {
 				// try the next loader
 			}
@@ -91,9 +119,17 @@ public final class Vanilla {
 		if (id == null) {
 			return null;
 		}
+		sync();
 		Image img = items.get(id);
 		if (img == null) {
-			img = texture("item/" + id);
+			try {
+				img = fromModel(id);
+			} catch (Throwable ignored) {
+				img = null; // an odd pack model: the plain lookups below still work
+			}
+			if (img == null) {
+				img = texture("item/" + id);
+			}
 			if (img == null) {
 				img = cube(id);
 			}
@@ -103,6 +139,157 @@ public final class Vanilla {
 			items.put(id, img == null ? NONE : img);
 		}
 		return img == NONE ? null : img;
+	}
+
+	// ── item models: what a resource pack's model files say the icon is ──────────────────
+
+	private static final Map<String, JsonObject> models = new HashMap<String, JsonObject>();
+	private static final JsonObject NO_MODEL = new JsonObject();
+
+	private static JsonObject model(String ref) {
+		JsonObject o = models.get(ref);
+		if (o == null) {
+			int colon = ref.indexOf(':');
+			String path = "assets/" + (colon > 0 ? ref.substring(0, colon) : "minecraft") + "/models/" + (colon > 0 ? ref.substring(colon + 1) : ref) + ".json";
+			o = json(path);
+			models.put(ref, o == null ? NO_MODEL : o);
+		}
+		return o == NO_MODEL ? null : o;
+	}
+
+	private static JsonObject json(String path) {
+		try {
+			byte[] b = bytes(path);
+			if (b == null) {
+				return null;
+			}
+			JsonElement e = new JsonParser().parse(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+			return e.isJsonObject() ? e.getAsJsonObject() : null;
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	/** The first "model": "namespace:name" string anywhere in an item definition (1.21.4+ assets/minecraft/items/*.json). */
+	private static String modelRef(JsonElement e) {
+		if (e == null) {
+			return null;
+		}
+		if (e.isJsonObject()) {
+			for (Map.Entry<String, JsonElement> en : e.getAsJsonObject().entrySet()) {
+				JsonElement v = en.getValue();
+				if (en.getKey().equals("model") && v.isJsonPrimitive()) {
+					return v.getAsString();
+				}
+				String r = modelRef(v);
+				if (r != null) {
+					return r;
+				}
+			}
+		} else if (e.isJsonArray()) {
+			for (JsonElement v : e.getAsJsonArray()) {
+				String r = modelRef(v);
+				if (r != null) {
+					return r;
+				}
+			}
+		}
+		return null;
+	}
+
+	private static String texOf(Map<String, String> tex, String... keys) {
+		for (String k : keys) {
+			String v = tex.get(k);
+			for (int i = 0; v != null && v.startsWith("#") && i < 6; i++) {
+				v = tex.get(v.substring(1));
+			}
+			if (v != null && !v.startsWith("#")) {
+				return v;
+			}
+		}
+		return null;
+	}
+
+	/** The icon an item's (pack or vanilla) model describes: its flat layer, or a cube of its block textures. Null when unclear. */
+	private static Image fromModel(String id) {
+		String ref = null;
+		JsonObject def = json("assets/minecraft/items/" + id + ".json");
+		if (def != null) {
+			ref = modelRef(def);
+		}
+		if (ref == null) {
+			ref = "minecraft:item/" + id;
+		}
+		Map<String, String> tex = new HashMap<String, String>();
+		boolean flat = false, entity = false, found = false;
+		String cur = ref;
+		for (int depth = 0; cur != null && depth < 10; depth++) {
+			String bare = cur.startsWith("minecraft:") ? cur.substring(10) : cur;
+			if (bare.equals("item/generated") || bare.equals("builtin/generated") || bare.equals("item/handheld") || bare.equals("item/handheld_rod")
+					|| bare.equals("item/handheld_mace")) {
+				flat = true;
+			}
+			if (bare.equals("builtin/entity")) {
+				entity = true;
+			}
+			JsonObject o = model(cur);
+			if (o == null) {
+				break;
+			}
+			found = true;
+			if (o.has("textures") && o.get("textures").isJsonObject()) {
+				for (Map.Entry<String, JsonElement> en : o.getAsJsonObject("textures").entrySet()) {
+					if (en.getValue().isJsonPrimitive() && !tex.containsKey(en.getKey())) {
+						tex.put(en.getKey(), en.getValue().getAsString());
+					}
+				}
+			}
+			cur = o.has("parent") && o.get("parent").isJsonPrimitive() ? o.get("parent").getAsString() : null;
+		}
+		if (!found) {
+			return null;
+		}
+		if (id.equals("shield")) {
+			return shield();
+		}
+		String layer = texOf(tex, "layer0");
+		if (layer != null && !entity) {
+			return texture(layer);
+		}
+		if (flat) {
+			return null;
+		}
+		String t = texOf(tex, "up", "top", "end", "all", "particle", "texture"), s = texOf(tex, "side", "north", "front", "all", "particle", "texture");
+		Image top = t == null ? null : texture(t), side = s == null ? null : texture(s);
+		if (top == null && side == null) {
+			return null;
+		}
+		return cube(id, top, side);
+	}
+
+	/** The shield's front, cut out of its entity texture (the game draws it as a model, so it has no flat item texture). */
+	private static Image shield() {
+		Image sheet = texture("entity/shield_base_nopattern");
+		if (sheet == null) {
+			sheet = texture("entity/shield/shield_base_nopattern");
+		}
+		if (sheet == null) {
+			return null;
+		}
+		float k = sheet.width / 64f;
+		int cx = Math.round(k), cy = Math.round(k), cw = Math.round(12 * k), ch = Math.round(22 * k);
+		if (cx + cw > sheet.width || cy + ch > sheet.height) {
+			return null;
+		}
+		int side = ch; // square canvas so the icon keeps its proportions
+		int[] out = new int[side * side];
+		int ox = (side - cw) / 2;
+		for (int y = 0; y < ch; y++) {
+			System.arraycopy(sheet.argb, (cy + y) * sheet.width + cx, out, y * side + ox, cw);
+		}
+		Image img = new Image(side, side, out);
+		img.linear = false;
+		return img;
 	}
 
 	private static Image firstOf(String... names) {
@@ -136,11 +323,19 @@ public final class Vanilla {
 			Image flat = firstOf(id);
 			return flat;
 		}
+		return cube(id, top, side);
+	}
+
+	/** An isometric cube from a top and a side texture (either may be null). */
+	private static Image cube(String id, Image top, Image side) {
 		if (top == null) {
 			top = side;
 		}
 		if (side == null) {
 			side = top;
+		}
+		if (top == null) {
+			return null;
 		}
 		int tt = tintFor(id, true), st = tintFor(id, false);
 		final int n = 32;
