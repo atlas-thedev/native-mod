@@ -18,6 +18,7 @@ while a:
     c = a.pop(0)
     if c == 'move': move(a.pop(0), a.pop(0))
     elif c == 'click': move(a.pop(0), a.pop(0)); time.sleep(0.15); btn(1)
+    elif c == 'rclick': move(a.pop(0), a.pop(0)); time.sleep(0.15); btn(3)
     elif c == 'scroll': n = int(a.pop(0)); [btn(4 if n > 0 else 5) for _ in range(abs(n))]
     elif c == 'key': key(a.pop(0))
     elif c == 'type':

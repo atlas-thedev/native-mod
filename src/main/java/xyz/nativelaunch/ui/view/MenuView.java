@@ -833,7 +833,13 @@ public final class MenuView {
 			c.icon(Theme.I_BAN, 26, ix + iw / 2, iy + ih / 2, Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_SECONDARY, hv));
 		} else if (it.isCape()) {
 			Image img = Wardrobe.url(it.stillUrl, true, 0);
-			if (img != null && img != Wardrobe.NONE) {
+			Image strip = it.animated() ? Wardrobe.url(it.stripUrl, true, 0) : null;
+			if (strip != null && strip != Wardrobe.NONE) {
+				// animated cape: the current frame of the strip (frames are stacked top to bottom)
+				float dh = ih - 12, dw = dh * 10f / 16f;
+				float fr = it.frame(), n = it.frames;
+				c.image(strip, ix + (iw - dw) / 2, iy + 6, dw, dh, 1f / 64, (fr * 32 + 1) / (32 * n), 11f / 64, (fr * 32 + 17) / (32 * n), 0xFFFFFFFF);
+			} else if (img != null && img != Wardrobe.NONE) {
 				float dh = ih - 12, dw = dh * 10f / 16f;
 				c.image(img, ix + (iw - dw) / 2, iy + 6, dw, dh, 1f / 64, 1f / 32, 11f / 64, 17f / 32, 0xFFFFFFFF);
 			} else if (img == null) {

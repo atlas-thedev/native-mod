@@ -482,10 +482,10 @@ public final class RelayClient {
 		});
 	}
 
-	/** Tells the other side we are typing (groups only: DMs have no ticket route for it), at most every 3 s. */
+	/** Tells the other side we are typing, at most every 3 s. */
 	public void typingPing(final String key) {
 		long now = System.currentTimeMillis();
-		if (ticket == null || !key.startsWith("g:") || now - lastTypingSent < 3000) {
+		if (ticket == null || now - lastTypingSent < 3000) {
 			return;
 		}
 		lastTypingSent = now;
@@ -493,11 +493,115 @@ public final class RelayClient {
 			try {
 				JsonObject body = new JsonObject();
 				body.addProperty("isTyping", true);
-				postJson("/v1/social/relay/groups/" + enc(key.substring(2)) + "/typing", body);
+				postJson("/v1/social/relay/" + (key.startsWith("g:") ? "groups/" + enc(key.substring(2)) : "dm/" + enc(key.substring(3))) + "/typing", body);
 			} catch (Exception ignored) {
 				// cosmetic
 			}
 		});
+	}
+
+	/** Pins / unpins a chat (synced with the launcher). */
+	public void setPinned(final String key, final boolean pinned) {
+		if (key.startsWith("g:")) {
+			List<Model.Group> next = new ArrayList<Model.Group>();
+			for (Model.Group g : groups) {
+				if (g.id.equals(key.substring(2))) {
+					g = g.withUnread(g.unread);
+					g.pinned = pinned;
+				}
+				next.add(g);
+			}
+			Collections.sort(next, (a, b) -> a.pinned == b.pinned ? 0 : a.pinned ? -1 : 1);
+			groups = next;
+		} else {
+			List<Model.Friend> next = new ArrayList<Model.Friend>();
+			for (Model.Friend f : friends) {
+				next.add(f.id.equals(key.substring(3)) ? f.withPrefs(f.nickname, pinned) : f);
+			}
+			sortFriends(next);
+			friends = next;
+		}
+		JsonObject body = new JsonObject();
+		body.addProperty("pinned", pinned);
+		prefs(key, body);
+	}
+
+	/** Sets (or, when empty, removes) the nickname of a friend. */
+	public void setNickname(final String friendId, String nickname) {
+		final String nick = nickname == null || nickname.trim().isEmpty() ? null : nickname.trim();
+		List<Model.Friend> next = new ArrayList<Model.Friend>();
+		for (Model.Friend f : friends) {
+			next.add(f.id.equals(friendId) ? f.withPrefs(nick, f.pinned) : f);
+		}
+		sortFriends(next);
+		friends = next;
+		JsonObject body = new JsonObject();
+		body.addProperty("nickname", nick == null ? "" : nick);
+		prefs("dm:" + friendId, body);
+	}
+
+	private void prefs(final String key, final JsonObject body) {
+		if (ticket == null) {
+			return;
+		}
+		pool.execute(() -> {
+			try {
+				postJson("/v1/social/relay/" + (key.startsWith("g:") ? "groups/" + enc(key.substring(2)) : "dm/" + enc(key.substring(3))) + "/prefs", body);
+			} catch (Exception e) {
+				Log.debug("Relay prefs failed: {}", e.toString());
+			}
+		});
+	}
+
+	// ── "Delete chat": hides the history up to now on this device (the launcher's Clear chat does the same) ──
+
+	private volatile java.util.Map<String, Long> cleared;
+
+	private java.nio.file.Path clearedFile() {
+		java.nio.file.Path dir = xyz.nativelaunch.core.NativeState.get().gameDir();
+		return dir == null ? null : dir.resolve("config").resolve("native-relay-cleared.json");
+	}
+
+	private synchronized java.util.Map<String, Long> clearedMap() {
+		if (cleared == null) {
+			java.util.Map<String, Long> m = new ConcurrentHashMap<String, Long>();
+			try {
+				java.nio.file.Path f = clearedFile();
+				if (f != null && java.nio.file.Files.exists(f)) {
+					JsonObject o = new JsonParser().parse(new String(java.nio.file.Files.readAllBytes(f), StandardCharsets.UTF_8)).getAsJsonObject();
+					for (java.util.Map.Entry<String, JsonElement> e : o.entrySet()) {
+						m.put(e.getKey(), e.getValue().getAsLong());
+					}
+				}
+			} catch (Exception ignored) {
+				// no saved state: nothing is hidden
+			}
+			cleared = m;
+		}
+		return cleared;
+	}
+
+	/** Messages at or before this time are hidden in the chat (0 = none). */
+	public long clearedAt(String key) {
+		Long t = clearedMap().get(meId + "|" + key);
+		return t == null ? 0 : t;
+	}
+
+	public void clearChat(String key) {
+		clearedMap().put(meId + "|" + key, System.currentTimeMillis() + 1000); // +1 s: tolerate small clock drift to the server
+		try {
+			JsonObject o = new JsonObject();
+			for (java.util.Map.Entry<String, Long> e : clearedMap().entrySet()) {
+				o.addProperty(e.getKey(), e.getValue());
+			}
+			java.nio.file.Path f = clearedFile();
+			if (f != null) {
+				java.nio.file.Files.createDirectories(f.getParent());
+				java.nio.file.Files.write(f, o.toString().getBytes(StandardCharsets.UTF_8));
+			}
+		} catch (Exception ignored) {
+			// still hidden for this session
+		}
 	}
 
 	private void clearUnread(String key) {
@@ -539,7 +643,7 @@ public final class RelayClient {
 				for (JsonElement e : arr) {
 					JsonObject f = e.getAsJsonObject();
 					list.add(new Model.Friend(str(f, "id"), str(f, "name"), str(f, "nickname"), str(f, "status"), str(f, "activity"),
-							str(f, "serverAddress"), skinRef(str(f, "skin"), str(f, "mcUuid")), bool(f, "online"), num(f, "unread")));
+							str(f, "serverAddress"), skinRef(str(f, "skin"), str(f, "mcUuid")), bool(f, "online"), num(f, "unread"), bool(f, "pinned"), lng(f, "lastSeen")));
 				}
 			}
 			sortFriends(list);
@@ -561,6 +665,9 @@ public final class RelayClient {
 
 	private static void sortFriends(List<Model.Friend> list) {
 		Collections.sort(list, (a, b) -> {
+			if (a.pinned != b.pinned) {
+				return a.pinned ? -1 : 1;
+			}
 			if (a.online != b.online) {
 				return a.online ? -1 : 1;
 			}
@@ -581,6 +688,7 @@ public final class RelayClient {
 					list.add(parseGroup(e.getAsJsonObject()));
 				}
 			}
+			Collections.sort(list, (a, b) -> a.pinned == b.pinned ? 0 : a.pinned ? -1 : 1); // stable: pinned first
 			groups = list;
 			groupsLoaded = true;
 			for (int i = 0; i < Math.min(3, list.size()); i++) {
@@ -649,6 +757,7 @@ public final class RelayClient {
 		if (str(g, "role") != null) {
 			group.role = str(g, "role");
 		}
+		group.pinned = bool(g, "pinned");
 		return group;
 	}
 
@@ -782,7 +891,7 @@ public final class RelayClient {
 				String id = str(p, "userId");
 				List<Model.Friend> next = new ArrayList<Model.Friend>();
 				for (Model.Friend f : friends) {
-					next.add(f.id.equals(id) ? f.withPresence(str(p, "status"), str(p, "activity"), str(p, "serverAddress")) : f);
+					next.add(f.id.equals(id) ? f.withPresence(str(p, "status"), str(p, "activity"), str(p, "serverAddress"), lng(p, "lastSeen")) : f);
 				}
 				sortFriends(next);
 				friends = next;

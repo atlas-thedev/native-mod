@@ -50,15 +50,25 @@ def _store_gif(name, phase0):
 _store_png(480, 300); _store_gif('g1.gif', 0); _gif2 = _store_gif('g2.gif', 90)
 def _put(b): h = hashlib.sha256(b).hexdigest(); TEX[h] = b; return h
 SKIN_H = _put(_png(64, 64, _skin)); CAPE_H = _put(_png(64, 32, _cape)); HAT_T = _put(_png(64, 32, _hat)); HAT_M = _put(HAT_MODEL)
+def _strip(frames=4):
+    from PIL import Image
+    im = Image.new('RGBA', (64, 32 * frames)); px = im.load()
+    for f in range(frames):
+        for y in range(32):
+            for x in range(64): px[x, f * 32 + y] = ((60 + f * 60) % 256, 90 + y * 4, 200 - f * 40, 255) if x < 22 else (30, 30, 30, 255)
+    b = io.BytesIO(); im.save(b, 'PNG'); return b.getvalue()
+STRIP_H = _put(_strip())
 B = 'http://127.0.0.1:8099/csl/textures/'
 CATALOG = [
     {'id': 'cape-lilac', 'name': 'Lilac Cloak', 'kind': 'cape', 'stillUrl': B + CAPE_H},
-    {'id': 'cape-two', 'name': 'Second Cape', 'kind': 'cape', 'stillUrl': B + CAPE_H},
+    {'id': 'cape-two', 'name': 'Second Cape', 'kind': 'cape', 'stillUrl': B + CAPE_H, 'stripUrl': B + STRIP_H, 'frames': 4, 'fps': 4},
     {'id': 'tophat', 'name': 'Top Hat', 'kind': 'cosmetic', 'slot': 'hats', 'stillUrl': B + HAT_T, 'modelUrl': B + HAT_M, 'textureUrl': B + HAT_T},
 ]
 LOCKER = {'equipped': 'cape-lilac', 'wearing': {'hats': 'tophat'}}
 ME['skin'] = SKIN_H
 FRIENDS[0]['skin'] = SKIN_H; FRIENDS[2]['skin'] = HAT_T
+FRIENDS[3]['lastSeen'] = int(time.time() * 1000) - 5 * 60000
+FRIENDS.append({'id': 'f5', 'name': 'meadowxp', 'status': 'offline', 'online': False, 'unread': 0, 'skin': None, 'lastSeen': int(time.time() * 1000) - 3 * 3600000})
 
 def msg(sender, text, ago=0, **kw):
     n = next(ids); return dict({'id': f'm{n}', 'senderId': sender, 'senderName': {'me': 'TestAlice', 'f1': 'Dinal', 'f2': 'Kasun', 'f3': 'Nethmi'}.get(sender, sender), 'content': text, 'createdAt': NOW() - ago}, **kw)
@@ -128,6 +138,17 @@ class H(http.server.BaseHTTPRequestHandler):
             if g: GM[g].append(m); push('group:message', {'groupId': g, 'message': m})
             else: m['receiverId'] = 'me'; DM.setdefault(who, []).append(m); push('message:new', {'message': m})
             return self.j({'ok': True, 'streams': len(streams)})
+        if p == '/test/typing':
+            push('typing', {'userId': qs.get('from', ['f1'])[0], 'isTyping': qs.get('on', ['1'])[0] == '1'}); return self.j({'ok': True})
+        if p.startswith('/v1/social/relay/dm/') and (p.endswith('/prefs') or p.endswith('/typing')):
+            b = self.body(); fid = p.split('/')[5]
+            for f in FRIENDS:
+                if f['id'] == fid and p.endswith('/prefs'):
+                    if 'pinned' in b: f['pinned'] = b['pinned']
+                    if 'nickname' in b: f['nickname'] = b['nickname'] or None
+            print('DMPREFS' if p.endswith('/prefs') else 'DMTYPING', p, b, flush=True)
+            if p.endswith('/prefs'): push('friends:changed', {'friendId': fid})
+            return self.j({'ok': True})
         if p == '/v1/social/relay/upload':
             import base64
             b = self.body(); head, _, data = b['data'].partition(',')
