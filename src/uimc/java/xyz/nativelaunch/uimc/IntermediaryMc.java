@@ -849,7 +849,17 @@ public final class IntermediaryMc implements McBridge {
 			if (!pr.project(x, top, z)) {
 				continue;
 			}
-			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, ((Number) a.maxHealth.invoke(e)).floatValue()), kind);
+			float absorb = floatOf(call(e, "method_6067"), 0f); // getAbsorptionAmount
+			int fx = 0;
+			Object active = call(e, "method_6088"); // getActiveStatusEffects
+			if (active instanceof java.util.Map) {
+				for (Object inst : ((java.util.Map<?, ?>) active).values()) {
+					Object key = inst == null ? null : call(inst, "method_5586"); // getTranslationKey
+					String id = xyz.nativelaunch.ui.mod.Game.effectId(key instanceof String ? (String) key : null);
+					fx |= "poison".equals(id) ? 1 : "wither".equals(id) ? 2 : "regeneration".equals(id) ? 4 : 0;
+				}
+			}
+			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, ((Number) a.maxHealth.invoke(e)).floatValue()), kind, absorb, fx);
 		}
 	}
 

@@ -104,15 +104,15 @@ public final class StatusModules {
 
 	static final class Effects extends Box {
 		final Setting.Choice layout = add(new Setting.Choice("layout", "Layout", 0, "List", "Row"));
-		final Setting.Bool icons = add(new Setting.Bool("icons", "Show icons", true));
-		final Setting.Bool names = add(new Setting.Bool("names", "Show names", true));
-		final Setting.Bool level = add(new Setting.Bool("level", "Show level", true));
+		final Setting.Bool icons = fixed(new Setting.Bool("icons", "Show icons", true));
+		final Setting.Bool names = fixed(new Setting.Bool("names", "Show names", true));
+		final Setting.Bool level = fixed(new Setting.Bool("level", "Show level", true));
 		final Setting.Bool time = add(new Setting.Bool("time", "Show time left", true));
-		final Setting.Bool bar = add(new Setting.Bool("bar", "Time bar", true));
-		final Setting.Bool byType = add(new Setting.Bool("type", "Colour good / bad effects", true));
-		final Setting.Bool beacon = add(new Setting.Bool("beacon", "Show beacon effects", true));
-		final Setting.Bool flash = add(new Setting.Bool("flash", "Flash when about to run out", true));
-		final Setting.Choice sort = add(new Setting.Choice("sort", "Sort by", 0, "Time left", "Level", "Name"));
+		final Setting.Bool bar = fixed(new Setting.Bool("bar", "Time bar", true));
+		final Setting.Bool byType = fixed(new Setting.Bool("type", "Colour good / bad effects", true));
+		final Setting.Bool beacon = fixed(new Setting.Bool("beacon", "Show beacon effects", true));
+		final Setting.Bool flash = fixed(new Setting.Bool("flash", "Flash when about to run out", true));
+		final Setting.Choice sort = fixed(new Setting.Choice("sort", "Sort by", 0, "Time left", "Level", "Name"));
 		final Setting.Bool hide = add(new Setting.Bool("hide", "Hide the vanilla effect icons", true));
 		private final ArrayList<Game.Effect> view = new ArrayList<Game.Effect>();
 		/** id -> {longest time seen, frame it was last seen}: the bar shows time left against the full length. */
@@ -335,12 +335,12 @@ public final class StatusModules {
 	static final class Armor extends Box {
 		final Setting.Choice layout = add(new Setting.Choice("layout", "Layout", 0, "List", "Row"));
 		final Setting.Choice text = add(new Setting.Choice("text", "Durability text", 0, "Remaining", "Percent", "Remaining / max", "Off").shorts("Left", "Percent", "Left / max", "Off"));
-		final Setting.Bool bar = add(new Setting.Bool("bar", "Durability bar on the icon", true));
-		final Setting.Bool wear = add(new Setting.Bool("wear", "Colour text by wear", true));
-		final Setting.Num warn = add(new Setting.Num("warn", "Flash red below", 15, 0, 50, 5, "%"));
+		final Setting.Bool bar = fixed(new Setting.Bool("bar", "Durability bar on the icon", true));
+		final Setting.Bool wear = fixed(new Setting.Bool("wear", "Colour text by wear", true));
+		final Setting.Num warn = fixed(new Setting.Num("warn", "Flash red below", 15, 0, 50, 5, "%"));
 		final Setting.Bool hand = add(new Setting.Bool("hand", "Show the item in your hand", true));
-		final Setting.Bool off = add(new Setting.Bool("offhand", "Show the off-hand item", false));
-		final Setting.Bool empty = add(new Setting.Bool("empty", "Show empty armour slots", false));
+		final Setting.Bool off = fixed(new Setting.Bool("offhand", "Show the off-hand item", false));
+		final Setting.Bool empty = fixed(new Setting.Bool("empty", "Show empty armour slots", false));
 		private final Game.Slot[] list = new Game.Slot[6];
 
 		Armor() {
@@ -478,11 +478,11 @@ public final class StatusModules {
 
 	static final class InventoryGrid extends Box {
 		final Setting.Bool hotbar = add(new Setting.Bool("hotbar", "Show the hotbar row", false));
-		final Setting.Bool slots = add(new Setting.Bool("slots", "Slot backgrounds", true));
+		final Setting.Bool slots = fixed(new Setting.Bool("slots", "Slot backgrounds", true));
 		final Setting.Bool counts = add(new Setting.Bool("counts", "Item counts", true));
-		final Setting.Bool bars = add(new Setting.Bool("bars", "Durability bars", true));
-		final Setting.Bool selected = add(new Setting.Bool("selected", "Highlight the selected slot", true));
-		final Setting.Bool hideEmpty = add(new Setting.Bool("hide", "Hide when the inventory is empty", false));
+		final Setting.Bool bars = fixed(new Setting.Bool("bars", "Durability bars", true));
+		final Setting.Bool selected = fixed(new Setting.Bool("selected", "Highlight the selected slot", true));
+		final Setting.Bool hideEmpty = fixed(new Setting.Bool("hide", "Hide when the inventory is empty", false));
 
 		InventoryGrid() {
 			super("inventory", "Inventory", "Your backpack on screen without opening it, with the game's item icons and counts.", Theme.I_BACKPACK, false, 1f, 0.8f);

@@ -65,12 +65,12 @@ public final class Game {
 
 	/** A living thing on screen: where its head is, and its health. */
 	public static final class Tag {
-		public float nx, ny, depth, perBlock, health, max;
-		public int kind;
+		public float nx, ny, depth, perBlock, health, max, absorb;
+		public int kind, fx;
 	}
 
 	/** Adds one entry (far ones first matters for drawing, so the list is kept sorted by depth, farthest first). */
-	public void addTag(float nx, float ny, float depth, float perBlock, float health, float max, int kind) {
+	public void addTag(float nx, float ny, float depth, float perBlock, float health, float max, int kind, float absorb, int fx) {
 		if (tagCount >= tags.length) {
 			return;
 		}
@@ -88,6 +88,8 @@ public final class Game {
 		t.health = health;
 		t.max = max;
 		t.kind = kind;
+		t.absorb = absorb;
+		t.fx = fx;
 	}
 
 	/** An active potion effect. {@code id} is the bare vanilla id ("speed"), or "namespace:name" for modded ones. */
