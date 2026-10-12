@@ -20,9 +20,9 @@ final class HealthIndicator extends Module {
 
 	final Setting.Bool players = add(new Setting.Bool("players", "Players", true));
 	final Setting.Bool mobs = add(new Setting.Bool("mobs", "Mobs and animals", true));
-	final Setting.Bool self = add(new Setting.Bool("self", "Yourself (third person)", false));
+	final Setting.Bool self = fixed(new Setting.Bool("self", "Yourself (third person)", false));
 	final Setting.Choice display = add(new Setting.Choice("display", "Show as", 0, "Hearts", "Number"));
-	final Setting.Num size = add(new Setting.Num("size", "Size", 11, 6, 24, 1, " px"));
+	final Setting.Num size = fixed(new Setting.Num("size", "Size", 11, 6, 24, 1, " px"));
 
 	HealthIndicator() {
 		super("healthindicator", "Health Indicator", "Hearts above players and mobs, so you can see how hurt they are.", VISUAL, Theme.I_HEART, false);

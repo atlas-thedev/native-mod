@@ -62,7 +62,7 @@ public final class HudModules {
 	}
 
 	static final class Cps extends HudModule {
-		final Setting.Bool right = add(new Setting.Bool("right", "Show right clicks", true));
+		final Setting.Bool right = fixed(new Setting.Bool("right", "Show right clicks", true));
 
 		Cps() {
 			super("cps", "CPS", "Clicks per second.", Theme.I_CLICK, false, 0f, 0.07f);
@@ -82,7 +82,7 @@ public final class HudModules {
 	}
 
 	static final class Coordinates extends HudModule {
-		final Setting.Bool facing = add(new Setting.Bool("facing", "Show facing", true));
+		final Setting.Bool facing = fixed(new Setting.Bool("facing", "Show facing", true));
 		final Setting.Bool compact = fixed(new Setting.Bool("compact", "One line", false));
 		final Setting.Choice decimals = fixed(new Setting.Choice("decimals", "Decimals", 0, "0", "1", "2"));
 
@@ -150,7 +150,7 @@ public final class HudModules {
 	}
 
 	static final class Memory extends HudModule {
-		final Setting.Bool detail = add(new Setting.Bool("detail", "Show amount", false));
+		final Setting.Bool detail = fixed(new Setting.Bool("detail", "Show amount", false));
 
 		Memory() {
 			super("memory", "Memory", "Java memory in use.", Theme.I_MEMORY, false, 1f, 0.07f);
@@ -232,8 +232,8 @@ public final class HudModules {
 	// ── graphical ────────────────────────────────────────────────────────
 
 	static final class Keystrokes extends HudModule {
-		final Setting.Bool mouse = add(new Setting.Bool("mouse", "Mouse buttons", true));
-		final Setting.Bool space = add(new Setting.Bool("space", "Space bar", true));
+		final Setting.Bool mouse = fixed(new Setting.Bool("mouse", "Mouse buttons", true));
+		final Setting.Bool space = fixed(new Setting.Bool("space", "Space bar", true));
 		final Setting.Bool cps = fixed(new Setting.Bool("cps", "CPS on mouse", true));
 		final Setting.Color pressed = fixed(new Setting.Color("pressed", "Pressed colour", 0xFFFFFFFF));
 		private final float[] size = new float[2];
@@ -339,7 +339,7 @@ public final class HudModules {
 	}
 
 	static final class Direction extends HudModule {
-		final Setting.Bool degrees = add(new Setting.Bool("degrees", "Show degrees", true));
+		final Setting.Bool degrees = fixed(new Setting.Bool("degrees", "Show degrees", true));
 		private final float[] size = new float[2];
 		private static final String[] NAMES = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
 
@@ -489,7 +489,7 @@ public final class HudModules {
 
 	static final class ZoomModule extends Module {
 		final Setting.Key key = add(new Setting.Key("key", "Zoom key", 67));
-		final Setting.Num level = add(new Setting.Num("level", "Zoom", 4f, 1.5f, 12f, 0.5f, "x"));
+		final Setting.Num level = fixed(new Setting.Num("level", "Zoom", 4f, 1.5f, 12f, 0.5f, "x"));
 		final Setting.Bool smooth = fixed(new Setting.Bool("smooth", "Smooth zoom", true));
 		final Setting.Bool scroll = fixed(new Setting.Bool("scroll", "Scroll to adjust", true));
 		final Setting.Bool cinematic = fixed(new Setting.Bool("cinematic", "Cinematic camera", false));
@@ -555,7 +555,7 @@ public final class HudModules {
 	}
 
 	static final class Fullbright extends Module {
-		final Setting.Num level = add(new Setting.Num("level", "Brightness", 16, 2, 16, 1, ""));
+		final Setting.Num level = fixed(new Setting.Num("level", "Brightness", 16, 2, 16, 1, ""));
 		private double old = Double.NaN;
 		private int tick;
 

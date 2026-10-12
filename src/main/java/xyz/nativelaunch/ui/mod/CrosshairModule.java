@@ -8,12 +8,12 @@ import xyz.nativelaunch.ui.gfx.Canvas;
 final class CrosshairModule extends Module {
 	final Setting.Choice shape = add(new Setting.Choice("shape", "Shape", 0, "Cross", "T", "Dot", "Circle", "Square"));
 	final Setting.Num size = add(new Setting.Num("size", "Size", 7, 1, 30, 1, "px"));
-	final Setting.Num thickness = add(new Setting.Num("thickness", "Thickness", 2, 1, 8, 1, "px"));
+	final Setting.Num thickness = fixed(new Setting.Num("thickness", "Thickness", 2, 1, 8, 1, "px"));
 	final Setting.Num gap = fixed(new Setting.Num("gap", "Gap", 3, 0, 20, 1, "px"));
 	final Setting.Bool dot = fixed(new Setting.Bool("dot", "Centre dot", false));
 	final Setting.Color color = add(new Setting.Color("color", "Colour", 0xFFFFFFFF));
 	final Setting.Num opacity = fixed(new Setting.Num("opacity", "Opacity", 100, 10, 100, 5, "%"));
-	final Setting.Bool outline = add(new Setting.Bool("outline", "Outline", true));
+	final Setting.Bool outline = fixed(new Setting.Bool("outline", "Outline", true));
 	final Setting.Color outlineColor = fixed(new Setting.Color("outlineColor", "Outline colour", 0xFF000000));
 	final Setting.Bool dynamic = fixed(new Setting.Bool("dynamic", "Open up while moving", false));
 	final Setting.Bool onTarget = fixed(new Setting.Bool("onTarget", "Change colour over a mob or player", true));
