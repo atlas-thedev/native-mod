@@ -41,7 +41,7 @@ public abstract class HudModule extends Module {
 		scale = look(new Setting.Num("scale", "Size", 1f, 0.5f, 2.5f, 0.05f, "x"));
 		style = look(new Setting.Choice("style", "Style", STYLE_CARD, "Card", "Text", "Brackets"));
 		color = new Setting.Color("color", "Text colour", 0xFFFFFFFF); // not offered: white
-		opacity = look(new Setting.Num("opacity", "Background", 55, 0, 100, 5, "%"));
+		opacity = fixed(new Setting.Num("opacity", "Background", 55, 0, 100, 5, "%"));
 		shadow = new Setting.Bool("shadow", "Text shadow", true); // not offered: always on
 		labels = new Setting.Bool("labels", "Show labels", true); // not offered: always on
 	}
