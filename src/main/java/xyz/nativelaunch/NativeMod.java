@@ -23,6 +23,16 @@ public final class NativeMod implements ClientModInitializer {
 	}
 
 	private static void startHealthIndicators() {
+		// 26.x: the Native "Health Indicators" module (its mixins load by themselves; this connects the menu to them)
+		if (present("net.minecraft.client.Minecraft") && present("net.minecraft.client.gui.GuiGraphicsExtractor")) {
+			try {
+				Class.forName("xyz.nativelaunch.health26.Boot").getMethod("start").invoke(null);
+			} catch (Throwable t) {
+				Log.warn("Health indicators are unavailable ({}).", t.toString());
+			}
+			return;
+		}
+		// older versions: the previous port
 		try {
 			Class<?> clazz = Class.forName("io.github.adytech99.healthindicators.HealthIndicatorsMod");
 			clazz.getMethod("init").invoke(null);
