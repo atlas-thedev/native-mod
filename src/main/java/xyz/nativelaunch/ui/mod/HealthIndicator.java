@@ -135,9 +135,8 @@ final class HealthIndicator extends Module {
 				continue;
 			}
 
-			// Distance-based billboard scaling (closer = slightly larger, farther = smaller)
-			float depthScale = Math.max(0.65f, Math.min(1.35f, t.perBlock * 22f));
-			float ps = size.value * depthScale;
+			// Stable fixed heart size (never resizes when moving closer/farther)
+			float ps = size.value;
 
 			if (a < 1f) {
 				c.pushAlpha(a);
@@ -192,15 +191,19 @@ final class HealthIndicator extends Module {
 		c.text(Fonts.SEMIBOLD, nf, text, tx + 0.8f, ty + 0.8f, 0xAA000000);
 		c.text(Fonts.SEMIBOLD, nf, text, tx, ty, col);
 
-		// Armor line if present
+		// Armor line if present (left-aligned with the number pill at rx)
 		if (showArmor.value && armor > 0) {
 			float ay = ry - ps * 1.05f;
-			drawArmorBar(c, x, ay, ps * 0.85f, armor);
+			drawArmorBar(c, rx, ay, ps, ps * 0.88f, armor);
 		}
 	}
 
 	/** Hearts display mode: AdyTech99 wrapping logic with absorption & effects. */
 	private void drawHearts(Canvas c, float x, float y, float ps, float hp, float max, float absorb, int armor, int fx) {
+		if (percentage.value) {
+			hp = (hp / Math.max(1f, max)) * 20f;
+			max = 20f;
+		}
 		int healthRed = (int) Math.ceil(hp);
 		int maxHealth = (int) Math.ceil(max);
 		int healthYellow = (int) Math.ceil(absorb);
@@ -261,21 +264,18 @@ final class HealthIndicator extends Module {
 			}
 		}
 
-		// 3. Draw armor bar above the hearts if enabled
+		// 3. Draw armor bar above the hearts if enabled (left-aligned with hearts at x0)
 		if (showArmor.value && armor > 0) {
 			float armorY = y - ps - rows * rowH - ps * 0.15f;
-			drawArmorBar(c, x, armorY, ps * 0.85f, armor);
+			drawArmorBar(c, x0, armorY, ps, pitch, armor);
 		}
 	}
 
-	/** Draws the 10-icon armor point bar above the health display. */
-	private void drawArmorBar(Canvas c, float x, float y, float size, int armor) {
+	/** Draws the 10-icon armor point bar left-aligned with the health bar at x0. */
+	private void drawArmorBar(Canvas c, float x0, float y, float size, float pitch, int armor) {
 		int armorFull = armor / 2;
 		boolean half = (armor % 2) != 0;
 		int totalPips = 10;
-		float pitch = size * 0.85f;
-		float totalW = pitch * (totalPips - 1) + size;
-		float x0 = x - totalW / 2f;
 
 		for (int i = 0; i < totalPips; i++) {
 			float ax = x0 + i * pitch;
