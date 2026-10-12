@@ -29,6 +29,11 @@ public abstract class Module {
 		return s;
 	}
 
+	/** A setting that keeps its default and is not offered in the menu (the module still reads it). */
+	protected <T extends Setting> T fixed(T s) {
+		return s;
+	}
+
 	public boolean isHud() {
 		return false;
 	}

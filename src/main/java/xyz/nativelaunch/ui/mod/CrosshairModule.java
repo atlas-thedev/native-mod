@@ -9,16 +9,16 @@ final class CrosshairModule extends Module {
 	final Setting.Choice shape = add(new Setting.Choice("shape", "Shape", 0, "Cross", "T", "Dot", "Circle", "Square"));
 	final Setting.Num size = add(new Setting.Num("size", "Size", 7, 1, 30, 1, "px"));
 	final Setting.Num thickness = add(new Setting.Num("thickness", "Thickness", 2, 1, 8, 1, "px"));
-	final Setting.Num gap = add(new Setting.Num("gap", "Gap", 3, 0, 20, 1, "px"));
-	final Setting.Bool dot = add(new Setting.Bool("dot", "Centre dot", false));
+	final Setting.Num gap = fixed(new Setting.Num("gap", "Gap", 3, 0, 20, 1, "px"));
+	final Setting.Bool dot = fixed(new Setting.Bool("dot", "Centre dot", false));
 	final Setting.Color color = add(new Setting.Color("color", "Colour", 0xFFFFFFFF));
-	final Setting.Num opacity = add(new Setting.Num("opacity", "Opacity", 100, 10, 100, 5, "%"));
+	final Setting.Num opacity = fixed(new Setting.Num("opacity", "Opacity", 100, 10, 100, 5, "%"));
 	final Setting.Bool outline = add(new Setting.Bool("outline", "Outline", true));
-	final Setting.Color outlineColor = add(new Setting.Color("outlineColor", "Outline colour", 0xFF000000));
-	final Setting.Bool dynamic = add(new Setting.Bool("dynamic", "Open up while moving", false));
-	final Setting.Bool onTarget = add(new Setting.Bool("onTarget", "Change colour over a mob or player", true));
-	final Setting.Color targetColor = add(new Setting.Color("targetColor", "Colour over a target", 0xFFEF4444));
-	final Setting.Bool hide = add(new Setting.Bool("hide", "Hide the vanilla crosshair", true));
+	final Setting.Color outlineColor = fixed(new Setting.Color("outlineColor", "Outline colour", 0xFF000000));
+	final Setting.Bool dynamic = fixed(new Setting.Bool("dynamic", "Open up while moving", false));
+	final Setting.Bool onTarget = fixed(new Setting.Bool("onTarget", "Change colour over a mob or player", true));
+	final Setting.Color targetColor = fixed(new Setting.Color("targetColor", "Colour over a target", 0xFFEF4444));
+	final Setting.Bool hide = fixed(new Setting.Bool("hide", "Hide the vanilla crosshair", true));
 	private float spread;
 	private long last;
 

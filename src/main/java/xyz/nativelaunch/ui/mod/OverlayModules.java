@@ -48,9 +48,9 @@ final class OverlayModules {
 		private static final float PAD = 9f, ROW_AIR = 3.5f, GAP_ROW = 7f, TITLE_GAP = 5f;
 
 		final Setting.Choice look = add(new Setting.Choice("look", "Look", 0, LOOKS));
-		final Setting.Bool numbers = add(new Setting.Bool("numbers", "Show score numbers", true));
-		final Setting.Bool title = add(new Setting.Bool("title", "Show title", true));
-		final Setting.Bool colors = add(new Setting.Bool("colors", "Server colours", true));
+		final Setting.Bool numbers = fixed(new Setting.Bool("numbers", "Show score numbers", true));
+		final Setting.Bool title = fixed(new Setting.Bool("title", "Show title", true));
+		final Setting.Bool colors = fixed(new Setting.Bool("colors", "Server colours", true));
 		private final Overlays.Sidebar live = new Overlays.Sidebar(), demo = new Overlays.Sidebar();
 		private final float[] size = new float[2];
 		private long readAt;
@@ -300,10 +300,10 @@ final class OverlayModules {
 	static final class BossBars extends HudModule {
 		static final int[] COLORS = {0xFFEC4899, 0xFF38BDF8, 0xFFEF4444, 0xFF22C55E, 0xFFEAB308, 0xFFA855F7, 0xFFE5E5E5};
 		final Setting.Choice look = add(new Setting.Choice("look", "Look", 0, LOOKS));
-		final Setting.Bool showName = add(new Setting.Bool("name", "Show name", true));
-		final Setting.Bool showBar = add(new Setting.Bool("bar", "Show bar", true));
-		final Setting.Bool percent = add(new Setting.Bool("percent", "Show percent", false));
-		final Setting.Num width = add(new Setting.Num("width", "Bar width", 182, 100, 320, 2, "px"));
+		final Setting.Bool showName = fixed(new Setting.Bool("name", "Show name", true));
+		final Setting.Bool showBar = fixed(new Setting.Bool("bar", "Show bar", true));
+		final Setting.Bool percent = fixed(new Setting.Bool("percent", "Show percent", false));
+		final Setting.Num width = fixed(new Setting.Num("width", "Bar width", 182, 100, 320, 2, "px"));
 		private final Overlays.Bars live = new Overlays.Bars(), demo = new Overlays.Bars();
 		private final float[] shown = new float[8];
 		private final Object[] shownIds = new Object[8];

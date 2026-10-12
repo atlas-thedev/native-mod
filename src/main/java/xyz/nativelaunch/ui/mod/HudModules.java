@@ -83,8 +83,8 @@ public final class HudModules {
 
 	static final class Coordinates extends HudModule {
 		final Setting.Bool facing = add(new Setting.Bool("facing", "Show facing", true));
-		final Setting.Bool compact = add(new Setting.Bool("compact", "One line", false));
-		final Setting.Choice decimals = add(new Setting.Choice("decimals", "Decimals", 0, "0", "1", "2"));
+		final Setting.Bool compact = fixed(new Setting.Bool("compact", "One line", false));
+		final Setting.Choice decimals = fixed(new Setting.Choice("decimals", "Decimals", 0, "0", "1", "2"));
 
 		Coordinates() {
 			super("coords", "Coordinates", "Your position and facing.", Theme.I_MAP_PIN, false, 0f, 0.14f);
@@ -125,7 +125,7 @@ public final class HudModules {
 
 	static final class Clock extends HudModule {
 		final Setting.Bool h24 = add(new Setting.Bool("24h", "24-hour clock", true));
-		final Setting.Bool seconds = add(new Setting.Bool("seconds", "Show seconds", false));
+		final Setting.Bool seconds = fixed(new Setting.Bool("seconds", "Show seconds", false));
 		private final Calendar cal = Calendar.getInstance();
 
 		Clock() {
@@ -234,8 +234,8 @@ public final class HudModules {
 	static final class Keystrokes extends HudModule {
 		final Setting.Bool mouse = add(new Setting.Bool("mouse", "Mouse buttons", true));
 		final Setting.Bool space = add(new Setting.Bool("space", "Space bar", true));
-		final Setting.Bool cps = add(new Setting.Bool("cps", "CPS on mouse", true));
-		final Setting.Color pressed = add(new Setting.Color("pressed", "Pressed colour", 0xFFFFFFFF));
+		final Setting.Bool cps = fixed(new Setting.Bool("cps", "CPS on mouse", true));
+		final Setting.Color pressed = fixed(new Setting.Color("pressed", "Pressed colour", 0xFFFFFFFF));
 		private final float[] size = new float[2];
 		private final float[] anim = new float[Game.CONTROLS.length];
 		private long last;
@@ -404,7 +404,7 @@ public final class HudModules {
 
 	static final class ToggleSprint extends HudModule {
 		final Setting.Bool sneak = add(new Setting.Bool("sneak", "Toggle sneak too", false));
-		final Setting.Bool status = add(new Setting.Bool("status", "Show status on HUD", true));
+		final Setting.Bool status = fixed(new Setting.Bool("status", "Show status on HUD", true));
 		private boolean sprint, sneaking, forced, forcedSneak;
 
 		ToggleSprint() {
@@ -490,9 +490,9 @@ public final class HudModules {
 	static final class ZoomModule extends Module {
 		final Setting.Key key = add(new Setting.Key("key", "Zoom key", 67));
 		final Setting.Num level = add(new Setting.Num("level", "Zoom", 4f, 1.5f, 12f, 0.5f, "x"));
-		final Setting.Bool smooth = add(new Setting.Bool("smooth", "Smooth zoom", true));
-		final Setting.Bool scroll = add(new Setting.Bool("scroll", "Scroll to adjust", true));
-		final Setting.Bool cinematic = add(new Setting.Bool("cinematic", "Cinematic camera", false));
+		final Setting.Bool smooth = fixed(new Setting.Bool("smooth", "Smooth zoom", true));
+		final Setting.Bool scroll = fixed(new Setting.Bool("scroll", "Scroll to adjust", true));
+		final Setting.Bool cinematic = fixed(new Setting.Bool("cinematic", "Cinematic camera", false));
 		private float current = 1, extra = 1;
 		private boolean held, smoothSet, smoothWas;
 		private long last;

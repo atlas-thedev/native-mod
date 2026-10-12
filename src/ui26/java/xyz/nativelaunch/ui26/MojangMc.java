@@ -737,7 +737,12 @@ public final class MojangMc implements McBridge {
 			if (!pr.project(p.x, p.y + e.getBbHeight() + (kind == 4 || kind == 2 ? 0.34 : 0.8), p.z)) {
 				continue;
 			}
-			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, l.getMaxHealth()), kind);
+			int fx = 0;
+			for (net.minecraft.world.effect.MobEffectInstance inst : l.getActiveEffects()) {
+				String id = xyz.nativelaunch.ui.mod.Game.effectId(inst.getDescriptionId());
+				fx |= "poison".equals(id) ? 1 : "wither".equals(id) ? 2 : "regeneration".equals(id) ? 4 : 0;
+			}
+			g.addTag(pr.nx, pr.ny, pr.depth, pr.perBlock, hp, Math.max(1f, l.getMaxHealth()), kind, l.getAbsorptionAmount(), fx);
 		}
 	}
 

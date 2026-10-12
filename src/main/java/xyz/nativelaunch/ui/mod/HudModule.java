@@ -40,10 +40,10 @@ public abstract class HudModule extends Module {
 		fy = defY = y;
 		scale = look(new Setting.Num("scale", "Size", 1f, 0.5f, 2.5f, 0.05f, "x"));
 		style = look(new Setting.Choice("style", "Style", STYLE_CARD, "Card", "Text", "Brackets"));
-		color = look(new Setting.Color("color", "Text colour", 0xFFFFFFFF));
+		color = new Setting.Color("color", "Text colour", 0xFFFFFFFF); // not offered: white
 		opacity = look(new Setting.Num("opacity", "Background", 55, 0, 100, 5, "%"));
-		shadow = look(new Setting.Bool("shadow", "Text shadow", true));
-		labels = look(new Setting.Bool("labels", "Show labels", true));
+		shadow = new Setting.Bool("shadow", "Text shadow", true); // not offered: always on
+		labels = new Setting.Bool("labels", "Show labels", true); // not offered: always on
 	}
 
 	/** Hides shared appearance settings this module does not use (so the menu never lists a setting that does nothing). */

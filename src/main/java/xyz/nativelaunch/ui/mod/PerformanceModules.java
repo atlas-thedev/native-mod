@@ -16,7 +16,7 @@ final class PerformanceModules {
 	 */
 	static final class BackgroundFps extends Module {
 		final Setting.Num unfocused = add(new Setting.Num("unfocused", "FPS in the background", 30, 5, 120, 5, ""));
-		final Setting.Num minimized = add(new Setting.Num("minimized", "FPS when minimised", 5, 1, 30, 1, ""));
+		final Setting.Num minimized = fixed(new Setting.Num("minimized", "FPS when minimised", 5, 1, 30, 1, ""));
 		private long checkAt, lastFrame;
 		private boolean focused = true, iconified;
 
