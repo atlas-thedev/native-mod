@@ -246,6 +246,7 @@ public final class RelayClient {
 			next.add(pending);
 			c.messages = next;
 		}
+		bump(key, pending.createdAt);
 		pool.execute(() -> {
 			try {
 				JsonObject body = new JsonObject();
@@ -318,6 +319,7 @@ public final class RelayClient {
 			next.add(new Model.Message(tempId, meId, meName, "", System.currentTimeMillis(), true, false, false, false, url, name, null));
 			c.messages = next;
 		}
+		bump(key, System.currentTimeMillis());
 		pool.execute(() -> {
 			try {
 				post(c, tempId, "", url, name);
@@ -511,7 +513,7 @@ public final class RelayClient {
 				}
 				next.add(g);
 			}
-			Collections.sort(next, (a, b) -> a.pinned == b.pinned ? 0 : a.pinned ? -1 : 1);
+			sortGroups(next);
 			groups = next;
 		} else {
 			List<Model.Friend> next = new ArrayList<Model.Friend>();
@@ -643,7 +645,7 @@ public final class RelayClient {
 				for (JsonElement e : arr) {
 					JsonObject f = e.getAsJsonObject();
 					list.add(new Model.Friend(str(f, "id"), str(f, "name"), str(f, "nickname"), str(f, "status"), str(f, "activity"),
-							str(f, "serverAddress"), skinRef(str(f, "skin"), str(f, "mcUuid")), bool(f, "online"), num(f, "unread"), bool(f, "pinned"), lng(f, "lastSeen")));
+							str(f, "serverAddress"), skinRef(str(f, "skin"), str(f, "mcUuid")), bool(f, "online"), num(f, "unread"), bool(f, "pinned"), lng(f, "lastSeen"), Math.max(lng(f, "lastMessageAt"), lastMsgOf(str(f, "id")))));
 				}
 			}
 			sortFriends(list);
@@ -663,10 +665,49 @@ public final class RelayClient {
 		}
 	}
 
+	/** The newest message time we already know for a friend (kept when the list is fetched again). */
+	private long lastMsgOf(String id) {
+		for (Model.Friend f : friends) {
+			if (f.id.equals(id)) {
+				return f.lastMsg;
+			}
+		}
+		return 0L;
+	}
+
+	/** Pinned first, then the group with the newest message. */
+	private static void sortGroups(List<Model.Group> list) {
+		Collections.sort(list, (a, b) -> a.pinned != b.pinned ? (a.pinned ? -1 : 1) : Long.compare(b.lastAt, a.lastAt));
+	}
+
+	/** A message was just sent or received in this chat: it moves to the top of the list (below pinned ones). */
+	private void bump(String key, long at) {
+		if (key.startsWith("g:")) {
+			String gid = key.substring(2);
+			List<Model.Group> next = new ArrayList<Model.Group>();
+			for (Model.Group g : groups) {
+				next.add(g.id.equals(gid) && g.lastAt < at ? g.withLast(g.lastText, g.lastSender, at, g.unread) : g);
+			}
+			sortGroups(next);
+			groups = next;
+		} else if (key.startsWith("dm:")) {
+			String fid = key.substring(3);
+			List<Model.Friend> next = new ArrayList<Model.Friend>();
+			for (Model.Friend f : friends) {
+				next.add(f.id.equals(fid) ? f.withLastMsg(at) : f);
+			}
+			sortFriends(next);
+			friends = next;
+		}
+	}
+
 	private static void sortFriends(List<Model.Friend> list) {
 		Collections.sort(list, (a, b) -> {
 			if (a.pinned != b.pinned) {
 				return a.pinned ? -1 : 1;
+			}
+			if (a.lastMsg != b.lastMsg) {
+				return a.lastMsg > b.lastMsg ? -1 : 1; // the chat with the newest message first
 			}
 			if (a.online != b.online) {
 				return a.online ? -1 : 1;
@@ -688,7 +729,7 @@ public final class RelayClient {
 					list.add(parseGroup(e.getAsJsonObject()));
 				}
 			}
-			Collections.sort(list, (a, b) -> a.pinned == b.pinned ? 0 : a.pinned ? -1 : 1); // stable: pinned first
+			sortGroups(list);
 			groups = list;
 			groupsLoaded = true;
 			for (int i = 0; i < Math.min(3, list.size()); i++) {
@@ -1023,6 +1064,7 @@ public final class RelayClient {
 			}
 		}
 		if (mine) {
+			bump(key, msg.createdAt);
 			return;
 		}
 		boolean watching = key.equals(viewing);
@@ -1033,11 +1075,12 @@ public final class RelayClient {
 			for (Model.Group g : groups) {
 				if (g.id.equals(gid)) {
 					hit = g.withLast(msg.content, msg.senderName, msg.createdAt, watching ? 0 : g.unread + 1);
-					next.add(0, hit);
+					next.add(hit);
 				} else {
 					next.add(g);
 				}
 			}
+			sortGroups(next);
 			groups = next;
 			if (watching) {
 				markReadLater(key);
@@ -1050,7 +1093,7 @@ public final class RelayClient {
 			Model.Friend hit = null;
 			for (Model.Friend f : friends) {
 				if (f.id.equals(fid)) {
-					hit = watching ? f : f.withUnread(f.unread + 1);
+					hit = (watching ? f : f.withUnread(f.unread + 1)).withLastMsg(msg.createdAt);
 					next.add(hit);
 				} else {
 					next.add(f);
