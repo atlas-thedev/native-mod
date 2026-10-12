@@ -23,6 +23,12 @@ public final class DamageArc {
 		az = attackerZ;
 	}
 
+	/** Hurt from a known direction but not a known place: {@code dirDeg} is the world heading to the attacker (atan2(dz, dx) in degrees). */
+	public static void markFrom(double playerX, double playerZ, double dirDeg, long nowNanos) {
+		double r = Math.toRadians(dirDeg);
+		mark(playerX + Math.cos(r) * 1000.0, playerZ + Math.sin(r) * 1000.0, nowNanos);
+	}
+
 	/** Follows the attacker while it is still around. */
 	public static void follow(double attackerX, double attackerZ) {
 		if (active) {

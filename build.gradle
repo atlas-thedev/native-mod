@@ -284,23 +284,6 @@ tasks.named('compileCos26Java') {
 	options.release = 25
 }
 
-// Health indicators for 26.x (official names), compiled against the same 26.x jar.
-sourceSets {
-	health26 {
-		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-	}
-}
-
-dependencies {
-	health26CompileOnly files("${animMcDir}/client.jar")
-	health26CompileOnly fileTree(dir: "${animMcDir}/libs", include: '*.jar')
-}
-
-tasks.named('compileHealth26Java') {
-	dependsOn 'fetchMinecraft'
-	options.release = 25
-}
-
 // Native UI bridge for 26.x (official names), compiled against the same 26.x jar.
 sourceSets {
 	ui26 {
@@ -357,7 +340,6 @@ jar {
 	from sourceSets.cos26.output
 	from sourceSets.uimc.output
 	from sourceSets.ui26.output
-	from sourceSets.health26.output
 	cosmeticEras.each { era ->
 		dependsOn "${era.name}Remap"
 		from(zipTree(layout.buildDirectory.file("cosmetics/${era.name}-intermediary.jar"))) {

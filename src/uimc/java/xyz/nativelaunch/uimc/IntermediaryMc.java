@@ -29,7 +29,7 @@ public final class IntermediaryMc implements McBridge {
 		this.version = version == null ? "" : version;
 	}
 
-	private static class_310 client() {
+	static class_310 client() {
 		return class_310.method_1551();
 	}
 
@@ -309,7 +309,7 @@ public final class IntermediaryMc implements McBridge {
 	private static final Object MISSING = new Object();
 	private final Map<String, Object> members = new HashMap<String, Object>();
 
-	private Field field(Class<?> owner, String name) {
+	Field field(Class<?> owner, String name) {
 		String key = owner.getName() + "#" + name;
 		Object m = members.get(key);
 		if (m == null) {
@@ -328,7 +328,7 @@ public final class IntermediaryMc implements McBridge {
 		return m == MISSING ? null : (Field) m;
 	}
 
-	private Method method(Class<?> owner, String name, Class<?>... params) {
+	Method method(Class<?> owner, String name, Class<?>... params) {
 		String key = owner.getName() + "." + name + params.length;
 		Object m = members.get(key);
 		if (m == null) {
@@ -353,7 +353,7 @@ public final class IntermediaryMc implements McBridge {
 		return m == MISSING ? null : (Method) m;
 	}
 
-	private Object get(Object target, String name) {
+	Object get(Object target, String name) {
 		if (target == null) {
 			return null;
 		}
@@ -365,7 +365,7 @@ public final class IntermediaryMc implements McBridge {
 		}
 	}
 
-	private Object call(Object target, String name) {
+	Object call(Object target, String name) {
 		if (target == null) {
 			return null;
 		}
@@ -677,7 +677,7 @@ public final class IntermediaryMc implements McBridge {
 	private boolean fovLooked;
 
 	/** The partial tick the world was drawn with this frame. */
-	private float partialTick() {
+	float partialTick() {
 		Object d = call(client(), "method_1488"); // MinecraftClient.getTickDelta (1.16 - 1.21.1)
 		if (d instanceof Number) {
 			return ((Number) d).floatValue();
@@ -698,7 +698,7 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	/** The vertical field of view the world is drawn with (dynamic sprint / potion changes included), in degrees. */
-	private float fov(Object camera, float tick) {
+	float fov(Object camera, float tick) {
 		try {
 			Object renderer = get(client(), "field_1773");
 			if (!fovLooked) {
@@ -723,7 +723,7 @@ public final class IntermediaryMc implements McBridge {
 
 	private Class<?> livingClass;
 
-	private boolean isLiving(Object o) {
+	boolean isLiving(Object o) {
 		try {
 			if (livingClass == null) {
 				livingClass = Class.forName("net.minecraft.class_1309");
@@ -742,7 +742,7 @@ public final class IntermediaryMc implements McBridge {
 	private Object emptyStyle;
 	private Method visitMethod;
 
-	private Method named(Class<?> owner, String name, int params) {
+	Method named(Class<?> owner, String name, int params) {
 		String key = owner.getName() + "~" + name + params;
 		Object m = members.get(key);
 		if (m == null) {
@@ -816,7 +816,7 @@ public final class IntermediaryMc implements McBridge {
 
 	private int visitBase = 0xFFFFFFFF;
 
-	private Object literal(String s) throws Exception {
+	Object literal(String s) throws Exception {
 		Class<?> text = Class.forName("net.minecraft.class_2561");
 		Method lit = named(text, "method_43470", 1);
 		if (lit != null) {
@@ -999,6 +999,44 @@ public final class IntermediaryMc implements McBridge {
 		} catch (Throwable t) {
 			out.count = 0;
 			return false;
+		}
+	}
+
+	// ── health indicators ──
+
+	private HealthReaderMc healthReader;
+
+	private HealthReaderMc health() {
+		if (healthReader == null) {
+			healthReader = new HealthReaderMc(this);
+		}
+		return healthReader;
+	}
+
+	@Override
+	public boolean health(xyz.nativelaunch.health.HealthScene out) {
+		try {
+			return health().read(out);
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	@Override
+	public String healthTarget() {
+		try {
+			return health().target();
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	@Override
+	public void healthSay(String text, int rgb, boolean chat) {
+		try {
+			health().say(text, rgb, chat);
+		} catch (Throwable ignored) {
+			// no player yet
 		}
 	}
 }

@@ -94,14 +94,6 @@ class HealthLayoutTest {
 	}
 
 	@Test
-	void depthOffsetGrowsWithDistanceAndShrinksWithSize() {
-		float near = HealthLayout.depthOffsetPx(4, 0.025f);
-		float far = HealthLayout.depthOffsetPx(4096, 0.025f);
-		assertTrue(far > near && near > 0);
-		assertTrue(HealthLayout.depthOffsetPx(4, 0.05f) < near);
-	}
-
-	@Test
 	void regenHopWrapsAroundTheBar() {
 		assertEquals(0, HealthLayout.regenIndex(0, 20));
 		assertEquals(24, HealthLayout.regenIndex(24, 20));

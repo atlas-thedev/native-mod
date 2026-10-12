@@ -4,10 +4,10 @@ import java.nio.file.Path;
 
 import xyz.nativelaunch.health.DamageArc;
 import xyz.nativelaunch.health.EntityList;
-import xyz.nativelaunch.health.HealthBridge;
 import xyz.nativelaunch.health.HealthSettings;
 import xyz.nativelaunch.ui.Theme;
 import xyz.nativelaunch.ui.Ui;
+import xyz.nativelaunch.ui.UiRuntime;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Image;
 
@@ -22,7 +22,8 @@ public final class HealthModule extends Module {
 	final Setting.Bool armor = add(new Setting.Bool("armor", "Armour indicator", false));
 	final Setting.Choice style = add(new Setting.Choice("style", "Style", 0, "Hearts", "Number", "Dynamic"));
 	final Setting.Num dynamicThreshold = add(new Setting.Num("dynamicThreshold", "Number above this max health", 100, 10, 200, 2, ""));
-	final Setting.Num size = add(new Setting.Num("size", "Size", 100, 20, 400, 5, "%"));
+	final Setting.Num size = add(new Setting.Num("size", "Size", 100, 30, 300, 5, "%"));
+	final Setting.Bool shrink = add(new Setting.Bool("shrink", "Shrink a little when far away", false));
 	final Setting.Num opacity = add(new Setting.Num("opacity", "Opacity", 100, 0, 100, 5, "%"));
 	final Setting.Num perRow = add(new Setting.Num("perRow", "Icons per row", 10, 1, 20, 1, ""));
 	final Setting.Bool effects = add(new Setting.Bool("effects", "Poison / wither / frozen / hardcore hearts", true));
@@ -40,7 +41,7 @@ public final class HealthModule extends Module {
 	final Setting.Bool players = add(new Setting.Bool("players", "Players", true));
 	final Setting.Bool self = add(new Setting.Bool("self", "Myself (third person)", false));
 	final Setting.Bool overridePlayers = add(new Setting.Bool("overridePlayers", "Always show other players", false));
-	final Setting.Bool throughWalls = add(new Setting.Bool("throughWalls", "Through walls (mob under the crosshair)", false));
+	final Setting.Bool throughWalls = add(new Setting.Bool("throughWalls", "Show the mob I aim at through walls", false));
 	final Setting.Bool afterAttack = add(new Setting.Bool("afterAttack", "Only after I hit it", false));
 	final Setting.Num timeAfterHit = add(new Setting.Num("timeAfterHit", "Keep showing for", 60, 1, 120, 1, " s"));
 	final Setting.Bool damagedOnly = add(new Setting.Bool("damagedOnly", "Only when hurt", false));
@@ -76,6 +77,8 @@ public final class HealthModule extends Module {
 	private final float[] one = new float[8];
 	private static EntityList list;
 	private boolean lastAfterAttack;
+	private final HealthHud hud = new HealthHud();
+	private int hudBroken;
 
 	public HealthModule() {
 		super("health", "Health Indicators", "Floating hearts, a number or armour above mobs and players, and an arc that points at what hurt you.",
@@ -147,7 +150,8 @@ public final class HealthModule extends Module {
 		s.armor = armor.value;
 		s.style = style.value;
 		s.dynamicThreshold = Math.round(dynamicThreshold.value);
-		s.size = size.value / 100f * 0.025f;
+		s.size = size.value / 100f;
+		s.shrinkWithDistance = shrink.value;
 		s.opacity = Math.round(opacity.value);
 		s.iconsPerRow = Math.round(perRow.value);
 		s.effects = effects.value;
@@ -182,7 +186,7 @@ public final class HealthModule extends Module {
 		s.arcFadeSeconds = Math.round(arcFadeSeconds.value);
 		if (lastAfterAttack != afterAttack.value) {
 			lastAfterAttack = afterAttack.value;
-			s.hitMemoryEpoch++;
+			xyz.nativelaunch.health.HealthEvents.HITS.clear();
 		}
 	}
 
@@ -247,8 +251,7 @@ public final class HealthModule extends Module {
 	}
 
 	private void toggleTargetInList() {
-		HealthBridge bridge = HealthBridge.HOLDER.bridge;
-		String id = bridge == null ? null : bridge.targetTypeId();
+		String id = UiRuntime.mc().healthTarget();
 		if (id == null) {
 			say("Look at a mob first", -1);
 			return;
@@ -263,24 +266,32 @@ public final class HealthModule extends Module {
 		if (s.messageType == HealthSettings.MESSAGE_NONE) {
 			return;
 		}
-		HealthBridge bridge = HealthBridge.HOLDER.bridge;
-		if (bridge != null) {
-			bridge.message(text, s.coloredMessages ? rgb : -1, s.messageType == HealthSettings.MESSAGE_CHAT);
-		}
+		UiRuntime.mc().healthSay(text, s.coloredMessages ? rgb : -1, s.messageType == HealthSettings.MESSAGE_CHAT);
 	}
 
 	// ── damage arc ──
 
 	@Override
 	public boolean overlays(Game g) {
-		if (!g.hudAllowed || !arc.value) {
+		if (!g.hudAllowed || !g.inWorld) {
 			return false;
 		}
-		return DamageArc.active(System.nanoTime(), Math.round(arcSeconds.value));
+		return hearts.value || armor.value || HealthSettings.cur.override || arc.value;
 	}
 
 	@Override
 	public void overlay(Ui ui, Game g, boolean editing) {
+		if (!editing && g.inWorld && hudBroken < 3) {
+			try {
+				hud.draw(ui, HealthSettings.cur);
+			} catch (Throwable t) {
+				xyz.nativelaunch.core.Log.warn("Health indicators failed ({}).", t.toString());
+				hudBroken++;
+			}
+		}
+		if (!arc.value || (!editing && !DamageArc.active(System.nanoTime(), Math.round(arcSeconds.value)))) {
+			return;
+		}
 		Canvas c = ui.c;
 		float cx = c.width() / 2f, cy = c.height() / 2f;
 		float angle;

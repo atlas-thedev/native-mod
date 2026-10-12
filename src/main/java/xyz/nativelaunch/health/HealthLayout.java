@@ -91,15 +91,6 @@ public final class HealthLayout {
 		return String.format(Locale.ROOT, "%." + Math.max(0, Math.min(6, decimals)) + "f", v);
 	}
 
-	/**
-	 * How far (in icon pixels) to push a filled icon towards the camera, and an empty one away, so they never fight
-	 * over the same depth. Depth precision falls with the square of the distance, so the offset has to grow with it.
-	 */
-	public static float depthOffsetPx(double distanceSq, float size) {
-		double world = 0.0015 + 3.0e-6 * distanceSq;
-		return (float) (world / Math.max(1.0e-4f, size));
-	}
-
 	/** Heart index that hops while regenerating, like the vanilla bar (index = tick % ceil(max + 5)). */
 	public static int regenIndex(int tick, float maxHealth) {
 		int mod = Math.max(1, (int) Math.ceil(maxHealth + 5f));

@@ -20,12 +20,12 @@ public final class HealthSettings {
 	public boolean override;
 
 	// ── which entities ──
-	public boolean passive = true, hostile = true, players = true, self = false, throughWalls = false;
+	public boolean passive = true, hostile = true, players = true, self = false;
+	/** Also show the mob you are aiming at when blocks are in the way (never players). */
+	public boolean throughWalls = false;
 	/** Other players ignore the advanced criteria below. */
 	public boolean overridePlayers = false;
 	public boolean afterAttack = false;
-	/** Bumped when the "after attack" mode flips; the hook forgets old hits when it changes. */
-	public volatile int hitMemoryEpoch;
 	public int timeAfterHit = 60;
 	public boolean damagedOnly = false;
 	public int maxHealthPct = 100;
@@ -46,8 +46,10 @@ public final class HealthSettings {
 	public int decimals = 1;
 	public boolean percent = false;
 	public int percentMax = 20;
-	/** Icon size in blocks per icon pixel (0.025 is the classic size). */
-	public float size = 0.025f;
+	/** Icon size multiplier: 1 = 9 Native-UI pixels per icon. The size on screen does not depend on the distance. */
+	public float size = 1f;
+	/** Optional: shrink a little with distance (never below half size) instead of staying the same. */
+	public boolean shrinkWithDistance = false;
 	/** Extra height, in rows of icons. */
 	public float offset = 0f;
 	public float offsetStep = 0.25f;

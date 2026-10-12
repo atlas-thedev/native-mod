@@ -69,16 +69,7 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 			return modern && yggdrasil;
 		}
 		if (mixinClassName.contains("healthindicators")) {
-			try {
-				String ver = System.getProperty("java.version");
-				int jv = Integer.parseInt(ver.split("[._]")[0]);
-				if (jv < 21) {
-					return false;
-				}
-			} catch (Throwable t) {
-				return false;
-			}
-			return loader != null && loader.getResource(targetClassName.replace('.', '/') + ".class") != null;
+			return false; // the old 1.21-only port: replaced by the Native "Health Indicators" module (xyz.nativelaunch.health)
 		}
 		// Game hooks come in two flavours: "*26" for the unobfuscated 26.x names and
 		// the plain ones for intermediary names. Loading the wrong set only produces
