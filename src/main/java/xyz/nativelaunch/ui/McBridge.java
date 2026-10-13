@@ -206,19 +206,4 @@ public interface McBridge {
 		return false;
 	}
 
-	// ── health indicators ──
-
-	/** Reads the camera and the living things around it for the health indicators; false when this version cannot be read. */
-	default boolean health(xyz.nativelaunch.health.HealthScene out) {
-		return false;
-	}
-
-	/** Registry id ("minecraft:zombie") of the mob under the crosshair, or null. */
-	default String healthTarget() {
-		return null;
-	}
-
-	/** Shows a short message: in the chat, or on the action bar. {@code rgb} < 0 = default colour. */
-	default void healthSay(String text, int rgb, boolean chat) {
-	}
 }

@@ -1002,41 +1002,4 @@ public final class IntermediaryMc implements McBridge {
 		}
 	}
 
-	// ── health indicators ──
-
-	private HealthReaderMc healthReader;
-
-	private HealthReaderMc health() {
-		if (healthReader == null) {
-			healthReader = new HealthReaderMc(this);
-		}
-		return healthReader;
-	}
-
-	@Override
-	public boolean health(xyz.nativelaunch.health.HealthScene out) {
-		try {
-			return health().read(out);
-		} catch (Throwable t) {
-			return false;
-		}
-	}
-
-	@Override
-	public String healthTarget() {
-		try {
-			return health().target();
-		} catch (Throwable t) {
-			return null;
-		}
-	}
-
-	@Override
-	public void healthSay(String text, int rgb, boolean chat) {
-		try {
-			health().say(text, rgb, chat);
-		} catch (Throwable ignored) {
-			// no player yet
-		}
-	}
 }
