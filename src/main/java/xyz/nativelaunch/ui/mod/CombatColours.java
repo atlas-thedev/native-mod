@@ -13,13 +13,13 @@ public final class CombatColours {
         HitboxColours m = hitboxes;
         if (m == null || !m.enabled) return vanilla;
         if (vanilla == 0xFFFFFFFF) return 0xFF000000 | (m.body.value & 0xFFFFFF);
-        if (vanilla == 0xFFFF0000) return 0xFF000000 | (m.eye.value & 0xFFFFFF);
-        return vanilla; // riding, server-side, multipart and direction debug colours stay vanilla
+        if (vanilla == 0xFF0000FF) return 0xFF000000 | (m.direction.value & 0xFFFFFF);
+        return vanilla; // the red eye-height, riding, server-side and multipart debug colours stay vanilla
     }
 
     public static int hitbox(float r, float g, float b) {
         if (r == 1f && g == 1f && b == 1f) return hitbox(0xFFFFFFFF);
-        if (r == 1f && g == 0f && b == 0f) return hitbox(0xFFFF0000);
+        if (r == 0f && g == 0f && b == 1f) return hitbox(0xFF0000FF);
         return 0; // sentinel: leave the original floats untouched
     }
 

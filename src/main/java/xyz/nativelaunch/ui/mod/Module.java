@@ -20,7 +20,7 @@ public abstract class Module {
 		this.name = name;
 		this.description = description;
 		this.category = category;
-		this.icon = icon;
+		this.icon = xyz.nativelaunch.ui.gfx.ModuleIcons.forModule(id, icon);
 		this.enabled = this.defaultEnabled = enabled;
 	}
 

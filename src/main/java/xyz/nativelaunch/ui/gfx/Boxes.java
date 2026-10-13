@@ -277,4 +277,27 @@ public final class Boxes {
 		}
 		quads = 0;
 	}
+
+    /** A preview wireframe, in the exact same model/camera transform as the skinned cubes. */
+    public void wireBox(Canvas c, float x, float y, float z, float w, float h, float d, float width, int colour) {
+        for (int i = 0; i < 8; i++) {
+            if (h == 0 && (i & 2) != 0) continue;
+            for (int bit = 1; bit <= 4; bit *= 2) {
+                if (h == 0 && bit == 2) continue;
+                int j = i ^ bit;
+                if (j <= i) continue;
+                line3D(c, x + ((i & 1) == 0 ? 0 : w), y + ((i & 2) == 0 ? 0 : h), z + ((i & 4) == 0 ? 0 : d),
+                        x + ((j & 1) == 0 ? 0 : w), y + ((j & 2) == 0 ? 0 : h), z + ((j & 4) == 0 ? 0 : d), width, colour);
+            }
+        }
+    }
+
+    /** Projects a crisp line without changing the model, camera or any gameplay collision box. */
+    public void line3D(Canvas c, float x0, float y0, float z0, float x1, float y1, float z1, float width, int colour) {
+        float[] xy = new float[4]; project(x0, y0, z0, xy, 0); project(x1, y1, z1, xy, 2);
+        float dx = xy[2] - xy[0], dy = xy[3] - xy[1], len = (float)Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.001f) return;
+        float nx = -dy / len * width / 2, ny = dx / len * width / 2;
+        c.freeQuad(WHITE, new float[]{xy[0]+nx,xy[1]+ny,xy[2]+nx,xy[3]+ny,xy[2]-nx,xy[3]-ny,xy[0]-nx,xy[1]-ny}, WHITE_UV, colour);
+    }
 }

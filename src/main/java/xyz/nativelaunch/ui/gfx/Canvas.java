@@ -259,9 +259,9 @@ public final class Canvas {
 		return text.substring(0, i) + "\u2026";
 	}
 
-	/** A Lucide icon centred on (cx, cy). */
+	/** A Native module or navigation icon centred on (cx, cy). */
 	public void icon(int codepoint, float size, float cx, float cy, int argb) {
-		Font f = font(Fonts.ICONS, size);
+		Font f = font(ModuleIcons.custom(codepoint) ? Fonts.MODULE_ICONS : Fonts.ICONS, size);
 		Glyph g = f.glyph(atlas, codepoint);
 		if (g.w <= 0) {
 			return;

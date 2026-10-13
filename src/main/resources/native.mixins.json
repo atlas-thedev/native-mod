@@ -41,7 +41,8 @@
     "EnchantedColoursMixin",
     "CriticalColoursMixin26",
     "EnchantedColoursMixin26",
-    "HitboxColoursMixin116"
+    "HitboxColoursMixin116",
+    "HitboxDirectionMixin"
   ],
   "injectors": {
     "defaultRequire": 0

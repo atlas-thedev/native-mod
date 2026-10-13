@@ -12,13 +12,16 @@ class CombatColoursTest {
         assertFalse(m.enabled);
         for (int c : new int[]{0xFFFFFFFF,0xFFFF0000,0xFF00FF00,0xFF0000FF,0xFFFFFF00}) assertEquals(c,CombatColours.hitbox(c));
     }
-    @Test void onlyBodyAndEyeLinesAreTintedWithOpaqueColours() {
+    @Test void onlyBodyAndLookDirectionAreTintedWithOpaqueColours() {
         HitboxColours m = new HitboxColours();m.enabled=true;
-        m.body.value=0x00336699;m.eye.value=0xFF987654;
+        m.body.value=0x00336699;m.direction.value=0xFF987654;
         assertEquals(0xFF336699,CombatColours.hitbox(1f,1f,1f));
-        assertEquals(0xFF987654,CombatColours.hitbox(1f,0f,0f));
+        assertEquals(0xFF987654,CombatColours.hitbox(0f,0f,1f));
         assertEquals(0,CombatColours.hitbox(0f,1f,0f));
-        assertEquals(0xFF0000FF,CombatColours.hitbox(0xFF0000FF));
+        assertEquals(0xFFFF0000,CombatColours.hitbox(0xFFFF0000));
+        assertEquals(0,CombatColours.hitbox(1f,0f,0f));
+        assertEquals(2,m.settings.size());
+        assertFalse(m.settings.stream().anyMatch(s -> s.id.equals("eye")));
     }
     @Test void particleSetterNamesWorkAcrossAllThreeLayouts() {
         CriticalColours m = new CriticalColours();m.enabled=true;

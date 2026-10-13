@@ -1,0 +1,168 @@
+{
+  "family": "Native Module Icons",
+  "version": 1,
+  "license": "CC0-1.0",
+  "icons": [
+    {
+      "id": "fps",
+      "label": "FPS",
+      "codepoint": "F400",
+      "glyph": "native_fps",
+      "sha256": "9dd7f9a6ee307b2d4d73fa68915946c0df848fff03619709b2aa0fd2fcd659d1"
+    },
+    {
+      "id": "cps",
+      "label": "CPS",
+      "codepoint": "F401",
+      "glyph": "native_cps",
+      "sha256": "67e32d79f970ea8e264bb6cd0602dcfadb4cf9d2374bee265007e4f376a9013d"
+    },
+    {
+      "id": "keystrokes",
+      "label": "Keystrokes",
+      "codepoint": "F402",
+      "glyph": "native_keystrokes",
+      "sha256": "269aea454d42da403f7ab06821da4fdc1acde34e98a403237405ecff59c49e86"
+    },
+    {
+      "id": "coords",
+      "label": "Coordinates",
+      "codepoint": "F403",
+      "glyph": "native_coords",
+      "sha256": "46cae5f05dc181efdb6b7a6933d866c7a35f2690f7f4bf71df569008c9938e6c"
+    },
+    {
+      "id": "direction",
+      "label": "Direction",
+      "codepoint": "F404",
+      "glyph": "native_direction",
+      "sha256": "6119605ddcc67795209f36e70882cfde33a840b0b476fb27f8b1171e78182d27"
+    },
+    {
+      "id": "clock",
+      "label": "Clock",
+      "codepoint": "F405",
+      "glyph": "native_clock",
+      "sha256": "07cd86d47c86c54e736a4d35b18d57ba72dd12aa24d8dd1737b59e3b01ec2b9f"
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "codepoint": "F406",
+      "glyph": "native_memory",
+      "sha256": "e4c370147b4e49b9b018a56fbfbe317031e1b59c012e3444b22463fdc029c9a2"
+    },
+    {
+      "id": "ping",
+      "label": "Ping",
+      "codepoint": "F407",
+      "glyph": "native_ping",
+      "sha256": "1a56199a746f50e7fc477834ae5bde9db4ff5e8a928cacd857fb78efd74096d1"
+    },
+    {
+      "id": "server",
+      "label": "Server IP",
+      "codepoint": "F408",
+      "glyph": "native_server",
+      "sha256": "a1b19d4b5f0f83bc05cd89c2d8f5b5c478574d2716c8f307ad2c2b78363f3bae"
+    },
+    {
+      "id": "speed",
+      "label": "Speed",
+      "codepoint": "F409",
+      "glyph": "native_speed",
+      "sha256": "c0f326d04f7371f031cc999063a8c95c896cd6d7ca4d876beea06ac35b29515d"
+    },
+    {
+      "id": "scoreboard",
+      "label": "Scoreboard",
+      "codepoint": "F40A",
+      "glyph": "native_scoreboard",
+      "sha256": "fbae64c74a3cfcef445a39e5e571f077e077c584d5587dfec9dccf338974d5c0"
+    },
+    {
+      "id": "bossbar",
+      "label": "Boss Bar",
+      "codepoint": "F40B",
+      "glyph": "native_bossbar",
+      "sha256": "b44ed929cf7e986cd5e2ea391ff08667e38bf6a61158c75cc96f9e6a1a661873"
+    },
+    {
+      "id": "togglesprint",
+      "label": "Toggle Sprint",
+      "codepoint": "F40C",
+      "glyph": "native_togglesprint",
+      "sha256": "a4fc90c779617a0bf8d95eb57e43fb1419f005a976f0fd8ba6f879cfc4b40242"
+    },
+    {
+      "id": "zoom",
+      "label": "Zoom",
+      "codepoint": "F40D",
+      "glyph": "native_zoom",
+      "sha256": "1fee49c6760f91d6729f46250bb3c88a060b095a1928d9b760509365b7a72e05"
+    },
+    {
+      "id": "fullbright",
+      "label": "Fullbright",
+      "codepoint": "F40E",
+      "glyph": "native_fullbright",
+      "sha256": "a75ef4d39b617956638104207f77b27fc2725e72753f462da4b3ceb8c328e9ae"
+    },
+    {
+      "id": "bgfps",
+      "label": "Background FPS",
+      "codepoint": "F40F",
+      "glyph": "native_bgfps",
+      "sha256": "fee5b8bdda94767d65977558ab6cc9f371282520bc5e3abf0a724fe5a9fcef2e"
+    },
+    {
+      "id": "effects",
+      "label": "Potion Effects",
+      "codepoint": "F410",
+      "glyph": "native_effects",
+      "sha256": "d648e4ae905cab5206f6cf30191a4563238a3e8e64fca2386283fa60e6464e88"
+    },
+    {
+      "id": "armor",
+      "label": "Armor Status",
+      "codepoint": "F411",
+      "glyph": "native_armor",
+      "sha256": "c2dbd5dfed6a14ac15a4f1bd977a98f5e58dd130da672253163ba0c934ef8e03"
+    },
+    {
+      "id": "inventory",
+      "label": "Inventory",
+      "codepoint": "F412",
+      "glyph": "native_inventory",
+      "sha256": "0ac795c3036318b3c05f079a0581d89b64b7bb1e03f25d41acd279a50298df47"
+    },
+    {
+      "id": "crosshair",
+      "label": "Crosshair",
+      "codepoint": "F413",
+      "glyph": "native_crosshair",
+      "sha256": "1cde1b5cb234ecc31c470865af4965f0a37fe7c62dbdfb04380f6eda8abc2f06"
+    },
+    {
+      "id": "hitbox-colours",
+      "label": "Hitbox Colours",
+      "codepoint": "F414",
+      "glyph": "native_hitbox_colours",
+      "sha256": "3728bf0c1c2add4f958865af64db2a157d898f32de7f64a868607a5965f8d96d"
+    },
+    {
+      "id": "critical-colours",
+      "label": "Critical Colours",
+      "codepoint": "F415",
+      "glyph": "native_critical_colours",
+      "sha256": "67512304bb0abace0b0911ebee28dcf364a137e715ae9dd0de70a95279cadb12"
+    },
+    {
+      "id": "watermark",
+      "label": "Native Watermark",
+      "codepoint": "F416",
+      "glyph": "native_watermark",
+      "sha256": "5d921d149b4d707e4aa8efb4c449e8e318eebca9b87e7bfb93c64a4e9cc8282e"
+    }
+  ]
+}

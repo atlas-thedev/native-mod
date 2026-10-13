@@ -79,7 +79,30 @@ public final class VisualProbe {
                 check(Math.abs(field(boxes,"comp_3858").getFloat(record)-0x12/255f)<0.001f,"queued hitbox colour not applied");
             } finally {hitbox.getClass().getMethod("resetSettings").invoke(hitbox);enabled(hitbox,false);}
         }
+        // Force the 1.21.9/10 command renderer through the transformer as well.
+        try { Class.forName("net.minecraft.class_11686"); } catch (ClassNotFoundException ignored) {}
+        Object hitbox=module("hitbox-colours");
+        boolean hitboxWasEnabled=hitbox.getClass().getField("enabled").getBoolean(hitbox);
+        try {
+            try { hitbox.getClass().getField("eye"); throw new AssertionError("obsolete eye colour option remains"); }
+            catch (NoSuchFieldException expected) {}
+            enabled(hitbox,true); colour(hitbox,"direction",0xFF123456);
+            Method palette=Class.forName("xyz.nativelaunch.ui.mod.CombatColours").getMethod("hitbox",int.class);
+            check(((Integer)palette.invoke(null,0xFF0000FF))==0xFF123456,"blue look direction not recoloured");
+            check(((Integer)palette.invoke(null,0xFFFF0000))==0xFFFF0000,"red eye-height line changed");
+        } finally { hitbox.getClass().getMethod("resetSettings").invoke(hitbox);enabled(hitbox,hitboxWasEnabled); }
         System.out.println("VPROBE hitbox transformer OK");
+        Class<?> icons=Class.forName("xyz.nativelaunch.ui.gfx.ModuleIcons");
+        List<?> modules=(List<?>)Class.forName("xyz.nativelaunch.ui.mod.Modules").getMethod("all").invoke(null);
+        Set<Integer> glyphs=new HashSet<Integer>();
+        for(Object m:modules) {
+            int cp=m.getClass().getField("icon").getInt(m);
+            check((Boolean)icons.getMethod("custom",int.class).invoke(null,cp),"module has a stock icon");
+            check(glyphs.add(cp),"modules share an icon");
+        }
+        check(glyphs.size()==(Integer)icons.getMethod("count").invoke(null),"custom icon count mismatch");
+        check(VisualProbe.class.getResource("/assets/native/ui/native-modules.ttf")!=null,"custom font missing");
+        System.out.println("VPROBE custom module icons OK");
         Object win = mc.getClass().getMethod(official ? "getWindow" : "method_22683").invoke(mc);
         boolean title=false;
         for (Method m : win.getClass().getDeclaredMethods()) if (m.getName().contains("nativeClient$title") && m.getReturnType()==String.class) {

@@ -7,10 +7,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** The faces the UI uses (Poppins like the launcher, Lucide icons) plus system fallbacks for other scripts. */
+/** The faces the UI uses (Poppins like the launcher, original Native module icons, Lucide navigation) plus system fallbacks for other scripts. */
 public final class Fonts {
-	public static final int REGULAR = 0, MEDIUM = 1, SEMIBOLD = 2, BOLD = 3, ICONS = 4;
-	private static final String[] FILES = {"Poppins-Regular.ttf", "Poppins-Medium.ttf", "Poppins-SemiBold.ttf", "Poppins-Bold.ttf", "lucide.ttf"};
+	public static final int REGULAR = 0, MEDIUM = 1, SEMIBOLD = 2, BOLD = 3, ICONS = 4, MODULE_ICONS = 5;
+	private static final String[] FILES = {"Poppins-Regular.ttf", "Poppins-Medium.ttf", "Poppins-SemiBold.ttf", "Poppins-Bold.ttf", "lucide.ttf", "native-modules.ttf"};
 	private final FontFace[] faces = new FontFace[FILES.length];
 	private final Map<Long, Font> sized = new HashMap<Long, Font>();
 	private List<FontFace> fallbacks;
