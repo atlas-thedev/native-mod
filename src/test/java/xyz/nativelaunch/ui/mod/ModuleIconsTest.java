@@ -34,6 +34,8 @@ class ModuleIconsTest {
         }
         assertEquals(Modules.all().size(),ids.size());
         assertNotNull(getClass().getResource("/assets/native/ui/native-modules.ttf"));
+        assertEquals(ModuleIcons.NATIVE_LOGO,Modules.get("watermark").icon);
+        assertNotNull(getClass().getResource("/assets/native/ui/logo.png"));
     }
     @Test void customFontRangeDoesNotChangeNavigationIcons() {
         assertFalse(ModuleIcons.custom(0xE158)); assertFalse(ModuleIcons.custom(0xF100));

@@ -21,6 +21,11 @@ public final class Overlays {
 		crosshairAt = System.nanoTime();
 	}
 
+    /** Restore vanilla immediately when the custom crosshair is disabled or its hide option changes. */
+    public static void releaseCrosshair() {
+        crosshairAt = Long.MIN_VALUE / 2;
+    }
+
 	public static void replaceEffects() {
 		effectsAt = System.nanoTime();
 	}

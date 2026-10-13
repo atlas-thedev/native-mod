@@ -3,6 +3,8 @@ package xyz.nativelaunch.ui.gfx;
 /** Original, CC0 Native module artwork. Codepoints mirror native-modules.json; append only. */
 public final class ModuleIcons {
     public static final int FIRST = 0xF400;
+    /** Same brand asset used by the launcher, menu and in-game watermark. */
+    public static final int NATIVE_LOGO = FIRST + 22;
     private static final String[] IDS = {"fps", "cps", "keystrokes", "coords", "direction", "clock", "memory", "ping", "server", "speed", "scoreboard", "bossbar", "togglesprint", "zoom", "fullbright", "bgfps", "effects", "armor", "inventory", "crosshair", "hitbox-colours", "critical-colours", "watermark"};
     private ModuleIcons() {}
 

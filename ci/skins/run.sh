@@ -39,7 +39,7 @@ SDL_VIDEO_FORCE_EGL=1 SDL_VIDEO_X11_FORCE_EGL=1 LIBGL_ALWAYS_SOFTWARE=1 timeout 
 set -e
 grep -E "SPROBE|\[Native\]" "$G/skins.log" || true
 fail=0
-for feature in "critical factories" "hitbox transformer" "custom module icons" "branding"; do
+for feature in "critical factories" "hitbox transformer" "custom module icons" "custom crosshair" "branding"; do
   grep -F "VPROBE $feature OK" "$G/skins.log" >/dev/null || { echo "::error::Minecraft $MC: visual probe failed ($feature)"; fail=1; }
 done
 for who in alice bob carol; do

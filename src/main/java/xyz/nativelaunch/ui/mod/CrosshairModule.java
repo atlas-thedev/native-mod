@@ -8,23 +8,35 @@ import xyz.nativelaunch.ui.gfx.Canvas;
 final class CrosshairModule extends Module {
 	final Setting.Choice shape = add(new Setting.Choice("shape", "Shape", 0, "Cross", "T", "Dot", "Circle", "Square"));
 	final Setting.Num size = add(new Setting.Num("size", "Size", 7, 1, 30, 1, "px"));
-	final Setting.Num thickness = fixed(new Setting.Num("thickness", "Thickness", 2, 1, 8, 1, "px"));
-	final Setting.Num gap = fixed(new Setting.Num("gap", "Gap", 3, 0, 20, 1, "px"));
-	final Setting.Bool dot = fixed(new Setting.Bool("dot", "Centre dot", false));
+	final Setting.Num thickness = add(new Setting.Num("thickness", "Thickness", 2, 1, 8, 1, "px"));
+	final Setting.Num gap = add(new Setting.Num("gap", "Gap", 3, 0, 20, 1, "px"));
+	final Setting.Bool dot = add(new Setting.Bool("dot", "Centre dot", false));
 	final Setting.Color color = add(new Setting.Color("color", "Colour", 0xFFFFFFFF));
-	final Setting.Num opacity = fixed(new Setting.Num("opacity", "Opacity", 100, 10, 100, 5, "%"));
-	final Setting.Bool outline = fixed(new Setting.Bool("outline", "Outline", true));
-	final Setting.Color outlineColor = fixed(new Setting.Color("outlineColor", "Outline colour", 0xFF000000));
-	final Setting.Bool dynamic = fixed(new Setting.Bool("dynamic", "Open up while moving", false));
-	final Setting.Bool onTarget = fixed(new Setting.Bool("onTarget", "Change colour over a mob or player", true));
-	final Setting.Color targetColor = fixed(new Setting.Color("targetColor", "Colour over a target", 0xFFEF4444));
-	final Setting.Bool hide = fixed(new Setting.Bool("hide", "Hide the vanilla crosshair", true));
+	final Setting.Num opacity = add(new Setting.Num("opacity", "Opacity", 100, 10, 100, 5, "%"));
+	final Setting.Bool outline = add(new Setting.Bool("outline", "Outline", true));
+	final Setting.Color outlineColor = add(new Setting.Color("outlineColor", "Outline colour", 0xFF000000));
+	final Setting.Bool dynamic = add(new Setting.Bool("dynamic", "Open up while moving", false));
+	final Setting.Bool onTarget = add(new Setting.Bool("onTarget", "Change colour over a mob or player", false));
+	final Setting.Color targetColor = add(new Setting.Color("targetColor", "Colour over a target", 0xFFEF4444));
+	final Setting.Bool hide = add(new Setting.Bool("hide", "Hide the vanilla crosshair", true));
 	private float spread;
 	private long last;
 
 	CrosshairModule() {
 		super("crosshair", "Crosshair", "Replace the vanilla crosshair with your own: shape, size, gap, colour and outline.", VISUAL, Theme.I_CROSSHAIR, false);
 	}
+
+    @Override
+    protected boolean hidden(Setting s) {
+        if (s == targetColor) return !onTarget.value;
+        if (s == outlineColor) return !outline.value;
+        return shape.value == 2 && (s == gap || s == dot || s == dynamic);
+    }
+
+    @Override
+    protected void onDisable() {
+        Overlays.releaseCrosshair();
+    }
 
 	@Override
 	public int needs() {
@@ -35,7 +47,9 @@ final class CrosshairModule extends Module {
 	public void frame(Game g) {
 		if (hide.value && g.hudAllowed) {
 			Overlays.replaceCrosshair();
-		}
+		} else {
+            Overlays.releaseCrosshair();
+        }
 	}
 
 	@Override
@@ -105,7 +119,7 @@ final class CrosshairModule extends Module {
 				{X - half + t + G, Y - half, L, t},
 				{X - half, Y - half - G - L, t, L},
 				{X - half, Y - half + t + G, t, L}};
-		int n = s == 1 ? 4 : 4;
+		int n = arms.length;
 		if (o > 0) {
 			for (int i = 0; i < n; i++) {
 				if (s == 1 && i == 2) {

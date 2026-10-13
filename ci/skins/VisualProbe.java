@@ -23,7 +23,7 @@ public final class VisualProbe {
         check(m != null, "missing module " + id); return m;
     }
     private static void colour(Object m, String name, int colour) throws Exception {
-        Object setting = m.getClass().getField(name).get(m);
+        Object setting = field(m.getClass(),name).get(m);
         setting.getClass().getField("value").setInt(setting, colour);
     }
     private static void enabled(Object m, boolean on) throws Exception { m.getClass().getField("enabled").setBoolean(m, on); }
@@ -103,6 +103,37 @@ public final class VisualProbe {
         check(glyphs.size()==(Integer)icons.getMethod("count").invoke(null),"custom icon count mismatch");
         check(VisualProbe.class.getResource("/assets/native/ui/native-modules.ttf")!=null,"custom font missing");
         System.out.println("VPROBE custom module icons OK");
+        Object crosshair=module("crosshair");
+        boolean crosshairWasEnabled=crosshair.getClass().getField("enabled").getBoolean(crosshair);
+        try {
+            check(((List<?>)crosshair.getClass().getMethod("allSettings").invoke(crosshair)).size()==13,"crosshair controls remain fixed/hidden");
+            colour(crosshair,"color",0xFF00FF00);
+            Object target=field(crosshair.getClass(),"onTarget").get(crosshair);
+            target.getClass().getField("value").setBoolean(target,false);
+            Class<?> canvas=Class.forName("xyz.nativelaunch.ui.gfx.Canvas"),atlas=Class.forName("xyz.nativelaunch.ui.gfx.Atlas"),fonts=Class.forName("xyz.nativelaunch.ui.gfx.Fonts");
+            Class<?> ui=Class.forName("xyz.nativelaunch.ui.Ui"),game=Class.forName("xyz.nativelaunch.ui.mod.Game"),mod=Class.forName("xyz.nativelaunch.ui.mod.Module");
+            Object c=canvas.getConstructor(atlas,fonts).newInstance(atlas.getConstructor(int.class).newInstance(256),null);
+            Object u=ui.getConstructor(canvas).newInstance(c),g=game.getConstructor().newInstance();
+            game.getField("hudAllowed").setBoolean(g,true);game.getField("hasTarget").setBoolean(g,true);
+            Object shape=field(crosshair.getClass(),"shape").get(crosshair);
+            for(int i=0;i<5;i++) {
+                shape.getClass().getField("value").setInt(shape,i);
+                canvas.getMethod("begin",int.class,int.class,float.class).invoke(c,1280,720,1f);
+                mod.getMethod("overlay",ui,game,boolean.class).invoke(crosshair,u,g,false);
+                int n=canvas.getField("quads").getInt(c);check(n>0,"crosshair shape emitted no geometry");
+                boolean green=false;int[] colours=(int[])canvas.getField("col").get(c);
+                for(int q=0;q<n*4;q++) if(colours[q]==0xFF00FF00)green=true;
+                check(green,"chosen crosshair colour was not retained over a target");
+            }
+            Class<?> hud=load(official ? "net.minecraft.client.gui.Hud" : "net.minecraft.class_329","net.minecraft.client.gui.Gui");
+            boolean crosshairHook=false;
+            for(Method m:hud.getDeclaredMethods()) if(m.getName().contains("nativeClient$crosshair"))crosshairHook=true;
+            check(crosshairHook,"vanilla crosshair hide hook missing");
+        } finally {
+            crosshair.getClass().getMethod("resetSettings").invoke(crosshair);enabled(crosshair,crosshairWasEnabled);
+            Class.forName("xyz.nativelaunch.ui.mod.Overlays").getMethod("releaseCrosshair").invoke(null);
+        }
+        System.out.println("VPROBE custom crosshair OK");
         Object win = mc.getClass().getMethod(official ? "getWindow" : "method_22683").invoke(mc);
         boolean title=false;
         for (Method m : win.getClass().getDeclaredMethods()) if (m.getName().contains("nativeClient$title") && m.getReturnType()==String.class) {
