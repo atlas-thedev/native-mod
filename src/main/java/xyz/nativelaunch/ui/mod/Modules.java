@@ -135,6 +135,7 @@ public final class Modules {
 					}
 					JsonObject s = o.has("settings") && o.get("settings").isJsonObject() ? o.getAsJsonObject("settings") : null;
 					if (s != null) {
+                        if (m.id.equals("hitbox-colours") && s.has("eye")) changed(); // retire the old red-line option
 						for (Setting st : m.allSettings()) {
 							JsonElement v = s.get(st.id);
 							if (v != null) {

@@ -41,6 +41,16 @@ public final class PlayerPreview implements CosmeticSink {
 	/** Draws the model into the box; ownCapeHash / skin come from the directory entry when known. */
 	/** Slot group shown empty in the preview (trying on "Nothing"); "capes" hides the cape. */
 	public String bare;
+    /** Optional F3+B settings preview. All three overlays use the same projection as the player. */
+    public boolean hitbox;
+    public int hitboxColour = 0xFFFFFFFF, directionColour = 0xFF0000FF;
+
+    public PlayerPreview() {}
+
+    public PlayerPreview(boolean hitbox) {
+        this.hitbox = hitbox;
+        if (hitbox) yaw = -0.9f; // show the direction vector clearly, not end-on
+    }
 
 	public void draw(Ui ui, String id, float x, float y, float w, float h, Wardrobe.Item hover) {
 		boolean over = ui.hover(x, y, w, h);
@@ -68,7 +78,7 @@ public final class PlayerPreview implements CosmeticSink {
 
 		// floor glow
 		float cx = x + w / 2;
-		float scale = Math.min(h / 50f, w / 30f);
+		float scale = Math.min(h / 50f, w / (hitbox ? 82f : 30f));
 		float feet = y + h / 2 + 19 * scale;
 		ui.c.shadow(cx - 9 * scale, feet - 1.5f * scale, 18 * scale, 3 * scale, 1.5f * scale, 10, 0x66000000);
 
@@ -210,6 +220,15 @@ public final class PlayerPreview implements CosmeticSink {
 			}
 		}
 		b.end(ui.c);
+        if (hitbox) {
+            // A standing player's 0.6 x 1.8 m AABB, using the preview's 32-pixel model height.
+            float side = 32f / 3f, eye = -4.8f, forward = 32f * 2f / 1.8f;
+            b.wireBox(ui.c, -side/2, -8, -side/2, side, 32, side, 1.2f, hitboxColour);
+            b.wireBox(ui.c, -side/2, eye, -side/2, side, 0, side, 0.9f, 0xFFFF0000);
+            b.line3D(ui.c, 0, eye, 0, 0, eye, -forward, 1.5f, directionColour);
+            b.line3D(ui.c, 0, eye, -forward, -2.5f, eye, -forward+4, 1.5f, directionColour);
+            b.line3D(ui.c, 0, eye, -forward, 2.5f, eye, -forward+4, 1.5f, directionColour);
+        }
 	}
 
 	private void part(Image s, int tw, int th, float x, float y, float z, float w, float h, float d, float u, float v, boolean mirror, int tint,
