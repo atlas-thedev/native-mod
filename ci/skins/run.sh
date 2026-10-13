@@ -15,7 +15,7 @@ R="$WORK/mc-$MC"
 pick() { python3 -c "import json,sys;print([p for p in json.load(open('$R/launch.json'))['cp'] if sys.argv[1] in p][0])" "$1"; }
 LOADER_JAR=$(pick fabric-loader); GUAVA=$(pick "/com/google/guava/guava/")
 P="$WORK/sprobe-$MC"; rm -rf "$P" && mkdir -p "$P"
-javac -nowarn -source 8 -target 8 -cp "$LOADER_JAR:$GUAVA" -d "$P" "$HERE/SkinProbe.java" 2>/dev/null || { echo "::error::could not compile SkinProbe"; exit 1; }
+javac -nowarn -source 8 -target 8 -cp "$LOADER_JAR:$GUAVA" -d "$P" "$HERE/SkinProbe.java" "$HERE/VisualProbe.java" 2>/dev/null || { echo "::error::could not compile SkinProbe"; exit 1; }
 echo '{"schemaVersion":1,"id":"sprobe","version":"1.0.0","environment":"client","entrypoints":{"client":["sprobe.SkinProbe"]}}' > "$P/fabric.mod.json"
 G="$R/game"; rm -rf "$G/mods" "$G/.native"; mkdir -p "$G/mods"
 (cd "$P" && zip -qr "$G/mods/sprobe.jar" .)
@@ -39,6 +39,9 @@ SDL_VIDEO_FORCE_EGL=1 SDL_VIDEO_X11_FORCE_EGL=1 LIBGL_ALWAYS_SOFTWARE=1 timeout 
 set -e
 grep -E "SPROBE|\[Native\]" "$G/skins.log" || true
 fail=0
+for feature in "critical factories" "hitbox transformer" "branding"; do
+  grep -F "VPROBE $feature OK" "$G/skins.log" >/dev/null || { echo "::error::Minecraft $MC: visual probe failed ($feature)"; fail=1; }
+done
 for who in alice bob carol; do
   grep -E "SPROBE $who .*skins/" "$G/skins.log" >/dev/null || { echo "::error::Minecraft $MC: $who does NOT get the Native skin"; fail=1; }
 done

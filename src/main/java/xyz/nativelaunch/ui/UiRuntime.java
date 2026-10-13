@@ -221,7 +221,11 @@ public final class UiRuntime {
 		if (game.hudAllowed) {
 			hud = HudOverlay.any(game);
 		}
-		boolean overlay = mc.overlay();
+		Module brand = Modules.get("watermark");
+        boolean wantBrand = brand != null && brand.enabled && !game.hudAllowed
+                && !mc.hudHidden() && !mc.debugOpen()
+                && kind != McBridge.TITLE && kind != McBridge.MENU && kind != McBridge.HUD;
+        boolean overlay = mc.overlay();
 		boolean classicTitle = classic && mc.isVanillaTitle(screen);
 		RelayClient client = RelayClient.get();
 		if (client != null && (kind != 0 || !config.notifications || !mc.inWorld())) {
@@ -230,7 +234,7 @@ public final class UiRuntime {
 		boolean wantToasts = kind == 0 && config.notifications && client != null && (toasts != null && toasts.active() || !client.notices.isEmpty());
 		capturing = kind != 0 && !overlay;
 		pillVisible = classicTitle && !overlay;
-		if ((kind == 0 && !classicTitle && !wantToasts && !hud) || overlay) {
+		if ((kind == 0 && !classicTitle && !wantToasts && !hud && !wantBrand) || overlay) {
 			if (kind == 0 && client != null && relay != null) {
 				client.viewing = null;
 			}
@@ -277,6 +281,12 @@ public final class UiRuntime {
 				toasts.draw(ui);
 			}
 		}
+        if (wantBrand && brand instanceof xyz.nativelaunch.ui.mod.HudModule) {
+            xyz.nativelaunch.ui.mod.HudModule mark = (xyz.nativelaunch.ui.mod.HudModule) brand;
+            float[] sz = mark.measure(canvas, game);
+            mark.paint(ui, xyz.nativelaunch.ui.mod.HudModule.pos(mark.fx, canvas.width(), sz[0]),
+                    xyz.nativelaunch.ui.mod.HudModule.pos(mark.fy, canvas.height(), sz[1]), game);
+        }
 		ui.tooltips();
 		ui.end();
 		gl.render(canvas);

@@ -110,6 +110,7 @@ public final class Modules {
 		}
 		try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
 			JsonObject root = new JsonParser().parse(r).getAsJsonObject();
+			if (root.has("health")) changed(); // discard retired Health Indicators settings on the next save
 			for (Module m : all) {
 				JsonElement e = root.get(m.id);
 				if (e == null || !e.isJsonObject()) {

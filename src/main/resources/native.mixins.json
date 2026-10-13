@@ -31,8 +31,17 @@
     "HoodHatMixin26",
     "HoodSlotMixin26",
     "HoodScopeMixin26",
-    "HealthDamageMixin26",
-    "HealthAttackMixin"
+    "WindowTitleMixin",
+    "WindowTitleMixin26",
+    "HitboxColoursMixin",
+    "HitboxStateColoursMixin",
+    "HitboxGizmoColoursMixin",
+    "HitboxGizmoColoursMixin26",
+    "CriticalColoursMixin",
+    "EnchantedColoursMixin",
+    "CriticalColoursMixin26",
+    "EnchantedColoursMixin26",
+    "HitboxColoursMixin116"
   ],
   "injectors": {
     "defaultRequire": 0

@@ -131,6 +131,7 @@ public class SkinProbe implements ClientModInitializer {
 			gp = Class.forName("com.mojang.authlib.GameProfile");
 			Thread.sleep(20000);
 			System.out.println("SPROBE ready");
+			onMain(() -> { VisualProbe.run(mc); return null; });
 			// an unsigned textures property pointing at a Mojang skin, like an offline server's skin plugin sends
 			String unsigned = Base64.getEncoder().encodeToString("{\"textures\":{\"SKIN\":{\"url\":\"http://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dcb13f7df319a713eb810b\"}}}".getBytes("UTF-8"));
 			Object alice = profile(UUID.nameUUIDFromBytes("OfflinePlayer:TestAlice".getBytes("UTF-8")), "TestAlice", null);

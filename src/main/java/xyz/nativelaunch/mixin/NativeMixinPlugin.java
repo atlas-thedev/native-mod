@@ -21,6 +21,7 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 	private static final String OFFICIAL_MARKER = "net/minecraft/client/Minecraft.class";
 	private static final String INTERMEDIARY_MARKER = "net/minecraft/class_310.class";
 
+	private boolean pre117;
 	private boolean modern;
 	private boolean services;
 	private boolean yggdrasil;
@@ -43,7 +44,9 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 			boolean official = loader.getResource(OFFICIAL_MARKER) != null;
 			boolean intermediary = loader.getResource(INTERMEDIARY_MARKER) != null;
 			naming = official == intermediary ? 0 : (official ? 1 : -1);
-			known = true;
+			pre117 = net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("minecraft")
+                    .map(m -> m.getMetadata().getVersion().getFriendlyString().startsWith("1.16")).orElse(false);
+            known = true;
 		} catch (Throwable t) {
 			known = false;
 		}
@@ -68,7 +71,10 @@ public final class NativeMixinPlugin implements IMixinConfigPlugin {
 		if (mixinClassName.endsWith("PackedTexturesMixin")) {
 			return modern && yggdrasil;
 		}
-		// Game hooks come in two flavours: "*26" for the unobfuscated 26.x names and
+		// renderHitbox is an instance method on 1.16 and static from 1.17 onward.
+        if (mixinClassName.endsWith("HitboxColoursMixin116")) return naming < 0 && pre117;
+        if (mixinClassName.endsWith("HitboxColoursMixin")) return naming < 0 && !pre117;
+        // Game hooks come in two flavours: "*26" for the unobfuscated 26.x names and
 		// the plain ones for intermediary names. Loading the wrong set only produces
 		// "Error loading class" noise (and confuses crash analysis), so skip it.
 		if (naming != 0) {
