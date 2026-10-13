@@ -124,6 +124,14 @@ public interface McBridge {
 	default void setSmoothCamera(boolean on) {
 	}
 
+	/** "particles" (0 all, 1 decreased, 2 minimal) or "entityDistance" (scale); NaN when unknown. */
+	default double videoOption(String key) {
+		return Double.NaN;
+	}
+
+	default void setVideoOption(String key, double value) {
+	}
+
 	/** The signed-in Minecraft name. */
 	/** Vanilla GUI size: {scaledWidth, scaledHeight, guiScale}; false when unknown. */
 	default boolean guiSize(float[] out) {

@@ -541,6 +541,17 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
+	public double videoOption(String key) {
+		// GameOptions.particles / entityDistanceScaling; SimpleOption.value on 1.19+
+		return xyz.nativelaunch.ui.VideoOptions.read(options(), "particles".equals(key) ? "field_1882" : "field_24214", "field_37868");
+	}
+
+	@Override
+	public void setVideoOption(String key, double value) {
+		xyz.nativelaunch.ui.VideoOptions.write(options(), "particles".equals(key) ? "field_1882" : "field_24214", "field_37868", value);
+	}
+
+	@Override
 	public boolean smoothCamera() {
 		return Boolean.TRUE.equals(get(options(), "field_1914"));
 	}

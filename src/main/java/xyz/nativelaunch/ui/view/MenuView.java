@@ -194,16 +194,33 @@ public final class MenuView {
 		float bx = mx + 20, by = py + hh + 16, bw = mw - 40, bh = ph - hh - 32;
 		float pe = ease(clamp01((ui.now - pageAt) / 220f));
 		if (tab == 0) {
-			if (selected == null) {
-				float tx = header(c, "Mods", mx, py, hh);
-				float sw = Math.min(220, mw * 0.26f);
-				float chipsEnd = chips(ui, tx + 18, py + (hh - 28) / 2, mx + mw - 20 - sw - 14);
-				drawSearch(ui, Math.max(chipsEnd + 12, mx + mw - 20 - sw), py + (hh - 34) / 2, sw, 34);
-				c.pushAlpha(pe);
-				mods(ui, bx, by + (1 - pe) * 10, bw, bh);
-				c.popAlpha();
-			} else {
-				modPage(ui, selected, mx, py, mw, hh, bx, by, bw, bh, pe, screen);
+			float tx = header(c, "Mods", mx, py, hh);
+			float sw = Math.max(160, Math.min(340, mx + mw - 20 - tx - 30));
+			drawSearch(ui, mx + mw - 20 - sw, py + (hh - 34) / 2, sw, 34);
+			float cw = Math.min(184, bw * 0.24f);
+			categories(ui, bx, by, cw, bh);
+			c.fill(bx + cw + 12, by, 1, bh, Theme.HAIRLINE);
+			float gx = bx + cw + 26, gw = bw - cw - 26;
+			if (selected != null) {
+				drawerMod = selected;
+			}
+			float slide = ease(ui.anim("menu:drawer", selected != null, 12f));
+			ui.interactive = slide < 0.05f;
+			c.pushAlpha(pe);
+			mods(ui, gx, by + (1 - pe) * 10, gw, bh);
+			c.popAlpha();
+			ui.interactive = true;
+			if (slide > 0.01f && drawerMod != null) {
+				c.pushClip(mx, py, mw, ph);
+				c.fill(mx, py + hh + 1, mw, ph - hh - 1, Theme.alpha(0x8C000000, slide));
+				float dw = Math.min(430, mw * 0.56f);
+				float dx = mx + mw - dw * slide;
+				if (selected != null && slide > 0.9f && ui.pressed && !ui.hover(dx, py, dw, ph) && Widgets.listening == null) {
+					selected = null;
+				} else {
+					modDrawer(ui, drawerMod, dx, py, dw, ph, screen);
+				}
+				c.popClip();
 			}
 		} else if (tab == 1) {
 			header(c, "Cosmetics", mx, py, hh);
@@ -311,46 +328,6 @@ public final class MenuView {
 		c.popClip();
 	}
 
-	/** Category chips in the header. Returns where they end. */
-	private float chips(Ui ui, float x, float y, float maxX) {
-		Canvas c = ui.c;
-		float chx = x;
-		for (int i = 0; i < CHIPS.length; i++) {
-			int n = 0;
-			for (Module m : Modules.all()) {
-				if (matches(m, i)) {
-					n++;
-				}
-			}
-			String label = CHIPS[i];
-			String count = String.valueOf(n);
-			float lw = c.textWidth(Fonts.SEMIBOLD, 11.5f, label), nw = c.textWidth(Fonts.MEDIUM, 10.5f, count);
-			float cwid = lw + nw + 32;
-			if (chx + cwid > maxX) {
-				break;
-			}
-			String id = "menu:chip:" + i;
-			boolean over = ui.hover(chx, y, cwid, 28);
-			if (ui.clicked(id, chx, y, cwid, 28) && chip != i) {
-				chip = i;
-				grid.target = grid.offset = 0;
-				pageAt = ui.now;
-			}
-			float on = ui.anim(id + "#on", chip == i, 16f);
-			float hv = ui.anim(id + "#h", over, 14f);
-			c.round(chx, y, cwid, 28, 14, Theme.mix(Theme.mix(Theme.SUBTLE, Theme.SUBTLE_HOVER, hv), 0xFFF4F4F5, on));
-			if (on < 0.99f) {
-				c.outline(chx, y, cwid, 28, 14, 1, Theme.alpha(Theme.HAIRLINE, 1 - on));
-			}
-			int fg = Theme.mix(Theme.mix(Theme.TEXT_SECONDARY, Theme.TEXT_STRONG, hv), Theme.SOLID_FG, on);
-			c.text(Fonts.SEMIBOLD, 11.5f, label, chx + 13, y + (28 - c.lineHeight(Fonts.SEMIBOLD, 11.5f)) / 2, fg);
-			c.text(Fonts.MEDIUM, 10.5f, count, chx + 19 + lw, y + (28 - c.lineHeight(Fonts.MEDIUM, 10.5f)) / 2,
-					Theme.mix(Theme.TEXT_MUTED, 0xFF71717A, on));
-			chx += cwid + 6;
-		}
-		return chx;
-	}
-
 	private static boolean matches(Module m, int chip) {
 		if (chip == 0) {
 			return true;
@@ -382,9 +359,9 @@ public final class MenuView {
 			cardW = (w - gap * (cols - 1)) / cols;
 			cardH = 60;
 		} else {
-			cols = Math.max(2, (int) ((w + gap) / (148 + gap)));
+			cols = Math.max(2, (int) ((w + gap) / (150 + gap)));
 			cardW = (w - gap * (cols - 1)) / cols;
-			cardH = Math.max(124, Math.min(150, cardW * 0.92f));
+			cardH = 156;
 		}
 		float off = grid.begin(ui, x, y, w + 6, h);
 		for (int i = 0; i < list.size(); i++) {
@@ -419,37 +396,41 @@ public final class MenuView {
 		return out;
 	}
 
-	/** Feather-style tile: big icon in the middle, name and switch along the bottom, a heart to pin it. */
+	/** Feather-style tile: icon and name on top, a wide ENABLED / DISABLED bar and a settings gear along the bottom. */
 	private void card(Ui ui, Module m, float x, float y, float w, float h, int index) {
 		Canvas c = ui.c;
 		String id = "menu:card:" + m.id;
-		float e = ease(clamp01((ui.now - pageAt - 40 - index * 22) / 300f));
+		float e = ease(clamp01((ui.now - pageAt - 40 - index * 18) / 300f));
 		c.pushAlpha(e);
 		y += (1 - e) * 12;
 		boolean over = ui.hover(x, y, w, h);
-		boolean click = ui.clicked(id, x, y, w, h - 40);
+		boolean click = ui.clicked(id, x, y, w, h - 44);
 		float hv = ui.anim(id + "#h", over, 14f);
 		float on = ui.anim(id + "#on", m.enabled, 14f);
-		c.round(x, y, w, h, 14, Theme.mix(CARD, CARD_HOVER, hv));
+		c.round(x, y, w, h, 12, Theme.mix(CARD, CARD_HOVER, hv));
 		if (on > 0.01f) {
-			glow(c, x, y, w, (h - 40) * 0.9f, 14, Theme.alpha(0x12FFFFFF, on));
+			glow(c, x, y, w, (h - 44) * 0.9f, 12, Theme.alpha(0x14FFFFFF, on));
 		}
-		c.outline(x, y, w, h, 14, 1, Theme.mix(Theme.mix(Theme.HAIRLINE, Theme.HAIRLINE_STRONG, on), Theme.BORDER_HOVER, hv));
-		float iy = y + (h - 40) / 2 + 3;
-		c.icon(m.icon, 30, x + w / 2, iy, Theme.mix(Theme.mix(0xFF52525B, Theme.TEXT_SECONDARY, hv), Theme.TEXT_STRONG, on));
+		c.outline(x, y, w, h, 12, 1, Theme.mix(Theme.mix(Theme.HAIRLINE, Theme.HAIRLINE_STRONG, on), Theme.BORDER_HOVER, hv));
+		float iy = y + (h - 44) * 0.42f;
+		c.icon(m.icon, 30, x + w / 2, iy - hv * 2, Theme.mix(Theme.mix(0xFF52525B, Theme.TEXT_SECONDARY, hv), Theme.TEXT_STRONG, on));
+		String name = c.ellipsize(Fonts.SEMIBOLD, 12.5f, m.name, w - 20);
+		float nw = c.textWidth(Fonts.SEMIBOLD, 12.5f, name);
+		c.text(Fonts.SEMIBOLD, 12.5f, name, x + (w - nw) / 2, y + h - 44 - 26, Theme.mix(Theme.TEXT, Theme.TEXT_STRONG, on));
 		if (heart(ui, id + ":fav", m, x + w - 32, y + 8, over)) {
 			click = false;
 		}
-		// bottom bar
-		c.fill(x + 1, y + h - 40, w - 2, 1, Theme.HAIRLINE);
-		c.text(Fonts.SEMIBOLD, 12.5f, c.ellipsize(Fonts.SEMIBOLD, 12.5f, m.name, w - 66), x + 13,
-				y + h - 20 - c.lineHeight(Fonts.SEMIBOLD, 12.5f) / 2, Theme.mix(Theme.TEXT, Theme.TEXT_STRONG, on));
-		if (ui.toggle(id + ":t", x + w - 46, y + h - 30, m.enabled)) {
+		float bx = x + 10, bw = w - 20, by = y + h - 38;
+		if (!m.allSettings().isEmpty()) {
+			if (ui.iconButton(id + ":gear", bx, by, 28, Theme.I_SETTINGS, "Settings")) {
+				click = true;
+			}
+			bx += 32;
+			bw -= 32;
+		}
+		if (stateButton(ui, id + ":t", bx, by, bw, 28, m.enabled, 10.5f)) {
 			m.setEnabled(!m.enabled);
 			Modules.changed();
-		}
-		if (hv > 0.01f && m.allSettings().size() > 0) {
-			c.icon(Theme.I_SLIDERS, 12, x + 18, y + 18, Theme.alpha(Theme.TEXT_MUTED, hv));
 		}
 		if (click) {
 			open(m, ui);
@@ -520,158 +501,170 @@ public final class MenuView {
 		Widgets.listening = null;
 	}
 
-	/** A mod's own page: breadcrumb header, a hero card, settings in grouped cards, a live preview stage on the right. */
-	private void modPage(Ui ui, Module m, float mx, float py, float mw, float hh, float x, float y, float w, float h, float pe, Object screen) {
+	private static final int[] CHIP_ICONS = {Theme.I_GRID, Theme.I_HEART, Theme.I_LAYOUT, Theme.I_MOUSE, Theme.I_EYE, Theme.I_GAUGE};
+	/** Card state colours (everything else stays monochrome like the rest of the Native UI). */
+	private static final int ON = 0xFF22C55E, OFF = 0xFFEF4444;
+	/** The module the drawer shows while it slides out (selected is already null then). */
+	private Module drawerMod;
+
+	/** Category list on the left of the mods grid (Feather style): icon, name, count, a blue marker on the active one. */
+	private void categories(Ui ui, float x, float y, float w, float h) {
 		Canvas c = ui.c;
-		float by = py + (hh - 32) / 2;
-		if (ui.iconButton("menu:page:back", mx + 14, by, 32, Theme.I_ARROW_LEFT, "Back")) {
-			selected = null;
-			pageAt = ui.now;
-			return;
+		c.text(Fonts.SEMIBOLD, 10, "CATEGORIES", x + 6, y + 2, Theme.TEXT_MUTED);
+		float ry = y + 24, rh = 38;
+		for (int i = 0; i < CHIPS.length; i++) {
+			int n = 0;
+			for (Module m : Modules.all()) {
+				if (matches(m, i)) {
+					n++;
+				}
+			}
+			String id = "menu:cat:" + i;
+			boolean over = ui.hover(x, ry, w, rh);
+			if (ui.clicked(id, x, ry, w, rh) && chip != i) {
+				chip = i;
+				grid.target = grid.offset = 0;
+				pageAt = ui.now;
+			}
+			float on = ui.anim(id + "#on", chip == i, 16f);
+			float hv = ui.anim(id + "#h", over, 14f);
+			c.round(x, ry, w, rh, 10, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv * 0.7f), 0x16FFFFFF, on));
+			if (on > 0.01f) {
+				c.outline(x, ry, w, rh, 10, 1, Theme.alpha(Theme.HAIRLINE_STRONG, on));
+				c.round(x - 5, ry + (rh - 18 * on) / 2, 3, 18 * on, 1.5f, Theme.alpha(Theme.WHITE, on));
+			}
+			int fg = Theme.mix(Theme.mix(Theme.TEXT_SECONDARY, Theme.TEXT_STRONG, hv), Theme.TEXT_STRONG, on);
+			c.icon(CHIP_ICONS[i], 15, x + 22, ry + rh / 2, fg);
+			c.text(Fonts.SEMIBOLD, 12.5f, CHIPS[i], x + 40, ry + (rh - c.lineHeight(Fonts.SEMIBOLD, 12.5f)) / 2, fg);
+			String count = String.valueOf(n);
+			float nw = c.textWidth(Fonts.MEDIUM, 10.5f, count);
+			c.round(x + w - nw - 22, ry + (rh - 20) / 2, nw + 12, 20, 10, Theme.mix(Theme.SUBTLE, 0xFFF4F4F5, on));
+			c.text(Fonts.MEDIUM, 10.5f, count, x + w - nw - 16, ry + (rh - c.lineHeight(Fonts.MEDIUM, 10.5f)) / 2, Theme.mix(Theme.TEXT_MUTED, Theme.SOLID_FG, on));
+			ry += rh + 4;
 		}
-		// breadcrumb: Mods > Name
-		float bx = mx + 58;
-		float cw = c.textWidth(Fonts.MEDIUM, 13.5f, "Mods");
-		boolean crumbOver = ui.hover(bx - 6, by, cw + 12, 32);
-		if (crumbOver) {
+		int active = 0;
+		for (Module m : Modules.all()) {
+			if (m.enabled) {
+				active++;
+			}
+		}
+		String a = active + " of " + Modules.all().size() + " enabled";
+		c.circle(x + 10, y + h - 12, 3.5f, ON);
+		c.text(Fonts.MEDIUM, 11, a, x + 20, y + h - 12 - c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.TEXT_MUTED);
+	}
+
+	/** The wide ENABLED / DISABLED bar of a Feather card. True when clicked. */
+	private static boolean stateButton(Ui ui, String id, float x, float y, float w, float h, boolean enabled, float fs) {
+		Canvas c = ui.c;
+		boolean over = ui.hover(x, y, w, h);
+		boolean click = ui.clicked(id, x, y, w, h);
+		float hv = ui.anim(id + "#h", over, 16f);
+		float on = ui.anim(id + "#on", enabled, 14f);
+		int tint = Theme.mix(OFF, ON, on);
+		c.round(x, y, w, h, 8, Theme.alpha(tint, 0.16f + 0.1f * hv));
+		c.outline(x, y, w, h, 8, 1, Theme.alpha(tint, 0.35f + 0.25f * hv));
+		String t = enabled ? "ENABLED" : "DISABLED";
+		float tw = c.textWidth(Fonts.BOLD, fs, t);
+		c.text(Fonts.BOLD, fs, t, x + (w - tw) / 2, y + (h - c.lineHeight(Fonts.BOLD, fs)) / 2, Theme.mix(0xFFFCA5A5, 0xFF86EFAC, on));
+		if (over) {
 			ui.cursorHand = true;
 		}
-		c.text(Fonts.MEDIUM, 13.5f, "Mods", bx, py + (hh - c.lineHeight(Fonts.MEDIUM, 13.5f)) / 2, crumbOver ? Theme.TEXT_STRONG : Theme.TEXT_MUTED);
-		if (ui.clicked("menu:page:crumb", bx - 6, by, cw + 12, 32)) {
+		return click;
+	}
+
+	/** A mod's settings in a drawer that slides in over the grid: header, state bar, live preview, settings, actions. */
+	private void modDrawer(Ui ui, Module m, float x, float y, float w, float h, Object screen) {
+		Canvas c = ui.c;
+		c.shadow(x, y, w, h, 16, 32, 0xAA000000);
+		c.round(x, y, w, h, 16, 0xFF0A0B0F);
+		c.outline(x, y, w, h, 16, 1, Theme.HAIRLINE_STRONG);
+		float ic = 44, pad = 18;
+		c.round(x + pad, y + 18, ic, ic, 12, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
+		c.icon(m.icon, 20, x + pad + ic / 2, y + 18 + ic / 2, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
+		float tx = x + pad + ic + 14;
+		c.text(Fonts.SEMIBOLD, 15, c.ellipsize(Fonts.SEMIBOLD, 15, m.name, w - (tx - x) - 90), tx, y + 20, Theme.TEXT_STRONG);
+		c.text(Fonts.MEDIUM, 10, m.category.toUpperCase(Locale.ROOT), tx, y + 42, Theme.TEXT_MUTED);
+		heart(ui, "menu:drawer:fav", m, x + w - 82, y + 22, true);
+		if (ui.iconButton("menu:drawer:close", x + w - 50, y + 20, 30, Theme.I_X, "Close (Esc)")) {
 			selected = null;
-			pageAt = ui.now;
 			return;
 		}
-		c.icon(Theme.I_CHEVRON_RIGHT, 13, bx + cw + 14, py + hh / 2, Theme.TEXT_MUTED);
-		c.text(Fonts.SEMIBOLD, 15, c.ellipsize(Fonts.SEMIBOLD, 15, m.name, mw * 0.35f), bx + cw + 28, py + (hh - c.lineHeight(Fonts.SEMIBOLD, 15)) / 2, Theme.TEXT_STRONG);
-		// header actions
-		float ax = mx + mw - 20;
-		ax -= 104;
-		if (ui.button("menu:page:hud", ax, py + (hh - 34) / 2, 104, 34, m.isHud() ? "Move" : "Edit HUD", Theme.I_MOVE, Ui.BTN_GLASS)) {
-			if (m.isHud() && !m.enabled) {
-				m.setEnabled(true);
-				Modules.changed();
-			}
-			openEditor(screen);
+		if (stateButton(ui, "menu:drawer:on:" + m.id, x + pad, y + 76, w - pad * 2, 36, m.enabled, 12)) {
+			m.setEnabled(!m.enabled);
+			Modules.changed();
 		}
-		ax -= 96;
-		if (ui.button("menu:page:reset", ax, py + (hh - 34) / 2, 88, 34, "Reset", Theme.I_RESET, Ui.BTN_GHOST)) {
+		float sy = y + 126, sh = y + h - sy - 62;
+		float off = detail.begin(ui, x, sy, w - 4, sh);
+		float ry = sy - off, cx = x + pad, cw = w - pad * 2 - 6;
+		ry = wrap(c, Fonts.REGULAR, 11.5f, m.description, cx, ry, cw, 17, Theme.TEXT_SECONDARY, 3) + 14;
+		float wh = 120;
+		c.round(cx, ry, cw, wh, 12, 0x66000000);
+		c.outline(cx, ry, cw, wh, 12, 1, Theme.HAIRLINE);
+		c.text(Fonts.SEMIBOLD, 9.5f, "PREVIEW", cx + 12, ry + 9, Theme.TEXT_MUTED);
+		if (m instanceof HudModule) {
+			HudModule hm = (HudModule) m;
+			c.pushClip(cx + 1, ry + 1, cw - 2, wh - 2);
+			float keep = hm.scale.value;
+			float[] sz = hm.measure(c, sample);
+			float k = Math.min(1.4f, Math.min((cw - 40) / Math.max(1, sz[0]), (wh - 34) / Math.max(1, sz[1])));
+			hm.scale.value = keep * Math.min(k, Math.max(1f, k * 0.6f)); // fit the box without touching the saved size
+			sz = hm.measure(c, sample);
+			c.pushAlpha(m.enabled ? 1f : 0.35f);
+			hm.paint(ui, cx + (cw - sz[0]) / 2, ry + 8 + (wh - sz[1]) / 2, sample);
+			c.popAlpha();
+			hm.scale.value = keep;
+			c.popClip();
+		} else if (!m.preview(ui, sample, cx + 1, ry + 1, cw - 2, wh - 2)) {
+			c.circle(cx + cw / 2, ry + wh / 2 + 6, 30, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
+			c.icon(m.icon, 24, cx + cw / 2, ry + wh / 2 + 6, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
+		}
+		ry += wh + 16;
+		ry = settingsCard(ui, m, "SETTINGS", m.shownSettings(), cx, ry, cw);
+		if (m instanceof HudModule) {
+			ry = settingsCard(ui, m, "APPEARANCE", ((HudModule) m).shownAppearance(), cx, ry, cw);
+		}
+		detail.end(ui, ry + off - sy + 4);
+		float fy = y + h - 52;
+		c.fill(x + pad, fy - 10, w - pad * 2, 1, Theme.HAIRLINE);
+		float half = (w - pad * 2 - 10) / 2;
+		if (ui.button("menu:drawer:reset", x + pad, fy, half, 36, "Reset", Theme.I_RESET, Ui.BTN_GHOST)) {
 			m.resetSettings();
 			if (m instanceof HudModule) {
 				((HudModule) m).resetPosition();
 			}
 			Modules.changed();
 		}
-		ax -= 40;
-		heart(ui, "menu:page:fav", m, ax + 4, py + (hh - 24) / 2, true);
+		if (ui.button("menu:drawer:hud", x + pad + half + 10, fy, half, 36, m.isHud() ? "Move on screen" : "Edit HUD", Theme.I_MOVE, Ui.BTN_PRIMARY)) {
+			if (m.isHud() && !m.enabled) {
+				m.setEnabled(true);
+				Modules.changed();
+			}
+			openEditor(screen);
+		}
+	}
 
-		c.pushAlpha(pe);
-		y += (1 - pe) * 10;
-		float pw = Math.min(340, w * 0.42f);
-		float lw = w - pw - 20;
-		float off = detail.begin(ui, x, y, lw + 8, h);
-		float ry = y - off;
-		float cardW = lw - 6;
-		// hero card
-		float heroH = 92;
-		c.round(x, ry, cardW, heroH, 14, CARD);
-		c.outline(x, ry, cardW, heroH, 14, 1, Theme.HAIRLINE);
-		float ic = 52;
-		c.round(x + 16, ry + (heroH - ic) / 2, ic, ic, 14, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
-		c.icon(m.icon, 22, x + 16 + ic / 2, ry + heroH / 2, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
-		float tx = x + 16 + ic + 16;
-		float stateW = 86;
-		c.text(Fonts.SEMIBOLD, 16, c.ellipsize(Fonts.SEMIBOLD, 16, m.name, cardW - (tx - x) - stateW - 16), tx, ry + 16, Theme.TEXT_STRONG);
-		float catW = c.textWidth(Fonts.MEDIUM, 10, m.category.toUpperCase(java.util.Locale.ROOT)) + 14;
-		c.round(tx, ry + 42, catW, 18, 9, Theme.SUBTLE_HOVER);
-		c.text(Fonts.MEDIUM, 10, m.category.toUpperCase(java.util.Locale.ROOT), tx + 7, ry + 42 + (18 - c.lineHeight(Fonts.MEDIUM, 10)) / 2, Theme.TEXT_SECONDARY);
-		wrap(c, Fonts.REGULAR, 11, m.description, tx + catW + 10, ry + 43, cardW - (tx - x) - catW - 10 - stateW - 16, 14, Theme.TEXT_MUTED, 2);
-		String st = m.enabled ? "On" : "Off";
-		float sw2 = c.textWidth(Fonts.SEMIBOLD, 11.5f, st);
-		c.text(Fonts.SEMIBOLD, 11.5f, st, x + cardW - 16 - 38 - 8 - sw2, ry + heroH / 2 - c.lineHeight(Fonts.SEMIBOLD, 11.5f) / 2, m.enabled ? Theme.ONLINE : Theme.TEXT_MUTED);
-		if (ui.toggle("menu:page:on:" + m.id, x + cardW - 16 - 38, ry + heroH / 2 - 10, m.enabled)) {
-			m.setEnabled(!m.enabled);
-			Modules.changed();
+	private float settingsCard(Ui ui, Module m, String title, List<Setting> rows, float x, float y, float w) {
+		if (rows.isEmpty()) {
+			return y;
 		}
-		ry += heroH + 18;
-		// settings card(s)
-		if (!m.shownSettings().isEmpty()) {
-			ry = section(c, "SETTINGS", x + 2, ry);
-			float ch = 0;
-			for (Setting s : m.shownSettings()) {
-				ch += Widgets.rowHeight(s);
-			}
-			c.round(x, ry, cardW, ch + 4, 14, CARD);
-			c.outline(x, ry, cardW, ch + 4, 14, 1, Theme.HAIRLINE);
-			float cy2 = ry + 2;
-			boolean first = true;
-			for (Setting s : m.shownSettings()) {
-				if (!first) {
-					c.fill(x + 16, cy2, cardW - 32, 1, Theme.HAIRLINE);
-				}
-				first = false;
-				Widgets.row(ui, "menu:set:" + m.id + ":" + s.id, x + 16, cy2, cardW - 32, s);
-				cy2 += Widgets.rowHeight(s);
-			}
-			ry += ch + 4 + 18;
+		Canvas c = ui.c;
+		y = section(c, title, x + 2, y);
+		float ch = 0;
+		for (Setting s : rows) {
+			ch += Widgets.rowHeight(s);
 		}
-		if (m instanceof HudModule) {
-			ry = section(c, "APPEARANCE", x + 2, ry);
-			float ch = 0;
-			for (Setting s : ((HudModule) m).shownAppearance()) {
-				ch += Widgets.rowHeight(s);
+		c.round(x, y, w, ch + 4, 12, CARD);
+		c.outline(x, y, w, ch + 4, 12, 1, Theme.HAIRLINE);
+		float cy = y + 2;
+		for (int i = 0; i < rows.size(); i++) {
+			Setting s = rows.get(i);
+			if (i > 0) {
+				c.fill(x + 14, cy, w - 28, 1, Theme.HAIRLINE);
 			}
-			c.round(x, ry, cardW, ch + 4, 14, CARD);
-			c.outline(x, ry, cardW, ch + 4, 14, 1, Theme.HAIRLINE);
-			float cy2 = ry + 2;
-			boolean first = true;
-			for (Setting s : ((HudModule) m).shownAppearance()) {
-				if (!first) {
-					c.fill(x + 16, cy2, cardW - 32, 1, Theme.HAIRLINE);
-				}
-				first = false;
-				Widgets.row(ui, "menu:set:" + m.id + ":" + s.id, x + 16, cy2, cardW - 32, s);
-				cy2 += Widgets.rowHeight(s);
-			}
-			ry += ch + 4 + 18;
+			Widgets.row(ui, "menu:set:" + m.id + ":" + s.id, x + 14, cy, w - 28, s);
+			cy += Widgets.rowHeight(s);
 		}
-		detail.end(ui, ry + off - y + 8);
-
-		// live preview stage
-		float px = x + w - pw;
-		c.round(px, y, pw, h, 14, 0x66000000);
-		glow(c, px, y, pw, h * 0.5f, 14, 0x0CFFFFFF);
-		c.outline(px, y, pw, h, 14, 1, Theme.HAIRLINE);
-		c.text(Fonts.SEMIBOLD, 10.5f, "LIVE PREVIEW", px + 16, y + 14, Theme.TEXT_MUTED);
-		float wy = y + 40, wh = Math.min(h * 0.5f, 200);
-		c.round(px + 12, wy, pw - 24, wh, 12, 0x55000000);
-		if (m instanceof HudModule) {
-			HudModule hm = (HudModule) m;
-			c.pushClip(px + 13, wy + 1, pw - 26, wh - 2);
-			float keep = hm.scale.value;
-			float[] sz = hm.measure(c, sample);
-			float k = Math.min(1.6f, Math.min((pw - 60) / Math.max(1, sz[0]), (wh - 30) / Math.max(1, sz[1])));
-			hm.scale.value = keep * Math.min(k, Math.max(1f, k * 0.6f)); // fit the box without touching the saved size
-			sz = hm.measure(c, sample);
-			c.pushAlpha(m.enabled ? 1f : 0.35f);
-			hm.paint(ui, px + (pw - sz[0]) / 2, wy + (wh - sz[1]) / 2, sample);
-			c.popAlpha();
-			hm.scale.value = keep;
-			c.popClip();
-		} else if (!m.preview(ui, sample, px + 13, wy + 1, pw - 26, wh - 2)) {
-			c.circle(px + pw / 2, wy + wh / 2, 38, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
-			c.icon(m.icon, 30, px + pw / 2, wy + wh / 2, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
-		}
-		c.outline(px + 12, wy, pw - 24, wh, 12, 1, Theme.HAIRLINE);
-		float ty = wy + wh + 18;
-		c.text(Fonts.SEMIBOLD, 13.5f, m.name, px + 16, ty, Theme.TEXT_STRONG);
-		ty += 22;
-		wrap(c, Fonts.REGULAR, 11.5f, m.description, px + 16, ty, pw - 32, 17, Theme.TEXT_SECONDARY, 4);
-		c.fill(px + 16, y + h - 44, pw - 32, 1, Theme.HAIRLINE);
-		c.circle(px + 20, y + h - 22, 3.5f, m.enabled ? Theme.ONLINE : Theme.TEXT_MUTED);
-		c.text(Fonts.MEDIUM, 11, (m.enabled ? "On" : "Off") + (m.isHud() ? "  \u00b7  drag it around in Edit HUD" : ""), px + 30,
-				y + h - 22 - c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.TEXT_MUTED);
-		c.popAlpha();
+		return y + ch + 4 + 16;
 	}
 
 	private void openEditor(Object screen) {

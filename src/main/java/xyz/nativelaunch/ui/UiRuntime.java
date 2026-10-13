@@ -249,46 +249,52 @@ public final class UiRuntime {
 		}
 		ensure();
 		float scale = Math.max(0.75f, Math.min(fbW / 1280f, fbH / 760f)) * config.scale;
-		canvas.begin(fbW, fbH, scale);
 		List<Input.Event> events = Input.drain();
-		ui.begin(events);
-		if (kind == McBridge.TITLE) {
-			title.draw(ui, screen);
-		} else if (kind == McBridge.RELAY) {
-			if (!mc.inWorld()) {
-				title.background(ui); // nothing is drawn behind us outside a world
+		// a frame that filled the atlas lost glyphs / avatars half way (the Relay blink): draw it again on a fresh atlas
+		for (int pass = 0; pass < 2; pass++) {
+			canvas.begin(fbW, fbH, scale);
+			ui.begin(pass == 0 ? events : java.util.Collections.<Input.Event>emptyList());
+			if (kind == McBridge.TITLE) {
+				title.draw(ui, screen);
+			} else if (kind == McBridge.RELAY) {
+				if (!mc.inWorld()) {
+					title.background(ui); // nothing is drawn behind us outside a world
+				}
+				relay.draw(ui, screen, false);
+			} else if (kind == McBridge.PAUSE) {
+				pause.draw(ui, screen);
+			} else if (kind == McBridge.MENU) {
+				if (!inWorld) {
+					title.background(ui);
+				}
+				menu.draw(ui, screen, inWorld);
+			} else if (kind == McBridge.HUD) {
+				if (!inWorld) {
+					title.background(ui);
+				}
+				editor.draw(ui, screen, inWorld, inWorld ? game : null);
+			} else if (classicTitle) {
+				drawPill(ui);
+			} else {
+				if (hud) {
+					HudOverlay.draw(ui, game);
+				}
+				if (toasts != null) {
+					toasts.draw(ui);
+				}
 			}
-			relay.draw(ui, screen, false);
-		} else if (kind == McBridge.PAUSE) {
-			pause.draw(ui, screen);
-		} else if (kind == McBridge.MENU) {
-			if (!inWorld) {
-				title.background(ui);
+			if (wantBrand && brand instanceof xyz.nativelaunch.ui.mod.HudModule) {
+				xyz.nativelaunch.ui.mod.HudModule mark = (xyz.nativelaunch.ui.mod.HudModule) brand;
+				float[] sz = mark.measure(canvas, game);
+				mark.paint(ui, xyz.nativelaunch.ui.mod.HudModule.pos(mark.fx, canvas.width(), sz[0]),
+						xyz.nativelaunch.ui.mod.HudModule.pos(mark.fy, canvas.height(), sz[1]), game);
 			}
-			menu.draw(ui, screen, inWorld);
-		} else if (kind == McBridge.HUD) {
-			if (!inWorld) {
-				title.background(ui);
-			}
-			editor.draw(ui, screen, inWorld, inWorld ? game : null);
-		} else if (classicTitle) {
-			drawPill(ui);
-		} else {
-			if (hud) {
-				HudOverlay.draw(ui, game);
-			}
-			if (toasts != null) {
-				toasts.draw(ui);
+			ui.tooltips();
+			ui.end();
+			if (!canvas.atlas.isFull()) {
+				break;
 			}
 		}
-        if (wantBrand && brand instanceof xyz.nativelaunch.ui.mod.HudModule) {
-            xyz.nativelaunch.ui.mod.HudModule mark = (xyz.nativelaunch.ui.mod.HudModule) brand;
-            float[] sz = mark.measure(canvas, game);
-            mark.paint(ui, xyz.nativelaunch.ui.mod.HudModule.pos(mark.fx, canvas.width(), sz[0]),
-                    xyz.nativelaunch.ui.mod.HudModule.pos(mark.fy, canvas.height(), sz[1]), game);
-        }
-		ui.tooltips();
-		ui.end();
 		gl.render(canvas);
 	}
 
@@ -568,7 +574,7 @@ public final class UiRuntime {
 		if (action == 1 && key == config.menuKey && (mods & (Ui.MOD_CONTROL | Ui.MOD_ALT | Ui.MOD_SUPER)) == 0) {
 			try {
 				if (mc.screen() == null && mc.inWorld()) {
-					openHub();
+					openMenu(null, 0); // Feather style: the mods menu straight away (Edit HUD is one click inside)
 					return true;
 				}
 			} catch (Throwable t) {

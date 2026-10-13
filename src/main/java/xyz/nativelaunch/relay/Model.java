@@ -201,6 +201,19 @@ public final class Model {
 		return n;
 	}
 
+	/** The server's copy of a message we sent, still showing our local picture (no reload, no blink). */
+	public static Message withLocal(Message m, String localKey) {
+		if (localKey == null || m.localKey != null) {
+			return m;
+		}
+		Message n = new Message(m.id, m.senderId, m.senderName, m.content, m.createdAt, m.pending, m.failed, m.system, m.deleted, m.mediaUrl, m.mediaName, localKey);
+		n.reply = m.reply;
+		n.reactions = m.reactions;
+		n.edited = m.edited;
+		n.read = m.read;
+		return n;
+	}
+
 	/** One chat (a DM or a group) and the messages loaded so far, oldest first. */
 	public static final class Conversation {
 		public final String key; // "dm:<friendId>" or "g:<groupId>"

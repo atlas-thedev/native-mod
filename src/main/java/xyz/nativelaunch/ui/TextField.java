@@ -17,6 +17,9 @@ public final class TextField {
 		this.id = id;
 	}
 
+	/** No box of its own: the owner draws it (the Relay composer). */
+	public boolean bare;
+
 	public String value() {
 		return text.toString();
 	}
@@ -67,8 +70,10 @@ public final class TextField {
 		}
 
 		float fw = ui.anim(id + "#f", focused, 14f);
-		ui.c.round(x, y, w, h, 10, Theme.mix(0xCC0B0C10, 0xF00E1014, fw));
-		ui.c.outline(x, y, w, h, 10, 1, Theme.mix(over ? Theme.HAIRLINE_STRONG : Theme.HAIRLINE, 0x47FFFFFF, fw));
+		if (!bare) {
+			ui.c.round(x, y, w, h, 10, Theme.mix(0xCC0B0C10, 0xF00E1014, fw));
+			ui.c.outline(x, y, w, h, 10, 1, Theme.mix(over ? Theme.HAIRLINE_STRONG : Theme.HAIRLINE, 0x47FFFFFF, fw));
+		}
 		float lh = ui.c.lineHeight(Fonts.REGULAR, size);
 		float ty = y + (h - lh) / 2;
 		String s = text.toString();

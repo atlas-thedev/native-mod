@@ -775,6 +775,16 @@ public final class MojangMc implements McBridge {
 	}
 
 	@Override
+	public double videoOption(String key) {
+		return xyz.nativelaunch.ui.VideoOptions.read(client().options, "particles".equals(key) ? "particles" : "entityDistanceScaling", "value");
+	}
+
+	@Override
+	public void setVideoOption(String key, double value) {
+		xyz.nativelaunch.ui.VideoOptions.write(client().options, "particles".equals(key) ? "particles" : "entityDistanceScaling", "value", value);
+	}
+
+	@Override
 	public boolean smoothCamera() {
 		return client().options.smoothCamera;
 	}

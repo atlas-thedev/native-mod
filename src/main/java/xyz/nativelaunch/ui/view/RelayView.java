@@ -89,6 +89,7 @@ public final class RelayView {
 
 	public RelayView() {
 		input.maxLength = 2000;
+		input.bare = true;
 		chatScrollsInit();
 	}
 
@@ -165,12 +166,17 @@ public final class RelayView {
 		float in = ui.anim("relay#in", 1f, 9f);
 		boolean overTitle = !UiRuntime.mc().inWorld();
 		c.fill(0, 0, W, H, Theme.alpha(overTitle ? 0xB8000000 : 0x8C000000, in));
-		float pw = Math.min(1040, W - 48), ph = Math.min(660, H - 48);
+		float pw = Math.min(1080, W - 48), ph = Math.min(680, H - 48);
 		float px = (W - pw) / 2, py = (H - ph) / 2 + (1 - in) * 18;
 		c.pushAlpha(in);
-		c.shadow(px, py + 10, pw, ph, 18, 40, 0x99000000);
-		c.round(px, py, pw, ph, 18, 0xF708090C);
-		c.outline(px, py, pw, ph, 18, 1, Theme.HAIRLINE);
+		c.shadow(px, py + 12, pw, ph, 20, 44, 0xAA000000);
+		c.round(px, py, pw, ph, 20, 0xFA0A0B0F);
+		// the sidebar sits on a slightly darker plate, like the launcher
+		float sbw = Math.min(300, pw * 0.34f);
+		c.pushClip(px, py, sbw, ph);
+		c.round(px, py, sbw + 24, ph, 20, 0xFF07080B);
+		c.popClip();
+		c.outline(px, py, pw, ph, 20, 1, Theme.HAIRLINE_STRONG);
 
 		if (bindingKey) {
 			for (int[] k : ui.keys) {
@@ -235,8 +241,13 @@ public final class RelayView {
 		if (client != null) {
 			RelayClient.State st = client.state;
 			int dot = st == RelayClient.State.ONLINE ? Theme.ONLINE : (st == RelayClient.State.CONNECTING ? Theme.IDLE : 0xFF71717A);
+			String label = st == RelayClient.State.ONLINE ? "Live" : st == RelayClient.State.CONNECTING ? "Connecting" : "Offline";
 			float tx = x + pad + c.textWidth(Fonts.BOLD, 19, "Relay") + 10;
-			c.circle(tx + 3, y + 18 + c.lineHeight(Fonts.BOLD, 19) / 2, 3.5f, dot);
+			float lw = c.textWidth(Fonts.SEMIBOLD, 10, label) + 22;
+			float ly = y + 18 + c.lineHeight(Fonts.BOLD, 19) / 2 - 10;
+			c.round(tx, ly, lw, 20, 10, Theme.alpha(dot, 0.14f));
+			c.circle(tx + 9, ly + 10, 3, dot);
+			c.text(Fonts.SEMIBOLD, 10, label, tx + 16, ly + (20 - c.lineHeight(Fonts.SEMIBOLD, 10)) / 2, Theme.mix(dot, 0xFFFFFFFF, 0.35f));
 		}
 		if (ui.iconButton("relay:settings", x + w - pad - 30, y + 16, 30, Theme.I_SETTINGS, "Chat settings")) {
 			settingsOpen = !settingsOpen;
@@ -246,7 +257,8 @@ public final class RelayView {
 		float tw = (w - pad * 2) / 2;
 		c.round(x + pad, ty, w - pad * 2, 34, 10, Theme.SUBTLE);
 		float tabPos = ui.anim("relay:tab", tab, 16f);
-		c.round(x + pad + 3 + tabPos * tw, ty + 3, tw - 6, 28, 8, 0xFF1C1D22);
+		c.shadow(x + pad + 3 + tabPos * tw, ty + 4, tw - 6, 28, 8, 6, 0x66000000);
+		c.round(x + pad + 3 + tabPos * tw, ty + 3, tw - 6, 28, 8, 0xFF1F2027);
 		int fu = 0, gu = 0;
 		if (client != null) {
 			for (Model.Friend f : client.friends) {
@@ -354,9 +366,10 @@ public final class RelayView {
 		}
 		float hv = ui.anim("row:" + key, over, 14f);
 		float sv = ui.anim("rowsel:" + key, sel, 14f);
-		c.round(x, y, w, h, 11, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv), 0xFF16171C, sv));
+		c.round(x, y, w, h, 12, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv * 0.8f), 0xFF17181E, sv));
 		if (sv > 0.01f) {
-			c.outline(x, y, w, h, 11, 1, Theme.alpha(Theme.HAIRLINE_STRONG, sv));
+			c.outline(x, y, w, h, 12, 1, Theme.alpha(Theme.HAIRLINE_STRONG, sv));
+			c.round(x - 4, y + (h - 22 * sv) / 2, 3, 22 * sv, 1.5f, Theme.alpha(Theme.WHITE, sv));
 		}
 		float av = 36;
 		float ax = x + 9, ay = y + (h - av) / 2;
@@ -611,7 +624,7 @@ public final class RelayView {
 			}
 			boolean rowHover = ui.interactive && viewer == null && !gifOpen && !pickerHover && ui.my >= my0 && ui.my <= my0 + mh && ui.hover(x, rowTop, w - 10, cy - rowTop);
 			if (rowHover) {
-				c.fill(x, rowTop - 1, w - 10, cy - rowTop + 1, 0x0AFFFFFF);
+				c.round(x + 8, rowTop - 2, w - 22, cy - rowTop + 3, 8, 0x0AFFFFFF);
 			}
 			if ((rowHover || m.id != null && m.id.equals(reactFor)) && !m.system && visible(rowTop, 24, my0, mh)) {
 				tools(ui, client, m, group, mineMsg, canModerate, x + w - 22, rowTop - 4, my0, mh);
@@ -765,8 +778,14 @@ public final class RelayView {
 			input.focus(ui);
 		}
 		String before2 = input.value();
-		float btn = 46;
-		boolean send = input.draw(ui, x + pad, iy, w - pad * 2 - btn * 3 - 24, inputH, editingId != null ? "Edit your message" : staged != null ? "Add a caption (optional)" : "Message " + (group ? "#" + name : "@" + name), 13.5f);
+		float btn = 36;
+		// one composer box: the text on the left, attach / GIF / send inside it on the right
+		float boxW = w - pad * 2;
+		float fa = ui.anim("relay:composer#f", input.focused(ui), 14f);
+		c.round(x + pad, iy, boxW, inputH, 14, Theme.mix(0xFF101116, 0xFF13141A, fa));
+		c.outline(x + pad, iy, boxW, inputH, 14, 1, Theme.mix(Theme.HAIRLINE_STRONG, Theme.BORDER_HOVER, fa));
+		boolean send = input.draw(ui, x + pad + 4, iy, boxW - btn * 3 - 26, inputH, editingId != null ? "Edit your message" : staged != null ? "Add a caption (optional)" : "Message " + (group ? "#" + name : "@" + name), 13.5f);
+		float by0 = iy + (inputH - btn) / 2;
 		if (input.pasteMiss && pasting.compareAndSet(false, true)) {
 			new Thread(() -> {
 				try {
@@ -780,16 +799,16 @@ public final class RelayView {
 			client.typingPing(selected);
 		}
 		// attach button: pick a picture from disk, like the launcher's (Ctrl+V still pastes one)
-		float ax = x + w - pad - btn * 3 - 16;
-		boolean aOver = ui.hover(ax, iy, btn, inputH);
+		float ax = x + w - pad - btn * 3 - 13;
+		boolean aOver = ui.hover(ax, by0, btn, btn);
 		boolean busy = picking.get();
 		float aHv = ui.anim("relay:attach", aOver || busy || shotsOpen, 14f);
-		boolean aClick = ui.clicked("relay:attach", ax, iy, btn, inputH);
-		c.round(ax, iy, btn, inputH, 12, Theme.mix(Theme.SUBTLE, 0xFF26272D, aHv));
+		boolean aClick = ui.clicked("relay:attach", ax, by0, btn, btn);
+		c.round(ax, by0, btn, btn, 10, Theme.alpha(0xFFFFFFFF, 0.1f * aHv));
 		if (busy) {
-			ui.dots(ax + btn / 2, iy + inputH / 2, Theme.TEXT_SECONDARY);
+			ui.dots(ax + btn / 2, by0 + btn / 2, Theme.TEXT_SECONDARY);
 		} else {
-			c.icon(Theme.I_PLUS, 18, ax + btn / 2, iy + inputH / 2, staged != null ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
+			c.icon(Theme.I_PLUS, 17, ax + btn / 2, by0 + btn / 2, staged != null || aHv > 0.5f ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
 		}
 		if (aOver) {
 			ui.cursorHand = true;
@@ -804,13 +823,13 @@ public final class RelayView {
 			}
 		}
 		// GIF button
-		float gx = x + w - pad - btn * 2 - 8;
-		boolean gOver = ui.hover(gx, iy, btn, inputH);
+		float gx = x + w - pad - btn * 2 - 9;
+		boolean gOver = ui.hover(gx, by0, btn, btn);
 		float gHv = ui.anim("relay:gifbtn", gOver || gifOpen, 14f);
-		boolean gClick = ui.clicked("relay:gifbtn", gx, iy, btn, inputH);
-		c.round(gx, iy, btn, inputH, 12, Theme.mix(Theme.SUBTLE, 0xFF26272D, gHv));
-		float gw = c.textWidth(Fonts.BOLD, 12, "GIF");
-		c.text(Fonts.BOLD, 12, "GIF", gx + (btn - gw) / 2, iy + (inputH - c.lineHeight(Fonts.BOLD, 12)) / 2, gifOpen ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
+		boolean gClick = ui.clicked("relay:gifbtn", gx, by0, btn, btn);
+		c.round(gx, by0, btn, btn, 10, Theme.alpha(0xFFFFFFFF, 0.1f * gHv));
+		float gw = c.textWidth(Fonts.BOLD, 11.5f, "GIF");
+		c.text(Fonts.BOLD, 11.5f, "GIF", gx + (btn - gw) / 2, by0 + (btn - c.lineHeight(Fonts.BOLD, 11.5f)) / 2, gifOpen || gHv > 0.5f ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
 		if (gClick) {
 			gifOpen = !gifOpen;
 			shotsOpen = false;
@@ -824,12 +843,13 @@ public final class RelayView {
 			}
 		}
 		boolean canSend = !input.value().trim().isEmpty() || staged != null;
-		float sx = x + w - pad - btn;
-		boolean over = ui.hover(sx, iy, btn, inputH);
+		float sx = x + w - pad - btn - 5;
+		boolean over = ui.hover(sx, by0, btn, btn);
 		float hv = ui.anim("relay:send", over && canSend, 14f);
-		boolean click = ui.clicked("relay:sendbtn", sx, iy, btn, inputH);
-		c.round(sx, iy, btn, inputH, 12, canSend ? Theme.mix(0xFFE4E4E7, 0xFFFFFFFF, hv) : Theme.SUBTLE);
-		c.icon(Theme.I_SEND, 18, sx + btn / 2, iy + inputH / 2, canSend ? Theme.SOLID_FG : Theme.TEXT_MUTED);
+		float ready = ui.anim("relay:send#on", canSend, 14f);
+		boolean click = ui.clicked("relay:sendbtn", sx, by0, btn, btn);
+		c.round(sx, by0, btn, btn, 10, Theme.mix(Theme.SUBTLE, Theme.mix(0xFFE4E4E7, 0xFFFFFFFF, hv), ready));
+		c.icon(Theme.I_SEND, 16, sx + btn / 2, by0 + btn / 2, Theme.mix(Theme.TEXT_MUTED, Theme.SOLID_FG, ready));
 		if ((send || click) && canSend) {
 			if (editingId != null) {
 				if (!input.value().trim().isEmpty()) {
@@ -1283,8 +1303,12 @@ public final class RelayView {
 
 	private float media(Ui ui, RelayClient client, Model.Message m, float x, float y, float maxW, float top, float viewH) {
 		Canvas c = ui.c;
-		String key = m.localKey != null ? m.localKey : m.mediaUrl;
+		// our own upload keeps its local copy (no reload when the server's copy replaces it) while the cache still has it
+		String key = m.localKey != null && (m.mediaUrl == null || ChatMedia.peek(m.localKey) != null) ? m.localKey : m.mediaUrl;
 		float[] known = mediaSizes.get(key);
+		if (known == null && m.localKey != null && !m.localKey.equals(key)) {
+			known = mediaSizes.get(m.localKey);
+		}
 		float dw = known != null ? known[0] : 240, dh = known != null ? (known[1] < 0 ? 54 : known[1]) : 150;
 		// Only pictures on (or near) the screen are fetched: asking for every picture of a long chat each frame made
 		// the media cache evict and re-download them in a loop, and the rows jumped between placeholder and real size.
@@ -1304,6 +1328,9 @@ public final class RelayView {
 				dw = maxW;
 			}
 			mediaSizes.put(key, new float[] {dw, dh});
+			if (m.mediaUrl != null && !m.mediaUrl.equals(key)) {
+				mediaSizes.put(m.mediaUrl, new float[] {dw, dh});
+			}
 		}
 		if (md == null || !visible(y, dh, top, viewH)) {
 			return dh;
@@ -1362,7 +1389,7 @@ public final class RelayView {
 
 	private void gifPicker(Ui ui, RelayClient client, float x, float y, float w, float h) {
 		Canvas c = ui.c;
-		if (ui.pressed && !ui.hover(x, y, w, h) && !ui.hover(x + w - 56, y + h + 8, 60, 60)) {
+		if (ui.pressed && !ui.hover(x, y, w, h) && !ui.hover(x + w - 130, y + h + 8, 130, 60)) {
 			gifOpen = false;
 			return;
 		}

@@ -20,12 +20,20 @@ public final class Keys {
 
 	/** Called for every key / mouse event the UI sees: keeps the fallback state in step. action: 1 press, 2 repeat, 0 release. */
 	public static void track(int code, int action) {
+		lastInput = System.nanoTime();
 		if (code < 0 || code >= MAX_CODE) {
 			return;
 		}
 		synchronized (DOWN) {
 			DOWN.set(code, action != 0);
 		}
+	}
+
+	private static volatile long lastInput = System.nanoTime();
+
+	/** System.nanoTime() of the last key / mouse button event. */
+	public static long lastInput() {
+		return lastInput;
 	}
 
 	/** Window lost focus: nothing can be held down any more. */

@@ -189,8 +189,16 @@ public final class RelayClient {
 		pool.execute(() -> {
 			try {
 				JsonObject page = getJson(messagesPath(c) + "?limit=60");
-				c.messages = parseMessages(page.getAsJsonArray("messages"), c);
-				c.hasMore = page.has("hasMore") && page.get("hasMore").getAsBoolean();
+				List<Model.Message> latest = parseMessages(page.getAsJsonArray("messages"), c);
+				boolean more = page.has("hasMore") && page.get("hasMore").getAsBoolean();
+				synchronized (c) {
+					// merge instead of replacing: reopening the chat used to drop the older pages already read, a message
+					// that arrived while the page loaded and our own pending sends (rows vanished, the view jumped)
+					List<Model.Message> merged = mergeLatest(c.messages, latest);
+					boolean keptOlder = !latest.isEmpty() && merged.get(0) != latest.get(0);
+					c.hasMore = keptOlder ? c.hasMore : more;
+					c.messages = merged;
+				}
 				c.loaded = true;
 				c.error = null;
 			} catch (Exception e) {
@@ -199,6 +207,32 @@ public final class RelayClient {
 				c.loading = false;
 			}
 		});
+	}
+
+	/** The latest page plus what only we have: older pages already loaded, pending / failed sends, newer live rows. */
+	static List<Model.Message> mergeLatest(List<Model.Message> have, List<Model.Message> page) {
+		if (have.isEmpty()) {
+			return page;
+		}
+		java.util.Set<String> ids = new java.util.HashSet<String>();
+		for (Model.Message m : page) {
+			ids.add(m.id);
+		}
+		long first = page.isEmpty() ? Long.MIN_VALUE : page.get(0).createdAt;
+		long last = page.isEmpty() ? Long.MIN_VALUE : page.get(page.size() - 1).createdAt;
+		List<Model.Message> out = new ArrayList<Model.Message>();
+		for (Model.Message m : have) {
+			if (!page.isEmpty() && m.createdAt < first && !ids.contains(m.id) && !m.pending && !m.failed) {
+				out.add(m);
+			}
+		}
+		out.addAll(page);
+		for (Model.Message m : have) {
+			if (!ids.contains(m.id) && (m.pending || m.failed || !page.isEmpty() && m.createdAt > last)) {
+				out.add(m);
+			}
+		}
+		return out;
 	}
 
 	/** Loads the page before the oldest loaded message. */
@@ -213,9 +247,20 @@ public final class RelayClient {
 			try {
 				JsonObject page = getJson(messagesPath(c) + "?limit=60&markRead=0&before=" + before);
 				List<Model.Message> older = parseMessages(page.getAsJsonArray("messages"), c);
-				List<Model.Message> merged = new ArrayList<Model.Message>(older);
-				merged.addAll(c.messages);
-				c.messages = merged;
+				synchronized (c) {
+					java.util.Set<String> have = new java.util.HashSet<String>();
+					for (Model.Message m : c.messages) {
+						have.add(m.id);
+					}
+					List<Model.Message> merged = new ArrayList<Model.Message>();
+					for (Model.Message m : older) {
+						if (!have.contains(m.id)) {
+							merged.add(m);
+						}
+					}
+					merged.addAll(c.messages);
+					c.messages = merged;
+				}
 				c.hasMore = page.has("hasMore") && page.get("hasMore").getAsBoolean();
 			} catch (Exception e) {
 				c.error = "Could not load older messages.";
@@ -255,23 +300,7 @@ public final class RelayClient {
 					body.addProperty("replyTo", pending.reply.id);
 				}
 				JsonObject res = postJson(messagesPath(c), body);
-				Model.Message sent = parseMessage(res.getAsJsonObject("message"), c);
-				synchronized (c) {
-					List<Model.Message> next = new ArrayList<Model.Message>();
-					boolean have = false;
-					for (Model.Message m : c.messages) {
-						if (m.id.equals(sent.id)) {
-							have = true;
-						}
-						if (!m.id.equals(tempId)) {
-							next.add(m);
-						}
-					}
-					if (!have) {
-						next.add(sent);
-					}
-					c.messages = next;
-				}
+				replacePending(c, tempId, parseMessage(res.getAsJsonObject("message"), c));
 			} catch (Exception e) {
 				fail(c, tempId);
 			}
@@ -337,7 +366,11 @@ public final class RelayClient {
 		body.addProperty("mediaKind", "image");
 		body.addProperty("isMedia", true);
 		JsonObject res = postJson(messagesPath(c), body);
-		Model.Message sent = parseMessage(res.getAsJsonObject("message"), c);
+		replacePending(c, tempId, parseMessage(res.getAsJsonObject("message"), c));
+	}
+
+	/** Puts the server's copy where the pending one was (it used to jump to the end and drop the local picture). */
+	private static void replacePending(Model.Conversation c, String tempId, Model.Message sent) {
 		synchronized (c) {
 			List<Model.Message> next = new ArrayList<Model.Message>();
 			boolean have = false;
@@ -345,11 +378,19 @@ public final class RelayClient {
 				if (m.id.equals(sent.id)) {
 					have = true;
 				}
-				if (!m.id.equals(tempId)) {
-					next.add(m);
-				}
 			}
-			if (!have) {
+			boolean placed = false;
+			for (Model.Message m : c.messages) {
+				if (m.id.equals(tempId)) {
+					if (!have) {
+						next.add(Model.withLocal(sent, m.localKey));
+						placed = true;
+					}
+					continue;
+				}
+				next.add(m);
+			}
+			if (!have && !placed) {
 				next.add(sent);
 			}
 			c.messages = next;
@@ -769,8 +810,12 @@ public final class RelayClient {
 			}
 			try {
 				JsonObject page = getJson(messagesPath(c) + "?limit=50&markRead=0");
-				if (!c.loaded) {
-					c.messages = parseMessages(page.getAsJsonArray("messages"), c);
+				List<Model.Message> latest = parseMessages(page.getAsJsonArray("messages"), c);
+				synchronized (c) {
+					if (c.loaded) {
+						return;
+					}
+					c.messages = mergeLatest(c.messages, latest);
 					c.hasMore = page.has("hasMore") && page.get("hasMore").getAsBoolean();
 					c.loaded = true;
 				}
@@ -1049,16 +1094,20 @@ public final class RelayClient {
 				}
 				if (!have) {
 					List<Model.Message> next = new ArrayList<Model.Message>();
-					// a pending copy of our own message is replaced by the real one
+					// a pending copy of our own message is replaced by the real one, in place (keeps its local picture)
 					boolean replaced = false;
+					boolean media = msg.mediaUrl != null;
 					for (Model.Message x : c.messages) {
-						if (!replaced && mine && x.pending && x.content.equals(msg.content)) {
+						if (!replaced && mine && x.pending && x.content.equals(msg.content) && media == (x.mediaUrl != null || x.localKey != null)) {
 							replaced = true;
+							next.add(Model.withLocal(msg, x.localKey));
 							continue;
 						}
 						next.add(x);
 					}
-					next.add(msg);
+					if (!replaced) {
+						next.add(msg);
+					}
 					c.messages = next;
 				}
 			}

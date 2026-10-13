@@ -31,7 +31,7 @@ public final class HudModules {
 		Modules.register(new ToggleSprint());
 		Modules.register(new ZoomModule());
 		Modules.register(new Fullbright());
-		Modules.register(new PerformanceModules.BackgroundFps());
+		Modules.register(new PerformanceModules.LagFree());
 		StatusModules.register();
 		Modules.register(new CrosshairModule());
 		Modules.register(new HitboxColours());
