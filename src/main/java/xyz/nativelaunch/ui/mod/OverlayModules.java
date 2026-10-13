@@ -62,7 +62,7 @@ final class OverlayModules {
 			drop(labels);
 			demo.has = true;
 			demo.title.set("NATIVE", 0xFFFFFF55);
-			String[] n = {"", "Players: 128", "Map: Lighthouse", "", "Kills: 7", "Coins: 2,450", "", "playnative.fun"};
+			String[] n = {"", "Players: 128", "Map: Lighthouse", "", "Kills: 7", "Coins: 2,450", "", "playnative.net"};
 			int[] col = {0, 0xFFFFFFFF, 0xFFFFFFFF, 0, 0xFF55FF55, 0xFFFFAA00, 0, 0xFFFFFF55};
 			demo.count = n.length;
 			for (int i = 0; i < n.length; i++) {

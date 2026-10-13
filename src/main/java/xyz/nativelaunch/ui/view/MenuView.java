@@ -1149,7 +1149,7 @@ public final class MenuView {
 		c.text(Fonts.SEMIBOLD, 14, "Native Client", x + 18 + lg + 12, y + 17, Theme.TEXT_STRONG);
 		c.text(Fonts.REGULAR, 11, "Mod " + modVersion() + "  \u00b7  Minecraft " + gameVersion(), x + 18 + lg + 12, y + 36, Theme.TEXT_MUTED);
 		c.fill(x + 18, y + 64, w - 36, 1, Theme.HAIRLINE);
-		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, "Updates install from the launcher. playnative.fun", w - 36), x + 18, y + 80, Theme.TEXT_SECONDARY);
+		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, "Updates install from the launcher. playnative.net", w - 36), x + 18, y + 80, Theme.TEXT_SECONDARY);
 		return y + h;
 	}
 

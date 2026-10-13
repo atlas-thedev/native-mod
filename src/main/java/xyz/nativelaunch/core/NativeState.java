@@ -14,10 +14,10 @@ import java.util.UUID;
  * on the render thread.
  */
 public final class NativeState {
-	public static final String DEFAULT_API = "https://api.playnative.fun";
+	public static final String DEFAULT_API = "https://api.playnative.net";
 
 	/** Hosts (and their subdomains) the mod will send the game ticket to over https. */
-	private static final String[] TRUSTED_HOSTS = {"playnative.fun", "nativelaunch.xyz"};
+	private static final String[] TRUSTED_HOSTS = {"playnative.net"};
 
 	private static final NativeState INSTANCE = new NativeState();
 
