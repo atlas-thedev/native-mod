@@ -32,6 +32,8 @@ public final class PlayerPreview implements CosmeticSink {
 	private long lastDrag;
 	private boolean slim;
 	private float armSwing, time;
+    /** A relaxed open-arm wardrobe pose; this does not change the in-game player model. */
+    private float armSpread = 0.20f;
 	private static final Image WHITE = new Image(2, 2, new int[] {-1, -1, -1, -1});
 
 	static {
@@ -49,7 +51,10 @@ public final class PlayerPreview implements CosmeticSink {
 
     public PlayerPreview(boolean hitbox) {
         this.hitbox = hitbox;
-        if (hitbox) yaw = -0.9f; // show the direction vector clearly, not end-on
+        if (hitbox) {
+            yaw = -0.9f; // show the direction vector clearly, not end-on
+            armSpread = 0.06f; // the debug preview keeps the ordinary standing pose
+        }
     }
 
 	public void draw(Ui ui, String id, float x, float y, float w, float h, Wardrobe.Item hover) {
@@ -332,11 +337,11 @@ public final class PlayerPreview implements CosmeticSink {
 		switch (a) {
 			case RIGHT_ARM:
 				b.translate(-5, slim ? 2.5f : 2, 0);
-				b.rotate(armSwing, 0, 0.06f + armSwing);
+				b.rotate(armSwing, 0, armSpread + armSwing);
 				break;
 			case LEFT_ARM:
 				b.translate(5, slim ? 2.5f : 2, 0);
-				b.rotate(-armSwing, 0, -0.06f - armSwing);
+				b.rotate(-armSwing, 0, -armSpread - armSwing);
 				break;
 			case RIGHT_LEG:
 				b.translate(-1.9f, 12, 0);

@@ -261,6 +261,7 @@ public final class Canvas {
 
 	/** A Native module or navigation icon centred on (cx, cy). */
 	public void icon(int codepoint, float size, float cx, float cy, int argb) {
+        if (codepoint == ModuleIcons.NATIVE_LOGO && NativeLogo.draw(this, cx - size / 2, cy - size / 2, size, argb)) return;
 		Font f = font(ModuleIcons.custom(codepoint) ? Fonts.MODULE_ICONS : Fonts.ICONS, size);
 		Glyph g = f.glyph(atlas, codepoint);
 		if (g.w <= 0) {
