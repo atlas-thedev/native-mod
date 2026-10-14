@@ -22,7 +22,8 @@ public final class WatermarkModule extends HudModule {
     @Override
     public float[] measure(Canvas c, Game g) {
         float k = scale.value;
-        size[0] = (text.value ? 24 + c.textWidth(Fonts.SEMIBOLD, 10, "Native Client") : 18) * k;
+        // measured at the drawn size (glyphs do not scale linearly) plus room for the shadow and a little padding
+        size[0] = text.value ? 24 * k + c.textWidth(Fonts.SEMIBOLD, 10 * k, "Native Client") + 4 * k : 18 * k;
         size[1] = 18 * k;
         return size;
     }

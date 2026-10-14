@@ -32,7 +32,7 @@ public final class MenuView {
 	private static final float RAIL = 54;
 	/** Corner radius of the floating top bars — squared off a little so square avatars sit well. */
 	private static final float PILL_R = 13;
-	private static final int[] TAB_ICONS = {Theme.I_PUZZLE, Theme.I_SHIRT, Theme.I_SETTINGS};
+	private static final int[] TAB_ICONS = {Theme.I_NAV_MODS, Theme.I_NAV_LOCKER, Theme.I_NAV_SETTINGS};
 	private static final String[] CHIPS = {"All", "Favorites", Module.HUD, Module.MECHANIC, Module.VISUAL, Module.PERFORMANCE};
 	private static final int[] SLOT_ICONS = {Theme.I_LAYERS, Theme.I_HAT, Theme.I_GLASSES, Theme.I_BACKPACK, Theme.I_FOOTPRINTS, Theme.I_HAND};
 	private static final int PANEL_BG = 0xF205060A;

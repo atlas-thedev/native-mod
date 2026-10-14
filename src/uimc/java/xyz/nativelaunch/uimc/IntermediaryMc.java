@@ -456,6 +456,10 @@ public final class IntermediaryMc implements McBridge {
 		if (old instanceof Boolean) {
 			return (Boolean) old;
 		}
+		Object entries = get(client(), "field_61504"); // 1.21.9+: DebugHudEntries; shouldShowDebugHud is also true for always-on entries
+		if (entries != null) {
+			return Boolean.TRUE.equals(call(entries, "method_72776")); // isF3Enabled
+		}
 		return Boolean.TRUE.equals(call(call(client(), "method_53526"), "method_53536"));
 	}
 

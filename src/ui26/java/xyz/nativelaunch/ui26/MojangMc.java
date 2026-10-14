@@ -707,7 +707,8 @@ public final class MojangMc implements McBridge {
 	@Override
 	public boolean debugOpen() {
 		try {
-			return client().getDebugOverlay().showDebugScreen();
+			// only the real F3 screen: showDebugScreen() is also true for always-on debug entries
+			return client().debugEntries.isOverlayVisible();
 		} catch (Throwable t) {
 			return false;
 		}

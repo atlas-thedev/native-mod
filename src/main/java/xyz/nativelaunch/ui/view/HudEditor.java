@@ -44,10 +44,10 @@ public final class HudEditor {
 	private Image backdrop;
 	private boolean backdropLoaded;
 	private Image logo;
-	private boolean drawerOpen, helpOpen;
+	private boolean drawerOpen;
 	private float drawerScroll, drawerX, drawerY, grabDX, grabDY;
 	private boolean drawerMoved;
-	private final float[] drawerRect = new float[4], helpRect = new float[4], hubRect = new float[4], noticeRect = new float[4];
+	private final float[] drawerRect = new float[4], hubRect = new float[4], noticeRect = new float[4];
 	private String notice;
 	private HudModule removed;
 	private long noticeAt;
@@ -60,8 +60,8 @@ public final class HudEditor {
 			popover = null;
 			return true;
 		}
-		if (drawerOpen || helpOpen) {
-			drawerOpen = helpOpen = false;
+		if (drawerOpen) {
+			drawerOpen = false;
 			return true;
 		}
 		return false;
@@ -85,7 +85,7 @@ public final class HudEditor {
 			popover = null;
 			drag = null;
 			sizing = null;
-			drawerOpen = helpOpen = false;
+			drawerOpen = false;
 			notice = null;
 		}
 		if (ui.now - sampleAt > 120) {
@@ -118,7 +118,7 @@ public final class HudEditor {
 			c.fill(0, H / 2, W, 1, 0x1AFFFFFF);
 		}
 
-		// where the hub, the drawer and the help card sit (they block the modules under them)
+		// where the hub and the drawer sit (they block the modules under them)
 		float hw = 280, hh = 172;
 		hubRect[0] = (W - hw) / 2;
 		hubRect[1] = (H - hh) / 2 - 18 + (1 - in) * 14;
@@ -139,13 +139,8 @@ public final class HudEditor {
 		} else {
 			drawerRect[2] = 0;
 		}
-		helpRect[0] = 18;
-		helpRect[1] = H - 52;
-		helpRect[2] = 34;
-		helpRect[3] = 34;
 		boolean overHub = ui.hover(hubRect[0] - 10, hubRect[1] - 10, hubRect[2] + 20, hubRect[3] + 20);
 		boolean overDrawer = in(drawerRect, ui);
-		boolean overHelp = ui.hover(helpRect[0] - 4, helpRect[1] - 4, 42, 42) || helpOpen && ui.hover(18, H - 52 - 188, 340, 188 + 8);
 		boolean overNotice = notice != null && in(noticeRect, ui);
 
 		// modules and their boxes
@@ -171,7 +166,7 @@ public final class HudEditor {
 			tags.add(new float[] {lx, ly, lw, lx + lw + 4, lx + lw + 26});
 		}
 		boolean overPop = popover != null && ui.hover(popX, popY, popW, popH);
-		boolean blocked = overHub || overDrawer || overHelp || overNotice || overPop;
+		boolean blocked = overHub || overDrawer || overNotice || overPop;
 
 		// the gear / minus badges first: they sit over the tag row, outside the box
 		HudModule tagHover = null;
@@ -379,7 +374,6 @@ public final class HudEditor {
 		if (dt > 0.01f) {
 			drawer(ui, dt, W, H);
 		}
-		help(ui, W, H, in);
 		notice(ui, W, H);
 		ui.interactive = under;
 		if (popover != null) {
@@ -427,7 +421,7 @@ public final class HudEditor {
 			return true;
 		}
 		// round shortcuts
-		int[] icons = {Theme.I_PLUS, Theme.I_PUZZLE, Theme.I_SHIRT, Theme.I_MESSAGE, Theme.I_RESET};
+		int[] icons = {Theme.I_PLUS, Theme.I_NAV_MODS, Theme.I_SHIRT, Theme.I_MESSAGE, Theme.I_RESET};
 		String[] tips = {"HUD modules", "Mods", "Cosmetics", "Relay chat", "Reset layout"};
 		float d = 42, gap = 10, rowW = icons.length * d + (icons.length - 1) * gap;
 		float rx = W / 2 - rowW / 2, ry = by + bh + 16;
@@ -438,7 +432,6 @@ public final class HudEditor {
 				switch (i) {
 					case 0:
 						drawerOpen = !drawerOpen;
-						helpOpen = false;
 						break;
 					case 1:
 						openMenu(screen, 0);
@@ -583,36 +576,7 @@ public final class HudEditor {
 		c.popAlpha();
 	}
 
-	// ── help + notices ───────────────────────────────────────────────────
-
-	private void help(Ui ui, float W, float H, float in) {
-		Canvas c = ui.c;
-		float x = helpRect[0], y = helpRect[1];
-		if (round(ui, "hud:help", x, y, 34, Theme.I_HELP, "How this works", helpOpen, in)) {
-			helpOpen = !helpOpen;
-			if (helpOpen) {
-				drawerOpen = false;
-			}
-		}
-		float t = ui.anim("hud:help#card", helpOpen, 16f);
-		if (t < 0.01f) {
-			return;
-		}
-		String[] lines = {"Drag a module to move it", "Drag a corner, or scroll over it, to resize", "Gear: its page in the Native menu. Right-click: quick settings",
-				"Minus: take it off the screen (Undo is offered)", "Plus in the middle: bring modules back", "Esc or " + UiRuntime.keyName(UiRuntime.config().menuKey) + " closes this"};
-		float w = 340, h = 22 + lines.length * 22 + 14, cx = x, cy = y - h - 10 + (1 - t) * 8;
-		c.pushAlpha(t);
-		c.shadow(cx, cy + 3, w, h, 12, 20, 0x99000000);
-		c.round(cx, cy, w, h, 12, 0xF4090A0D);
-		c.outline(cx, cy, w, h, 12, 1, Theme.HAIRLINE_STRONG);
-		c.text(Fonts.SEMIBOLD, 12.5f, "Edit your HUD", cx + 16, cy + 14, Theme.TEXT_STRONG);
-		for (int i = 0; i < lines.length; i++) {
-			float ly = cy + 40 + i * 22;
-			c.circle(cx + 20, ly + 7, 2, Theme.ACCENT);
-			c.text(Fonts.REGULAR, 11.5f, lines[i], cx + 32, ly, Theme.TEXT_SECONDARY);
-		}
-		c.popAlpha();
-	}
+	// ── notices ───────────────────────────────────────────────────
 
 	private void notice(Ui ui, float W, float H) {
 		Canvas c = ui.c;

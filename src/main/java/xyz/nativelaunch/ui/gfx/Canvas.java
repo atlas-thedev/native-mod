@@ -259,8 +259,26 @@ public final class Canvas {
 		return text.substring(0, i) + "\u2026";
 	}
 
+	private static final int WATERMARK = ModuleIcons.forModule("watermark", -1);
+	private Image logo;
+
 	/** A Native module or navigation icon centred on (cx, cy). */
 	public void icon(int codepoint, float size, float cx, float cy, int argb) {
+		if (NavIcons.has(codepoint)) {
+			int p = Math.max(1, px(size));
+			float s = p / scale;
+			stamp("nav:" + codepoint, NavIcons.get(codepoint, p), Math.round(cx * scale - p / 2f) / scale, Math.round(cy * scale - p / 2f) / scale, s, s, false, argb);
+			return;
+		}
+		if (codepoint == WATERMARK) {
+			if (logo == null) {
+				logo = Image.resource("/assets/native/ui/logo.png");
+			}
+			if (logo != null) {
+				stamp("native:logo-icon", logo, cx - size / 2, cy - size / 2, size, size, true, argb);
+				return;
+			}
+		}
 		Font f = font(ModuleIcons.custom(codepoint) ? Fonts.MODULE_ICONS : Fonts.ICONS, size);
 		Glyph g = f.glyph(atlas, codepoint);
 		if (g.w <= 0) {

@@ -90,7 +90,7 @@ public final class TitleView {
 				{"nativemods", "Native Mods"},
 				{"options", mc.tr("menu.options", "Options...").replace("...", "").replace("\u2026", "")},
 		};
-		int[] icons = {Theme.I_USER, Theme.I_GLOBE, Theme.I_CLOUD, Theme.I_PUZZLE, Theme.I_MESSAGE, Theme.I_SPARKLES, Theme.I_SETTINGS};
+		int[] icons = {Theme.I_USER, Theme.I_GLOBE, Theme.I_CLOUD, Theme.I_PUZZLE, Theme.I_MESSAGE, Theme.I_NAV_MODS, Theme.I_SETTINGS};
 		int index = 0;
 		for (int i = 0; i < items.length; i++) {
 			String id = items[i][0];

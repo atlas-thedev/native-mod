@@ -409,7 +409,7 @@ public final class UiRuntime {
 		c.shadow(x, y + 2, w, h, 15, 8, 0x55000000);
 		c.round(x, y, w, h, 15, Theme.mix(0xD008090C, 0xF014171D, hv));
 		c.outline(x, y, w, h, 15, 1, Theme.mix(Theme.HAIRLINE_STRONG, Theme.BORDER_HOVER, hv));
-		c.icon(Theme.I_SPARKLES, 14, x + 18, y + h / 2, Theme.TEXT_STRONG);
+		c.icon(Theme.I_NAV_MODS, 14, x + 18, y + h / 2, Theme.TEXT_STRONG);
 		c.text(Fonts.SEMIBOLD, 12, "Native menu", x + 32, y + (h - c.lineHeight(Fonts.SEMIBOLD, 12)) / 2, Theme.TEXT_STRONG);
 	}
 

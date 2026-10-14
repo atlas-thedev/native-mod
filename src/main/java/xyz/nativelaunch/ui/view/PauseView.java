@@ -97,7 +97,7 @@ public final class PauseView {
 		if (unread > 0) {
 			TitleView.badge(c, x + half - 12, y + bh / 2, unread);
 		}
-		if (button(ui, "pause:menu", x + half + gap, y, half, bh, "Native Mods", Theme.I_SPARKLES, NORMAL)) {
+		if (button(ui, "pause:menu", x + half + gap, y, half, bh, "Native Mods", Theme.I_NAV_MODS, NORMAL)) {
 			UiRuntime.openMenu(screen);
 		}
 		y += bh + gap;
