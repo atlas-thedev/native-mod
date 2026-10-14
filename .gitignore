@@ -38,3 +38,10 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
