@@ -425,7 +425,7 @@ public final class StatusModules {
 						return "";
 				}
 			}
-			return String.valueOf(carried(g, sl));
+			return text.value == 3 ? "" : String.valueOf(carried(g, sl));
 		}
 
 		private int textColor(Game.Slot sl, long now) {

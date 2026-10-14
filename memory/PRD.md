@@ -12,3 +12,5 @@ JDK 25 at /root/jdk/jdk-25.0.4.1+1; compile-only per user (no run/release).
 
 ## Backlog
 - Armor Row layout tile parity; pause "Cosmetics" icon parity
+- 2026-06: Leaving a world/server is deferred to the next game tick (UiRuntime.leaveWorld) - fixes blank screen after Disconnect
+- 2026-06: Armor HUD classic icon+number column (percent, total carried count), Inventory HUD dark-cell 9x3 grid + vertical layout; custom items (item_model / custom model data) in Vanilla.item(Slot)
