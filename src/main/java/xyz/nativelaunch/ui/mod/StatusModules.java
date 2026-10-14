@@ -459,6 +459,7 @@ public final class StatusModules {
 		InventoryGrid() {
 			super("inventory", "Inventory", "Your backpack on screen without opening it, with the game's item icons and counts (custom items too).", Theme.I_BACKPACK, false, 1f, 0.8f);
 			drop(labels, color);
+			style.initial(STYLE_CARD);
 		}
 
 		@Override
@@ -482,46 +483,66 @@ public final class StatusModules {
 		@Override
 		float pad() {
 			float s = scale.value;
-			return style.value == STYLE_CARD ? 4 * s : style.value == STYLE_BRACKETS ? 4 * s : 0;
+			return style.value == STYLE_CARD ? 6 * s : style.value == STYLE_BRACKETS ? 4 * s : 2 * s;
 		}
 
 		@Override
 		void render(Canvas c, Ui ui, Game g, float x, float y) {
 			float s = scale.value, pad = pad();
-			float cell = 20 * s, step = 21 * s, ic = 16 * s, sep = 4 * s;
+			float cell = 20 * s, gap = 2 * s, step = cell + gap, ic = 16 * s, sep = 6 * s;
 			int lines = 3 + (hotbar.value ? 1 : 0);
 			boolean vertical = layout.value == 1;
-			// horizontal: 9 columns x 3 (+ hotbar) rows like the inventory screen; vertical: the same grid turned on its side
-			float along = 9 * step - (step - cell), across = lines * step - (step - cell) + (hotbar.value ? sep : 0);
+			float along = 9 * step - gap;
+			float across = lines * step - gap + (hotbar.value ? sep - gap : 0);
 			float w = (vertical ? across : along) + 2 * pad, h = (vertical ? along : across) + 2 * pad;
 			if (ui != null) {
-				float cr = 3 * s, fs = 10.5f * s;
+				float cr = 4 * s, fs = 10f * s;
 				float flh = c.lineHeight(Fonts.BOLD, fs);
+				if (hotbar.value) {
+					if (!vertical) {
+						float divY = y + pad + 3 * step - gap + sep / 2f;
+						c.fill(x + pad + 2 * s, divY, along - 4 * s, 1, 0x1AFFFFFF);
+					} else {
+						float divX = x + pad + 3 * step - gap + sep / 2f;
+						c.fill(divX, y + pad + 2 * s, 1, along - 4 * s, 0x1AFFFFFF);
+					}
+				}
 				for (int r = 0; r < lines; r++) {
 					boolean hot = r == 3;
-					float off = r * step + (hot ? sep : 0);
+					float off = r * step + (hot ? sep - gap : 0);
 					for (int col = 0; col < 9; col++) {
 						Game.Slot sl = g.inv[hot ? col : 9 + r * 9 + col];
 						float sx = x + pad + (vertical ? off : col * step), sy = y + pad + (vertical ? col * step : off);
 						if (slots.value) {
-							c.round(sx, sy, cell, cell, cr, 0x66000000);
-							c.fill(sx + cr, sy, cell - 2 * cr, Math.max(1f, s * 0.75f), 0x12FFFFFF);
+							c.round(sx, sy, cell, cell, cr, 0x40000000);
+							c.outline(sx, sy, cell, cell, cr, 1, 0x14FFFFFF);
+							c.fill(sx + cr, sy + 1, cell - 2 * cr, Math.max(1f, s * 0.75f), 0x0AFFFFFF);
 						}
 						if (hot && selected.value && col == g.selected) {
-							c.outline(sx - s, sy - s, cell + 2 * s, cell + 2 * s, cr + s, Math.max(1f, 1.5f * s), 0xE6FFFFFF);
+							c.round(sx, sy, cell, cell, cr, 0x1AFFFFFF);
+							c.outline(sx - 0.5f * s, sy - 0.5f * s, cell + s, cell + s, cr + 0.5f * s, Math.max(1f, 1.5f * s), 0xCCFFFFFF);
 						}
 						if (sl.empty()) {
 							continue;
 						}
-						float ix = sx + (cell - ic) / 2, iy = sy + (cell - ic) / 2;
+						float ix = sx + (cell - ic) / 2f, iy = sy + (cell - ic) / 2f;
 						item(c, sl, ix, iy, ic, 0xFFFFFFFF);
-						if (bars.value) {
-							durabilityBar(c, sl, ix, iy, ic);
+						if (bars.value && sl.max > 0 && sl.damage > 0) {
+							float pct = sl.durability();
+							float barX = sx + 2.5f * s;
+							float barY = sy + cell - 3 * s;
+							float barW = cell - 5 * s;
+							float barH = Math.max(1.5f, 2 * s);
+							c.fill(barX, barY, barW, barH, 0xCC000000);
+							c.fill(barX, barY, Math.max(1f, Math.round(barW * pct)), barH, Status.wear(pct));
 						}
 						if (counts.value && sl.count > 1) {
 							String t = String.valueOf(sl.count);
-							// bottom-right like the game, nudged slightly past the icon
-							text(c, Fonts.BOLD, fs, t, sx + cell - c.textWidth(Fonts.BOLD, fs, t) - 0.5f * s, sy + cell - flh + 1.5f * s, 0xFFFFFFFF);
+							float tw = c.textWidth(Fonts.BOLD, fs, t);
+							float tx = sx + cell - tw - 1.5f * s;
+							float ty = sy + cell - flh + 1f * s;
+							c.text(Fonts.BOLD, fs, t, tx + 1f, ty + 1f, 0xDD000000);
+							c.text(Fonts.BOLD, fs, t, tx, ty, 0xFFFFFFFF);
 						}
 					}
 				}

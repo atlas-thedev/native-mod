@@ -48,7 +48,51 @@ public final class Vanilla {
 		Image img = cache.get(name);
 		if (img == null) {
 			int colon = name.indexOf(':');
-			img = load("assets/" + (colon > 0 ? name.substring(0, colon) : "minecraft") + "/textures/" + (colon > 0 ? name.substring(colon + 1) : name) + ".png");
+			String ns = colon > 0 ? name.substring(0, colon) : "minecraft";
+			String rel = colon > 0 ? name.substring(colon + 1) : name;
+			if (rel.startsWith("textures/")) {
+				rel = rel.substring("textures/".length());
+			}
+			if (rel.endsWith(".png")) {
+				rel = rel.substring(0, rel.length() - 4);
+			}
+			img = load("assets/" + ns + "/textures/" + rel + ".png");
+			if (img == null && rel.startsWith("item/")) {
+				img = load("assets/" + ns + "/textures/items/" + rel.substring(5) + ".png");
+			}
+			if (img == null && rel.startsWith("items/")) {
+				img = load("assets/" + ns + "/textures/item/" + rel.substring(6) + ".png");
+			}
+			if (img == null && rel.startsWith("block/")) {
+				img = load("assets/" + ns + "/textures/blocks/" + rel.substring(6) + ".png");
+			}
+			if (img == null && rel.startsWith("blocks/")) {
+				img = load("assets/" + ns + "/textures/block/" + rel.substring(7) + ".png");
+			}
+			if (img == null && rel.contains("golden_")) {
+				img = load("assets/" + ns + "/textures/item/" + rel.substring(rel.indexOf('/') + 1).replace("golden_", "gold_") + ".png");
+				if (img == null) {
+					img = load("assets/" + ns + "/textures/items/" + rel.substring(rel.indexOf('/') + 1).replace("golden_", "gold_") + ".png");
+				}
+			}
+			if (img == null && rel.contains("gold_")) {
+				img = load("assets/" + ns + "/textures/item/" + rel.substring(rel.indexOf('/') + 1).replace("gold_", "golden_") + ".png");
+				if (img == null) {
+					img = load("assets/" + ns + "/textures/items/" + rel.substring(rel.indexOf('/') + 1).replace("gold_", "golden_") + ".png");
+				}
+			}
+			if (img == null && rel.contains("wooden_")) {
+				img = load("assets/" + ns + "/textures/item/" + rel.substring(rel.indexOf('/') + 1).replace("wooden_", "wood_") + ".png");
+				if (img == null) {
+					img = load("assets/" + ns + "/textures/items/" + rel.substring(rel.indexOf('/') + 1).replace("wooden_", "wood_") + ".png");
+				}
+			}
+			if (img == null && rel.contains("wood_")) {
+				img = load("assets/" + ns + "/textures/item/" + rel.substring(rel.indexOf('/') + 1).replace("wood_", "wooden_") + ".png");
+				if (img == null) {
+					img = load("assets/" + ns + "/textures/items/" + rel.substring(rel.indexOf('/') + 1).replace("wood_", "wooden_") + ".png");
+				}
+			}
 			if (img != null && img.height > img.width && img.width > 0 && img.height % img.width == 0) {
 				int w = img.width;
 				int[] px = new int[w * w];
@@ -129,6 +173,9 @@ public final class Vanilla {
 			}
 			if (img == null) {
 				img = texture("item/" + id);
+			}
+			if (img == null) {
+				img = texture("items/" + id);
 			}
 			if (img == null) {
 				img = cube(id);
@@ -372,7 +419,7 @@ public final class Vanilla {
 		if (id.equals("shield")) {
 			return shield();
 		}
-		String layer = texOf(tex, "layer0");
+		String layer = texOf(tex, "layer0", "layer1", "texture");
 		if (layer != null && !entity) {
 			return texture(layer);
 		}
