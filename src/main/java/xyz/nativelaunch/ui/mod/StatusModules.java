@@ -266,7 +266,7 @@ public final class StatusModules {
 						ry += rowH + gap;
 					}
 				}
-				done(inner + 2 * pad, n * rowH + (n - 1) * gap + 2 * pad);
+				done(inner + 2 * pad + 4 * s, n * rowH + (n - 1) * gap + 2 * pad);
 				return;
 			}
 			// row of tiles: icon (or the name when icons are off), level badge, time below
@@ -314,7 +314,7 @@ public final class StatusModules {
 					tx += tw[i] + gap;
 				}
 			}
-			done(total + 2 * pad, tileH + 2 * pad);
+			done(total + 2 * pad + 4 * s, tileH + 2 * pad);
 		}
 
 		private static void effectIcon(Canvas c, String id, float x, float y, float size, int tint) {
@@ -374,9 +374,12 @@ public final class StatusModules {
 			return g.sample || collect(g) > 0;
 		}
 
-		private String label(Game.Slot sl) {
+		private String label(Game.Slot sl, boolean named) {
 			if (sl.empty()) {
 				return "";
+			}
+			if (sl.max <= 0 && named) {
+				return Status.title(sl.id) + (sl.count > 1 ? "  x" + sl.count : "");
 			}
 			if (sl.max > 0) {
 				switch (text.value) {
@@ -418,31 +421,53 @@ public final class StatusModules {
 			float ic = 18 * s, tf = 12 * s;
 			float lh = c.lineHeight(Fonts.SEMIBOLD, tf);
 			if (layout.value == 0) {
+				// every row: the item on a soft slot tile, its durability (or name) beside it, a slim wear bar under the number
+				float tile = ic + 4 * s, rowGap = 3 * s, maxText = 96 * s, barH = Math.max(1.5f, 2 * s);
 				float tw = 0;
 				for (int i = 0; i < n; i++) {
-					tw = Math.max(tw, c.textWidth(Fonts.SEMIBOLD, tf, label(list[i])));
+					tw = Math.max(tw, Math.min(maxText, c.textWidth(Fonts.SEMIBOLD, tf, label(list[i], true))));
 				}
-				float rowH = ic + 2 * s, w = ic + (tw > 0 ? 6 * s + tw : 0);
+				if (tw > 0) {
+					tw = Math.max(tw, c.textWidth(Fonts.SEMIBOLD, tf, "000"));
+				}
+				float w = tile + (tw > 0 ? 7 * s + tw : 0);
 				if (ui != null) {
-					float ry = y + pad;
+					float ry = y + pad, tx = x + pad + tile + 7 * s;
 					for (int i = 0; i < n; i++) {
 						Game.Slot sl = list[i];
-						drawSlot(c, sl, x + pad, ry + (rowH - ic) / 2, ic);
-						String t = label(sl);
-						if (!t.isEmpty()) {
-							text(c, Fonts.SEMIBOLD, tf, t, x + pad + ic + 6 * s, ry + (rowH - lh) / 2, textColor(sl, now));
+						c.round(x + pad, ry, tile, tile, 4 * s, 0x14FFFFFF);
+						boolean worn = sl.max > 0 && !sl.empty();
+						boolean under = worn && bar.value && tw > 0;
+						if (sl.empty()) {
+							drawSlot(c, sl, x + pad + 2 * s, ry + 2 * s, ic);
+						} else {
+							item(c, sl.id, x + pad + 2 * s, ry + 2 * s, ic, 0xFFFFFFFF);
+							if (worn && bar.value && !under) {
+								durabilityBar(c, sl, x + pad + 2 * s, ry + 2 * s, ic);
+							}
 						}
-						ry += rowH;
+						String t = c.ellipsize(Fonts.SEMIBOLD, tf, label(sl, true), maxText);
+						if (!t.isEmpty()) {
+							int col = worn ? textColor(sl, now) : color.value;
+							float block = lh + (under ? 3 * s + barH : 0), ty = ry + (tile - block) / 2;
+							text(c, Fonts.SEMIBOLD, tf, t, tx, ty, col);
+							if (under) {
+								float by = ty + lh + 3 * s;
+								c.round(tx, by, tw, barH, barH / 2, 0x33FFFFFF);
+								c.round(tx, by, Math.max(barH, tw * sl.durability()), barH, barH / 2, Status.wear(sl.durability()));
+							}
+						}
+						ry += tile + rowGap;
 					}
 				}
-				done(w + 2 * pad, n * rowH + 2 * pad);
+				done(w + 2 * pad + (tw > 0 ? 4 * s : 0), n * tile + (n - 1) * rowGap + 2 * pad);
 				return;
 			}
 			float gap = 4 * s, total = 0;
 			float[] tw = new float[n];
 			boolean anyText = false;
 			for (int i = 0; i < n; i++) {
-				String t = label(list[i]);
+				String t = label(list[i], false);
 				anyText |= !t.isEmpty();
 				tw[i] = Math.max(ic, c.textWidth(Fonts.SEMIBOLD, tf, t)) + 2 * s;
 				total += tw[i] + (i > 0 ? gap : 0);
@@ -452,7 +477,7 @@ public final class StatusModules {
 				for (int i = 0; i < n; i++) {
 					Game.Slot sl = list[i];
 					drawSlot(c, sl, tx + (tw[i] - ic) / 2, y + pad, ic);
-					String t = label(sl);
+					String t = label(sl, false);
 					if (!t.isEmpty()) {
 						text(c, Fonts.SEMIBOLD, tf, t, tx + (tw[i] - c.textWidth(Fonts.SEMIBOLD, tf, t)) / 2, y + pad + ic + s, textColor(sl, now));
 					}

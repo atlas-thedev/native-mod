@@ -574,7 +574,7 @@ public final class UiRuntime {
 		if (action == 1 && key == config.menuKey && (mods & (Ui.MOD_CONTROL | Ui.MOD_ALT | Ui.MOD_SUPER)) == 0) {
 			try {
 				if (mc.screen() == null && mc.inWorld()) {
-					openMenu(null, 0); // Feather style: the mods menu straight away (Edit HUD is one click inside)
+					openHub(); // the HUD editor with the Native hub in the middle
 					return true;
 				}
 			} catch (Throwable t) {
