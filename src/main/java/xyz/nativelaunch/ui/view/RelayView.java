@@ -2,6 +2,7 @@ package xyz.nativelaunch.ui.view;
 
 import xyz.nativelaunch.relay.Model;
 import xyz.nativelaunch.relay.RelayClient;
+import xyz.nativelaunch.ui.Ads;
 import xyz.nativelaunch.ui.Avatars;
 import xyz.nativelaunch.ui.ChatMedia;
 import xyz.nativelaunch.ui.ClipboardImage;
@@ -74,6 +75,7 @@ public final class RelayView {
 	/** A file picker is open (one at a time). */
 	private final java.util.concurrent.atomic.AtomicBoolean picking = new java.util.concurrent.atomic.AtomicBoolean();
 	private ChatMedia.Media viewer;
+	private String viewerUrl;
 	// GIF picker
 	private boolean gifOpen;
 	private final TextField gifSearch = new TextField("relay:gifs");
@@ -130,6 +132,7 @@ public final class RelayView {
 		}
 		if (viewer != null) {
 			viewer = null;
+			viewerUrl = null;
 			return true;
 		}
 		if (gifOpen) {
@@ -309,7 +312,8 @@ public final class RelayView {
 					rowTyping = !client.typing(key).isEmpty();
 					rowPinned = f.pinned;
 					rowDot = f.dot();
-					if (row(ui, client, key, x + 8, ry, w - 16, rh, f.display(), f.name, f.skin, sub, f.unread, f.online ? 1 : 0)) {
+					int unread = key.equals(client.viewing) ? 0 : f.unread;
+					if (row(ui, client, key, x + 8, ry, w - 16, rh, f.display(), f.name, f.skin, sub, unread, f.online ? 1 : 0)) {
 						select(key, client);
 						input.focus(ui);
 					}
@@ -331,7 +335,8 @@ public final class RelayView {
 					rowDot = 0;
 					rowTyping = !client.typing(key).isEmpty();
 					rowPinned = g.pinned;
-					if (row(ui, client, key, x + 8, ry, w - 16, rh, g.name, g.name, null, sub, g.unread, -1)) {
+					int unread = key.equals(client.viewing) ? 0 : g.unread;
+					if (row(ui, client, key, x + 8, ry, w - 16, rh, g.name, g.name, null, sub, unread, -1)) {
 						select(key, client);
 						input.focus(ui);
 					}
@@ -1339,6 +1344,14 @@ public final class RelayView {
 			c.round(x, y, 240, 54, 10, 0xFF121318);
 			c.outline(x, y, 240, 54, 10, 1, Theme.HAIRLINE);
 			c.text(Fonts.MEDIUM, 11.5f, "Picture unavailable", x + 14, y + 19, Theme.TEXT_MUTED);
+			if (m.mediaUrl != null && ui.interactive && ui.my >= top && ui.my <= top + viewH) {
+				if (ui.hover(x, y, 240, 54)) {
+					ui.cursorHand = true;
+				}
+				if (ui.clicked("relay:img:fail:" + (m.id != null ? m.id : key), x, y, 240, 54)) {
+					Ads.open(m.mediaUrl);
+				}
+			}
 			return 54;
 		}
 		Object frame = md.frame(ui.now);
@@ -1360,8 +1373,9 @@ public final class RelayView {
 			if (ui.hover(x, y, dw, dh)) {
 				ui.cursorHand = true;
 			}
-			if (ui.clicked("relay:img:" + m.id, x, y, dw, dh)) {
+			if (ui.clicked("relay:img:" + (m.id != null ? m.id : key), x, y, dw, dh)) {
 				viewer = md;
+				viewerUrl = m.mediaUrl;
 			}
 		}
 		return dh;
@@ -1371,16 +1385,23 @@ public final class RelayView {
 		Canvas c = ui.c;
 		ui.interactive = true;
 		c.fill(0, 0, W, H, 0xE6000000);
-		Object frame = viewer.frame(ui.now);
+		Object frame = viewer != null ? viewer.frame(ui.now) : null;
 		if (frame != null && viewer.width > 0) {
-			float k = Math.min((W - 80) / viewer.width, (H - 100) / viewer.height);
+			float k = Math.min((W - 80) / viewer.width, (H - 120) / viewer.height);
 			k = Math.min(k, 4f);
 			float dw = viewer.width * k, dh = viewer.height * k;
-			c.image((xyz.nativelaunch.ui.gfx.Image) frame, (W - dw) / 2, (H - dh) / 2, dw, dh, 0, 0, 1, 1, 0xFFFFFFFF);
+			c.image((xyz.nativelaunch.ui.gfx.Image) frame, (W - dw) / 2, (H - dh) / 2 - 14, dw, dh, 0, 0, 1, 1, 0xFFFFFFFF);
 		}
-		c.text(Fonts.MEDIUM, 11.5f, "Click anywhere or press Esc to close", (W - c.textWidth(Fonts.MEDIUM, 11.5f, "Click anywhere or press Esc to close")) / 2, H - 34, Theme.TEXT_SECONDARY);
-		if (ui.pressed) {
+		c.text(Fonts.MEDIUM, 11.5f, "Click anywhere or press Esc to close", (W - c.textWidth(Fonts.MEDIUM, 11.5f, "Click anywhere or press Esc to close")) / 2, H - 28, Theme.TEXT_SECONDARY);
+		if (viewerUrl != null && (viewerUrl.startsWith("http://") || viewerUrl.startsWith("https://"))) {
+			float bw = 130, bh = 28, bx = (W - bw) / 2, by = H - 64;
+			if (ui.button("relay:lightbox:open", bx, by, bw, bh, "Open in browser", Theme.I_GLOBE, Ui.BTN_GLASS)) {
+				Ads.open(viewerUrl);
+			}
+		}
+		if (ui.pressed && !ui.hover((W - 140) / 2, H - 70, 140, 36)) {
 			viewer = null;
+			viewerUrl = null;
 			ui.pressed = false;
 		}
 	}

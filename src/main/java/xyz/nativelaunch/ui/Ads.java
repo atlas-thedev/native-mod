@@ -263,9 +263,9 @@ public final class Ads {
 		return (Math.round(oa * 255) << 24) | (r << 16) | (g << 8) | b;
 	}
 
-	/** Opens an ad link in the system browser (https only). */
+	/** Opens a web link in the system browser (http or https). */
 	public static void open(String url) {
-		if (url == null || !url.startsWith("https://")) {
+		if (url == null || (!url.startsWith("https://") && !url.startsWith("http://"))) {
 			return;
 		}
 		Thread t = new Thread(() -> {

@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -124,10 +125,14 @@ public final class RelayClient {
 	public int unreadTotal() {
 		int n = 0;
 		for (Model.Friend f : friends) {
-			n += f.unread;
+			if (viewing == null || !viewing.equals("dm:" + f.id)) {
+				n += f.unread;
+			}
 		}
 		for (Model.Group g : groups) {
-			n += g.unread;
+			if (viewing == null || !viewing.equals("g:" + g.id)) {
+				n += g.unread;
+			}
 		}
 		return n;
 	}
@@ -182,6 +187,7 @@ public final class RelayClient {
 		viewing = key;
 		final Model.Conversation c = conversation(key);
 		clearUnread(key);
+		markReadLater(key);
 		if (ticket == null || c.loading) {
 			return;
 		}
@@ -685,8 +691,10 @@ public final class RelayClient {
 			if (arr != null) {
 				for (JsonElement e : arr) {
 					JsonObject f = e.getAsJsonObject();
-					list.add(new Model.Friend(str(f, "id"), str(f, "name"), str(f, "nickname"), str(f, "status"), str(f, "activity"),
-							str(f, "serverAddress"), skinRef(str(f, "skin"), str(f, "mcUuid")), bool(f, "online"), num(f, "unread"), bool(f, "pinned"), lng(f, "lastSeen"), Math.max(lng(f, "lastMessageAt"), lastMsgOf(str(f, "id")))));
+					String fid = str(f, "id");
+					int unread = (viewing != null && viewing.equals("dm:" + fid)) ? 0 : num(f, "unread");
+					list.add(new Model.Friend(fid, str(f, "name"), str(f, "nickname"), str(f, "status"), str(f, "activity"),
+							str(f, "serverAddress"), skinRef(str(f, "skin"), str(f, "mcUuid")), bool(f, "online"), unread, bool(f, "pinned"), lng(f, "lastSeen"), Math.max(lng(f, "lastMessageAt"), lastMsgOf(fid))));
 				}
 			}
 			sortFriends(list);
@@ -767,7 +775,11 @@ public final class RelayClient {
 			JsonArray arr = o.getAsJsonArray("groups");
 			if (arr != null) {
 				for (JsonElement e : arr) {
-					list.add(parseGroup(e.getAsJsonObject()));
+					Model.Group g = parseGroup(e.getAsJsonObject());
+					if (viewing != null && viewing.equals("g:" + g.id)) {
+						g = g.withUnread(0);
+					}
+					list.add(g);
 				}
 			}
 			sortGroups(list);
@@ -864,12 +876,14 @@ public final class RelayClient {
 		String mediaUrl = deleted ? null : str(m, "mediaUrl");
 		String mediaName = str(m, "mediaName");
 		String kind = str(m, "mediaKind");
-		boolean image = mediaUrl != null && (kind == null || "image".equals(kind)) && ChatMedia.allowed(mediaUrl, api);
+		String lowerUrl = mediaUrl == null ? "" : mediaUrl.toLowerCase(Locale.ROOT);
+		boolean isImgExt = lowerUrl.matches(".*\\.(png|jpe?g|gif|webp)(\\?.*)?$");
+		boolean image = mediaUrl != null && (kind == null || "image".equals(kind) || isImgExt) && ChatMedia.allowed(mediaUrl, api);
 		if ((content == null || content.isEmpty()) && !deleted) {
 			content = mediaName != null ? "[" + mediaName + "]" : (mediaUrl != null || bool(m, "isMedia") ? "[attachment]" : "");
 		}
 		Model.Message out = new Model.Message(str(m, "id"), sender, nameOf(sender, str(m, "senderName")), deleted ? "Message deleted" : content,
-				lng(m, "createdAt"), false, false, bool(m, "isSystem"), deleted, image ? mediaUrl : null, mediaName, null);
+				lng(m, "createdAt"), false, false, bool(m, "isSystem"), deleted, (image || mediaUrl != null) ? mediaUrl : null, mediaName, null);
 		out.edited = !deleted && lng(m, "editedAt") > 0;
 		out.read = bool(m, "isRead");
 		if (!deleted && m.has("reactions") && m.get("reactions").isJsonArray()) {
@@ -1142,7 +1156,7 @@ public final class RelayClient {
 			Model.Friend hit = null;
 			for (Model.Friend f : friends) {
 				if (f.id.equals(fid)) {
-					hit = (watching ? f : f.withUnread(f.unread + 1)).withLastMsg(msg.createdAt);
+					hit = (watching ? f.withUnread(0) : f.withUnread(f.unread + 1)).withLastMsg(msg.createdAt);
 					next.add(hit);
 				} else {
 					next.add(f);

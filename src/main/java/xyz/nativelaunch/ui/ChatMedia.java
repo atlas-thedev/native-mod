@@ -72,10 +72,15 @@ public final class ChatMedia {
 		if (url == null) {
 			return false;
 		}
-		if (api != null && url.startsWith(api + "/v1/social/media/")) {
+		if (url.contains("/v1/social/media/")) {
 			return true;
 		}
-		return url.matches("https://media[0-9]*\\.giphy\\.com/media/.+\\.gif(\\?.*)?");
+		if (api != null && url.startsWith(api)) {
+			return true;
+		}
+		return url.matches("https?://media[0-9]*\\.giphy\\.com/media/.+\\.gif(\\?.*)?")
+				|| url.matches("https?://.*\\.nativelaunch\\.net/.*")
+				|| url.matches("https?://.*\\.giphy\\.com/.*");
 	}
 
 	/** The picture for a URL if it is already cached (or loading); never starts a download. */
@@ -99,6 +104,9 @@ public final class ChatMedia {
 				return fresh;
 			}
 			String fetch = url.contains("giphy.com") ? url.replaceAll("/giphy\\.gif", "/200w.gif") : url;
+			if (fetch.startsWith("/") && api != null) {
+				fetch = (api.endsWith("/") ? api.substring(0, api.length() - 1) : api) + fetch;
+			}
 			final String target = fetch;
 			pool.execute(() -> {
 				try {
