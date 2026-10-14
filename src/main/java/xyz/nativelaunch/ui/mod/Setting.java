@@ -123,10 +123,16 @@ public abstract class Setting {
 		public final String[] options;
 		/** Shorter labels used when the full ones do not fit the row (the saved value always stays the full label). */
 		public String[] shorts;
-		private final int def;
+		private int def;
 
 		public Choice shorts(String... s) {
 			this.shorts = s;
+			return this;
+		}
+
+		/** A different starting value (and reset target) for a shared setting. */
+		public Choice initial(int v) {
+			this.value = this.def = v;
 			return this;
 		}
 

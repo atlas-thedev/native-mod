@@ -115,6 +115,40 @@ public final class UiRuntime {
 		return screen;
 	}
 
+	private static volatile boolean leaving;
+
+	/**
+	 * Leaves the world on the next game tick. Disconnecting renders frames of its own (the saving / progress screen),
+	 * so doing it from inside our frame hook nests a render pass in the middle of this one and leaves a blank screen.
+	 */
+	public static void leaveWorld() {
+		if (leaving) {
+			return;
+		}
+		leaving = true;
+		final java.util.concurrent.Executor game = mc.gameThread();
+		Thread t = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				// posted from another thread so it is queued for the next tick instead of running right here
+				game.execute(new Runnable() {
+					@Override
+					public void run() {
+						try {
+							mc.exitWorld();
+						} catch (Throwable e) {
+							Log.warn("Native UI: leaving the world failed: {}", e.toString());
+						} finally {
+							leaving = false;
+						}
+					}
+				});
+			}
+		}, "Native leave world");
+		t.setDaemon(true);
+		t.start();
+	}
+
 	/** 26.x setScreen hook: true when the call was replaced by opening the Native title screen. */
 	public static boolean swapScreen(Object screen) {
 		try {
@@ -574,7 +608,7 @@ public final class UiRuntime {
 		if (action == 1 && key == config.menuKey && (mods & (Ui.MOD_CONTROL | Ui.MOD_ALT | Ui.MOD_SUPER)) == 0) {
 			try {
 				if (mc.screen() == null && mc.inWorld()) {
-					openMenu(null, 0); // Feather style: the mods menu straight away (Edit HUD is one click inside)
+					openHub(); // the HUD editor with the Native hub in the middle
 					return true;
 				}
 			} catch (Throwable t) {

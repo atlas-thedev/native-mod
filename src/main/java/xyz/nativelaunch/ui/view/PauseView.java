@@ -66,7 +66,7 @@ public final class PauseView {
 		if (confirmLeave) {
 			if (button(ui, "pause:leave:yes", x, y, bw, bh, single ? "Save and quit" : "Disconnect", Theme.I_LOG_OUT, DANGER)) {
 				confirmLeave = false;
-				mc.exitWorld();
+				UiRuntime.leaveWorld();
 			}
 			y += bh + gap;
 			if (button(ui, "pause:leave:no", x, y, bw, bh, "Stay in game", Theme.I_PLAY, NORMAL)) {
