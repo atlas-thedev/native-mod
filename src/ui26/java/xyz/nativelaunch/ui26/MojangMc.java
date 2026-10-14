@@ -213,6 +213,11 @@ public final class MojangMc implements McBridge {
 	}
 
 	@Override
+	public java.util.concurrent.Executor gameThread() {
+		return client();
+	}
+
+	@Override
 	public void exitWorld() {
 		xyz.nativelaunch.ui.UiRuntime.pauseBypass = true;
 		try {
@@ -613,6 +618,14 @@ public final class MojangMc implements McBridge {
 		}
 		boolean worn = st.isDamageableItem();
 		out.set(id, st.getCount(), worn ? st.getDamageValue() : 0, worn ? st.getMaxDamage() : 0);
+		try {
+			Object model = st.get(net.minecraft.core.component.DataComponents.ITEM_MODEL);
+			net.minecraft.world.item.component.CustomModelData data = st.get(net.minecraft.core.component.DataComponents.CUSTOM_MODEL_DATA);
+			Float f = data == null ? null : data.getFloat(0);
+			out.custom(model == null ? null : model.toString(), f == null ? Float.NaN : f);
+		} catch (Throwable ignored) {
+			// plain icon
+		}
 	}
 
 	@Override

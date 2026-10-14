@@ -73,8 +73,9 @@ public final class StatusModules {
 	}
 
 	/** An item's icon from the game's textures, or a plain tile with its first letter when the game has none. */
-	static void item(Canvas c, String id, float x, float y, float size, int tint) {
-		Image img = Vanilla.item(id);
+	static void item(Canvas c, Game.Slot sl, float x, float y, float size, int tint) {
+		String id = sl.id;
+		Image img = Vanilla.item(sl);
 		if (img != null) {
 			Vanilla.draw(c, img, x, y, size, size, tint);
 			return;
@@ -334,23 +335,26 @@ public final class StatusModules {
 
 	static final class Armor extends Box {
 		final Setting.Choice layout = add(new Setting.Choice("layout", "Layout", 0, "List", "Row"));
-		final Setting.Choice text = fixed(new Setting.Choice("text", "Durability text", 0, "Remaining", "Percent", "Remaining / max", "Off").shorts("Left", "Percent", "Left / max", "Off"));
+		final Setting.Choice text = fixed(new Setting.Choice("text", "Durability text", 1, "Remaining", "Percent", "Remaining / max", "Off").shorts("Left", "Percent", "Left / max", "Off"));
 		final Setting.Bool bar = fixed(new Setting.Bool("bar", "Durability bar on the icon", true));
 		final Setting.Bool wear = fixed(new Setting.Bool("wear", "Colour text by wear", true));
 		final Setting.Num warn = fixed(new Setting.Num("warn", "Flash red below", 15, 0, 50, 5, "%"));
 		final Setting.Bool hand = fixed(new Setting.Bool("hand", "Show the item in your hand", true));
 		final Setting.Bool off = fixed(new Setting.Bool("offhand", "Show the off-hand item", false));
+		final Setting.Bool total = fixed(new Setting.Bool("total", "Count matching items in the inventory", true));
 		final Setting.Bool empty = fixed(new Setting.Bool("empty", "Show empty armour slots", false));
 		private final Game.Slot[] list = new Game.Slot[6];
+		private final String[] texts = new String[6];
 
 		Armor() {
-			super("armor", "Armor Status", "Armour pieces and your held item with their durability, using the game's item icons.", Theme.I_SHIELD, false, 0f, 0.7f);
+			super("armor", "Armor Status", "Armour pieces and your held item with their durability, using the game's item icons (custom items too).", Theme.I_SHIELD, false, 0f, 0.7f);
 			drop(labels);
+			style.initial(STYLE_TEXT);
 		}
 
 		@Override
 		public int needs() {
-			return Game.NEED_ARMOR;
+			return Game.NEED_ARMOR | (total.value ? Game.NEED_INVENTORY : 0);
 		}
 
 		private int collect(Game g) {
@@ -366,6 +370,9 @@ public final class StatusModules {
 			if (off.value && !g.offhand.empty()) {
 				list[n++] = g.offhand;
 			}
+			for (int i = 0; i < n; i++) {
+				texts[i] = label(g, list[i]);
+			}
 			return n;
 		}
 
@@ -374,12 +381,37 @@ public final class StatusModules {
 			return g.sample || collect(g) > 0;
 		}
 
-		private String label(Game.Slot sl, boolean named) {
+		private static boolean same(Game.Slot a, Game.Slot b) {
+			return a.id.equals(b.id) && (a.model == null ? b.model == null : a.model.equals(b.model))
+					&& (Float.isNaN(a.cmd) ? Float.isNaN(b.cmd) : a.cmd == b.cmd);
+		}
+
+		/** How many of this item the player carries (the held stack plus every matching stack in the inventory). */
+		private int carried(Game g, Game.Slot sl) {
+			if (!total.value || g.sample) {
+				return sl.count;
+			}
+			int n = 0;
+			boolean seen = false;
+			for (int i = 0; i < g.inv.length; i++) {
+				Game.Slot o = g.inv[i];
+				if (!o.empty() && same(o, sl)) {
+					n += o.count;
+					seen |= i == g.selected;
+				}
+			}
+			if (sl != g.offhand && !g.offhand.empty() && same(g.offhand, sl)) {
+				n += g.offhand.count;
+			}
+			if (sl == g.offhand || !seen) {
+				n = Math.max(n, sl.count); // the off-hand (or an armour slot) is not part of the 36 slots
+			}
+			return Math.max(1, n);
+		}
+
+		private String label(Game g, Game.Slot sl) {
 			if (sl.empty()) {
 				return "";
-			}
-			if (sl.max <= 0 && named) {
-				return Status.title(sl.id) + (sl.count > 1 ? "  x" + sl.count : "");
 			}
 			if (sl.max > 0) {
 				switch (text.value) {
@@ -393,7 +425,7 @@ public final class StatusModules {
 						return "";
 				}
 			}
-			return sl.count > 1 ? "x" + sl.count : "";
+			return String.valueOf(carried(g, sl));
 		}
 
 		private int textColor(Game.Slot sl, long now) {
@@ -418,73 +450,54 @@ public final class StatusModules {
 				return;
 			}
 			long now = ui == null ? 0 : ui.now;
-			float ic = 18 * s, tf = 12 * s;
+			float ic = 16 * s, tf = 11.5f * s, gap = 5 * s;
 			float lh = c.lineHeight(Fonts.SEMIBOLD, tf);
 			if (layout.value == 0) {
-				// every row: the item on a soft slot tile, its durability (or name) beside it, a slim wear bar under the number
-				float tile = ic + 4 * s, rowGap = 3 * s, maxText = 96 * s, barH = Math.max(1.5f, 2 * s);
-				float tw = 0;
+				// icon + number per row, like the classic armour HUDs; on the right half of the screen the numbers sit left of the icons
+				boolean right = fx > 0.5f;
+				float rowH = ic + 3 * s, tw = 0;
 				for (int i = 0; i < n; i++) {
-					tw = Math.max(tw, Math.min(maxText, c.textWidth(Fonts.SEMIBOLD, tf, label(list[i], true))));
+					tw = Math.max(tw, c.textWidth(Fonts.SEMIBOLD, tf, texts[i]));
 				}
-				if (tw > 0) {
-					tw = Math.max(tw, c.textWidth(Fonts.SEMIBOLD, tf, "000"));
-				}
-				float w = tile + (tw > 0 ? 7 * s + tw : 0);
+				float w = ic + (tw > 0 ? gap + tw : 0);
 				if (ui != null) {
-					float ry = y + pad, tx = x + pad + tile + 7 * s;
 					for (int i = 0; i < n; i++) {
 						Game.Slot sl = list[i];
-						c.round(x + pad, ry, tile, tile, 4 * s, 0x14FFFFFF);
-						boolean worn = sl.max > 0 && !sl.empty();
-						boolean under = worn && bar.value && tw > 0;
-						if (sl.empty()) {
-							drawSlot(c, sl, x + pad + 2 * s, ry + 2 * s, ic);
-						} else {
-							item(c, sl.id, x + pad + 2 * s, ry + 2 * s, ic, 0xFFFFFFFF);
-							if (worn && bar.value && !under) {
-								durabilityBar(c, sl, x + pad + 2 * s, ry + 2 * s, ic);
-							}
-						}
-						String t = c.ellipsize(Fonts.SEMIBOLD, tf, label(sl, true), maxText);
+						float ry = y + pad + i * rowH;
+						float ix = right ? x + pad + w - ic : x + pad;
+						drawSlot(c, sl, ix, ry, ic);
+						String t = texts[i];
 						if (!t.isEmpty()) {
-							int col = worn ? textColor(sl, now) : color.value;
-							float block = lh + (under ? 3 * s + barH : 0), ty = ry + (tile - block) / 2;
-							text(c, Fonts.SEMIBOLD, tf, t, tx, ty, col);
-							if (under) {
-								float by = ty + lh + 3 * s;
-								c.round(tx, by, tw, barH, barH / 2, 0x33FFFFFF);
-								c.round(tx, by, Math.max(barH, tw * sl.durability()), barH, barH / 2, Status.wear(sl.durability()));
-							}
+							float t0 = c.textWidth(Fonts.SEMIBOLD, tf, t);
+							float tx = right ? ix - gap - t0 : ix + ic + gap;
+							text(c, Fonts.SEMIBOLD, tf, t, tx, ry + (ic - lh) / 2 + s * 0.5f, textColor(sl, now));
 						}
-						ry += tile + rowGap;
 					}
 				}
-				done(w + 2 * pad + (tw > 0 ? 4 * s : 0), n * tile + (n - 1) * rowGap + 2 * pad);
+				done(w + 2 * pad, n * rowH - 3 * s + 2 * pad);
 				return;
 			}
-			float gap = 4 * s, total = 0;
+			float rowGap = 4 * s, totalW = 0;
 			float[] tw = new float[n];
 			boolean anyText = false;
 			for (int i = 0; i < n; i++) {
-				String t = label(list[i], false);
-				anyText |= !t.isEmpty();
-				tw[i] = Math.max(ic, c.textWidth(Fonts.SEMIBOLD, tf, t)) + 2 * s;
-				total += tw[i] + (i > 0 ? gap : 0);
+				anyText |= !texts[i].isEmpty();
+				tw[i] = Math.max(ic, c.textWidth(Fonts.SEMIBOLD, tf, texts[i]));
+				totalW += tw[i] + (i > 0 ? rowGap : 0);
 			}
 			if (ui != null) {
 				float tx = x + pad;
 				for (int i = 0; i < n; i++) {
 					Game.Slot sl = list[i];
 					drawSlot(c, sl, tx + (tw[i] - ic) / 2, y + pad, ic);
-					String t = label(sl, false);
+					String t = texts[i];
 					if (!t.isEmpty()) {
-						text(c, Fonts.SEMIBOLD, tf, t, tx + (tw[i] - c.textWidth(Fonts.SEMIBOLD, tf, t)) / 2, y + pad + ic + s, textColor(sl, now));
+						text(c, Fonts.SEMIBOLD, tf, t, tx + (tw[i] - c.textWidth(Fonts.SEMIBOLD, tf, t)) / 2, y + pad + ic + 2 * s, textColor(sl, now));
 					}
-					tx += tw[i] + gap;
+					tx += tw[i] + rowGap;
 				}
 			}
-			done(total + 2 * pad, ic + (anyText ? lh + s : 0) + 2 * pad);
+			done(totalW + 2 * pad, ic + (anyText ? lh + 2 * s : 0) + 2 * pad);
 		}
 
 		private void drawSlot(Canvas c, Game.Slot sl, float x, float y, float ic) {
@@ -492,7 +505,7 @@ public final class StatusModules {
 				c.round(x + ic * 0.1f, y + ic * 0.1f, ic * 0.8f, ic * 0.8f, 3, 0x14FFFFFF);
 				return;
 			}
-			item(c, sl.id, x, y, ic, 0xFFFFFFFF);
+			item(c, sl, x, y, ic, 0xFFFFFFFF);
 			if (bar.value) {
 				durabilityBar(c, sl, x, y, ic);
 			}
@@ -502,6 +515,7 @@ public final class StatusModules {
 	// ── inventory ────────────────────────────────────────────────────────
 
 	static final class InventoryGrid extends Box {
+		final Setting.Choice layout = add(new Setting.Choice("layout", "Layout", 0, "Horizontal", "Vertical"));
 		final Setting.Bool hotbar = fixed(new Setting.Bool("hotbar", "Show the hotbar row", false));
 		final Setting.Bool slots = fixed(new Setting.Bool("slots", "Slot backgrounds", true));
 		final Setting.Bool counts = fixed(new Setting.Bool("counts", "Item counts", true));
@@ -510,7 +524,7 @@ public final class StatusModules {
 		final Setting.Bool hideEmpty = fixed(new Setting.Bool("hide", "Hide when the inventory is empty", false));
 
 		InventoryGrid() {
-			super("inventory", "Inventory", "Your backpack on screen without opening it, with the game's item icons and counts.", Theme.I_BACKPACK, false, 1f, 0.8f);
+			super("inventory", "Inventory", "Your backpack on screen without opening it, with the game's item icons and counts (custom items too).", Theme.I_BACKPACK, false, 1f, 0.8f);
 			drop(labels, color);
 		}
 
@@ -533,36 +547,48 @@ public final class StatusModules {
 		}
 
 		@Override
+		float pad() {
+			float s = scale.value;
+			return style.value == STYLE_CARD ? 4 * s : style.value == STYLE_BRACKETS ? 4 * s : 0;
+		}
+
+		@Override
 		void render(Canvas c, Ui ui, Game g, float x, float y) {
 			float s = scale.value, pad = pad();
-			float p = 19 * s, ic = 16 * s, gap = 4 * s;
-			int rows = 3 + (hotbar.value ? 1 : 0);
-			float w = 9 * p + 2 * pad - 2 * s, h = rows * p + (hotbar.value ? gap : 0) + 2 * pad - 2 * s;
+			float cell = 20 * s, step = 21 * s, ic = 16 * s, sep = 4 * s;
+			int lines = 3 + (hotbar.value ? 1 : 0);
+			boolean vertical = layout.value == 1;
+			// horizontal: 9 columns x 3 (+ hotbar) rows like the inventory screen; vertical: the same grid turned on its side
+			float along = 9 * step - (step - cell), across = lines * step - (step - cell) + (hotbar.value ? sep : 0);
+			float w = (vertical ? across : along) + 2 * pad, h = (vertical ? along : across) + 2 * pad;
 			if (ui != null) {
-				for (int r = 0; r < rows; r++) {
+				float cr = 3 * s, fs = 10.5f * s;
+				float flh = c.lineHeight(Fonts.BOLD, fs);
+				for (int r = 0; r < lines; r++) {
 					boolean hot = r == 3;
-					float ry = y + pad + r * p + (hot ? gap : 0);
+					float off = r * step + (hot ? sep : 0);
 					for (int col = 0; col < 9; col++) {
 						Game.Slot sl = g.inv[hot ? col : 9 + r * 9 + col];
-						float sx = x + pad + col * p;
+						float sx = x + pad + (vertical ? off : col * step), sy = y + pad + (vertical ? col * step : off);
 						if (slots.value) {
-							c.round(sx, ry, p - 2 * s, p - 2 * s, 3 * s, 0x26FFFFFF);
+							c.round(sx, sy, cell, cell, cr, 0x66000000);
+							c.fill(sx + cr, sy, cell - 2 * cr, Math.max(1f, s * 0.75f), 0x12FFFFFF);
 						}
 						if (hot && selected.value && col == g.selected) {
-							c.outline(sx - s, ry - s, p, p, 4 * s, Math.max(1f, 1.5f * s), 0xE0FFFFFF);
+							c.outline(sx - s, sy - s, cell + 2 * s, cell + 2 * s, cr + s, Math.max(1f, 1.5f * s), 0xE6FFFFFF);
 						}
 						if (sl.empty()) {
 							continue;
 						}
-						float ix = sx + (p - 2 * s - ic) / 2, iy = ry + (p - 2 * s - ic) / 2;
-						item(c, sl.id, ix, iy, ic, 0xFFFFFFFF);
+						float ix = sx + (cell - ic) / 2, iy = sy + (cell - ic) / 2;
+						item(c, sl, ix, iy, ic, 0xFFFFFFFF);
 						if (bars.value) {
 							durabilityBar(c, sl, ix, iy, ic);
 						}
 						if (counts.value && sl.count > 1) {
 							String t = String.valueOf(sl.count);
-							float fs = 9.5f * s;
-							text(c, Fonts.SEMIBOLD, fs, t, sx + p - 2 * s - c.textWidth(Fonts.SEMIBOLD, fs, t) - s, ry + p - 2 * s - c.lineHeight(Fonts.SEMIBOLD, fs), 0xFFFFFFFF);
+							// bottom-right like the game, nudged slightly past the icon
+							text(c, Fonts.BOLD, fs, t, sx + cell - c.textWidth(Fonts.BOLD, fs, t) - 0.5f * s, sy + cell - flh + 1.5f * s, 0xFFFFFFFF);
 						}
 					}
 				}

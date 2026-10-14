@@ -43,6 +43,9 @@ public interface McBridge {
 	default void exitWorld() {
 	}
 
+	/** The game thread's task queue (Minecraft is an Executor on every version). */
+	java.util.concurrent.Executor gameThread();
+
 	void quit();
 
 	boolean inWorld();

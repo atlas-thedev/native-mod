@@ -123,7 +123,7 @@ public final class Vanilla {
 		Image img = items.get(id);
 		if (img == null) {
 			try {
-				img = fromModel(id);
+				img = fromModel(id, Float.NaN);
 			} catch (Throwable ignored) {
 				img = null; // an odd pack model: the plain lookups below still work
 			}
@@ -141,7 +141,118 @@ public final class Vanilla {
 		return img == NONE ? null : img;
 	}
 
+	/**
+	 * The icon of an item in a slot, honouring server / pack custom items: the item_model component and custom model
+	 * data (1.21.4+ item definitions and the older model "overrides"). Falls back to the plain item icon.
+	 */
+	public static synchronized Image item(Game.Slot sl) {
+		if (sl == null || sl.id == null) {
+			return null;
+		}
+		if (sl.model == null && Float.isNaN(sl.cmd)) {
+			return item(sl.id);
+		}
+		sync();
+		String key = sl.id + "|" + sl.model + "|" + sl.cmd;
+		Image img = items.get(key);
+		if (img == null) {
+			try {
+				img = fromModel(sl.model != null ? sl.model : sl.id, sl.cmd);
+			} catch (Throwable ignored) {
+				img = null;
+			}
+			if (img == null) {
+				img = item(sl.id);
+			}
+			items.put(key, img == null ? NONE : img);
+		}
+		return img == NONE ? null : img;
+	}
+
 	// ── item models: what a resource pack's model files say the icon is ──────────────────
+
+	private static String str(JsonObject o, String k) {
+		JsonElement e = o.get(k);
+		return e != null && e.isJsonPrimitive() ? e.getAsString() : null;
+	}
+
+	/** The model a 1.21.4+ item definition picks for this custom model data (NaN: the default branch). */
+	private static String pick(JsonElement e, float cmd) {
+		if (e == null || !e.isJsonObject()) {
+			return null;
+		}
+		JsonObject o = e.getAsJsonObject();
+		String type = str(o, "type");
+		type = type == null ? "" : type.startsWith("minecraft:") ? type.substring(10) : type;
+		if (type.equals("model")) {
+			return str(o, "model");
+		}
+		if (type.equals("range_dispatch")) {
+			String prop = str(o, "property");
+			int index = o.has("index") ? o.get("index").getAsInt() : 0;
+			if (prop != null && prop.endsWith("custom_model_data") && index == 0 && !Float.isNaN(cmd) && o.has("entries") && o.get("entries").isJsonArray()) {
+				float v = cmd * (o.has("scale") ? o.get("scale").getAsFloat() : 1f), bestT = Float.NEGATIVE_INFINITY;
+				JsonElement best = null;
+				for (JsonElement en : o.getAsJsonArray("entries")) {
+					if (!en.isJsonObject() || !en.getAsJsonObject().has("threshold")) {
+						continue;
+					}
+					float t = en.getAsJsonObject().get("threshold").getAsFloat();
+					if (t <= v && t >= bestT) {
+						bestT = t;
+						best = en.getAsJsonObject().get("model");
+					}
+				}
+				String r = pick(best, cmd);
+				if (r != null) {
+					return r;
+				}
+			}
+			String r = pick(o.get("fallback"), cmd);
+			return r != null ? r : modelRef(o);
+		}
+		if (type.equals("condition")) {
+			String r = pick(o.get("on_false"), cmd);
+			return r != null ? r : pick(o.get("on_true"), cmd);
+		}
+		if (type.equals("select")) {
+			String r = pick(o.get("fallback"), cmd);
+			if (r == null && o.has("cases") && o.get("cases").isJsonArray() && o.getAsJsonArray("cases").size() > 0) {
+				JsonElement c0 = o.getAsJsonArray("cases").get(0);
+				r = c0.isJsonObject() ? pick(c0.getAsJsonObject().get("model"), cmd) : null;
+			}
+			return r;
+		}
+		if (type.equals("composite") && o.has("models") && o.get("models").isJsonArray() && o.getAsJsonArray("models").size() > 0) {
+			return pick(o.getAsJsonArray("models").get(0), cmd);
+		}
+		if (type.equals("special")) {
+			return str(o, "base");
+		}
+		return modelRef(o);
+	}
+
+	/** Pre-1.21.4 packs: the last model "overrides" entry whose custom_model_data is at most the item's. */
+	private static String override(JsonObject m, float cmd) {
+		if (m == null || Float.isNaN(cmd) || !m.has("overrides") || !m.get("overrides").isJsonArray()) {
+			return null;
+		}
+		String found = null;
+		for (JsonElement e : m.getAsJsonArray("overrides")) {
+			if (!e.isJsonObject()) {
+				continue;
+			}
+			JsonObject o = e.getAsJsonObject();
+			JsonElement pred = o.get("predicate");
+			if (pred == null || !pred.isJsonObject() || !pred.getAsJsonObject().has("custom_model_data")) {
+				continue;
+			}
+			if (pred.getAsJsonObject().get("custom_model_data").getAsFloat() <= cmd && str(o, "model") != null) {
+				found = str(o, "model");
+			}
+		}
+		return found;
+	}
 
 	private static final Map<String, JsonObject> models = new HashMap<String, JsonObject>();
 	private static final JsonObject NO_MODEL = new JsonObject();
@@ -211,14 +322,23 @@ public final class Vanilla {
 	}
 
 	/** The icon an item's (pack or vanilla) model describes: its flat layer, or a cube of its block textures. Null when unclear. */
-	private static Image fromModel(String id) {
+	private static Image fromModel(String fullId, float cmd) {
+		int colon = fullId.indexOf(':');
+		String ns = colon > 0 ? fullId.substring(0, colon) : "minecraft", id = colon > 0 ? fullId.substring(colon + 1) : fullId;
 		String ref = null;
-		JsonObject def = json("assets/minecraft/items/" + id + ".json");
+		JsonObject def = json("assets/" + ns + "/items/" + id + ".json");
 		if (def != null) {
-			ref = modelRef(def);
+			ref = pick(def.get("model"), cmd);
+			if (ref == null) {
+				ref = modelRef(def);
+			}
 		}
 		if (ref == null) {
-			ref = "minecraft:item/" + id;
+			ref = ns + ":item/" + id;
+		}
+		String over = override(model(ref), cmd);
+		if (over != null) {
+			ref = over;
 		}
 		Map<String, String> tex = new HashMap<String, String>();
 		boolean flat = false, entity = false, found = false;

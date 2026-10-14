@@ -65,6 +65,9 @@ public final class Game {
 	public static final class Slot {
 		public String id;
 		public int count, damage, max;
+		/** Custom look: the item_model component when it differs from the item ("ns:path"), and the first custom model data number. */
+		public String model;
+		public float cmd = Float.NaN;
 
 		public boolean empty() {
 			return id == null;
@@ -73,6 +76,8 @@ public final class Game {
 		public void clear() {
 			id = null;
 			count = damage = max = 0;
+			model = null;
+			cmd = Float.NaN;
 		}
 
 		public void set(String id, int count, int damage, int max) {
@@ -80,6 +85,17 @@ public final class Game {
 			this.count = count;
 			this.damage = damage;
 			this.max = max;
+			this.model = null;
+			this.cmd = Float.NaN;
+		}
+
+		/** Sets the custom look; a model equal to the item's own id counts as none. */
+		public void custom(String model, float cmd) {
+			if (model != null && (model.equals(id) || model.equals("minecraft:" + id))) {
+				model = null;
+			}
+			this.model = model;
+			this.cmd = cmd;
 		}
 
 		/** Remaining durability fraction (1 = new); 1 for things that do not wear. */

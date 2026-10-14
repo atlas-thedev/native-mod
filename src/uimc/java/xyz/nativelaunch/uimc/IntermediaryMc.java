@@ -70,6 +70,11 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
+	public java.util.concurrent.Executor gameThread() {
+		return (java.util.concurrent.Executor) (Object) client(); // MinecraftClient is a ThreadExecutor on every version
+	}
+
+	@Override
 	public void exitWorld() {
 		xyz.nativelaunch.ui.UiRuntime.pauseBypass = true;
 		try {
@@ -608,6 +613,65 @@ public final class IntermediaryMc implements McBridge {
 			max = intOf(call(st, "method_7936"), 0);
 		}
 		out.set(id, intOf(call(st, "method_7947"), 1), damage, max);
+		try {
+			customLook(st, out);
+		} catch (Throwable ignored) {
+			// plain icon
+		}
+	}
+
+	/** item_model (1.21.2+) and custom model data: components on 1.20.5+, the CustomModelData NBT tag before. */
+	private void customLook(Object st, xyz.nativelaunch.ui.mod.Game.Slot out) throws ReflectiveOperationException {
+		Object model = component(st, "field_54199"); // DataComponentTypes.ITEM_MODEL
+		float cmd = Float.NaN;
+		Object data = component(st, "field_49637"); // DataComponentTypes.CUSTOM_MODEL_DATA
+		if (data != null) {
+			Object floats = call(data, "comp_3354"); // 1.21.4+: floats()
+			if (floats instanceof java.util.List && !((java.util.List<?>) floats).isEmpty() && ((java.util.List<?>) floats).get(0) instanceof Number) {
+				cmd = ((Number) ((java.util.List<?>) floats).get(0)).floatValue();
+			} else if (call(data, "comp_2382") instanceof Number) { // 1.20.5 - 1.21.3: value()
+				cmd = ((Number) call(data, "comp_2382")).floatValue();
+			}
+		} else if (componentTypes() == null) {
+			Object tag = call(st, "method_7969"); // getTag (1.16 - 1.20.4)
+			if (tag != null) {
+				Method contains = method(tag.getClass(), "method_10545", String.class), getInt = method(tag.getClass(), "method_10550", String.class);
+				if (contains != null && getInt != null && Boolean.TRUE.equals(contains.invoke(tag, "CustomModelData"))) {
+					cmd = ((Number) getInt.invoke(tag, "CustomModelData")).floatValue();
+				}
+			}
+		}
+		out.custom(model == null ? null : model.toString(), cmd);
+	}
+
+	private Class<?> componentTypesClass;
+	private boolean componentTypesChecked;
+
+	private Class<?> componentTypes() {
+		if (!componentTypesChecked) {
+			componentTypesChecked = true;
+			try {
+				componentTypesClass = Class.forName("net.minecraft.class_9334");
+			} catch (Throwable t) {
+				componentTypesClass = null;
+			}
+		}
+		return componentTypesClass;
+	}
+
+	private Object component(Object st, String typeField) {
+		Class<?> types = componentTypes();
+		Field f = types == null ? null : field(types, typeField);
+		if (f == null) {
+			return null;
+		}
+		try {
+			Object type = f.get(null);
+			Method get = method(st.getClass(), "method_58694", Class.forName("net.minecraft.class_9331")); // get(ComponentType)
+			return type == null || get == null ? null : get.invoke(st, type);
+		} catch (Throwable t) {
+			return null;
+		}
 	}
 
 	@Override
