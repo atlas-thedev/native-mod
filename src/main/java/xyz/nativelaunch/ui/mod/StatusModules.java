@@ -331,184 +331,117 @@ public final class StatusModules {
 		}
 	}
 
-	// ── armour status ────────────────────────────────────────────────────
+	// ── armour status (Armor Stats) ──────────────────────────────────────
 
 	static final class Armor extends Box {
-		final Setting.Choice layout = add(new Setting.Choice("layout", "Layout", 0, "List", "Row"));
-		final Setting.Choice text = fixed(new Setting.Choice("text", "Durability text", 1, "Remaining", "Percent", "Remaining / max", "Off").shorts("Left", "Percent", "Left / max", "Off"));
-		final Setting.Bool bar = fixed(new Setting.Bool("bar", "Durability bar on the icon", true));
-		final Setting.Bool wear = fixed(new Setting.Bool("wear", "Colour text by wear", true));
-		final Setting.Num warn = fixed(new Setting.Num("warn", "Flash red below", 15, 0, 50, 5, "%"));
-		final Setting.Bool hand = fixed(new Setting.Bool("hand", "Show the item in your hand", true));
-		final Setting.Bool off = fixed(new Setting.Bool("offhand", "Show the off-hand item", false));
-		final Setting.Bool total = fixed(new Setting.Bool("total", "Count matching items in the inventory", true));
-		final Setting.Bool empty = fixed(new Setting.Bool("empty", "Show empty armour slots", false));
-		private final Game.Slot[] list = new Game.Slot[6];
-		private final String[] texts = new String[6];
+		private static final String[] EMPTY_ITEMS = {
+			"leather_helmet", "leather_chestplate", "leather_leggings", "leather_boots"
+		};
+
+		final Setting.Choice layout = add(new Setting.Choice("layout", "Orientation", 0, "Vertical", "Horizontal").shorts("Vertical", "Horizontal"));
+		final Setting.Bool durability = fixed(new Setting.Bool("durability", "Show durability", true));
+		final Setting.Bool empty = fixed(new Setting.Bool("empty", "Show empty slots", false));
 
 		Armor() {
-			super("armor", "Armor Status", "Armour pieces and your held item with their durability, using the game's item icons (custom items too).", Theme.I_SHIELD, false, 0f, 0.7f);
+			super("armor", "Armor Stats", "Displays your equipped armor pieces and their durability bars.", Theme.I_SHIELD, false, 0f, 0.7f);
 			drop(labels);
-			style.initial(STYLE_TEXT);
+			style.initial(STYLE_CARD);
 		}
 
 		@Override
 		public int needs() {
-			return Game.NEED_ARMOR | (total.value ? Game.NEED_INVENTORY : 0);
-		}
-
-		private int collect(Game g) {
-			int n = 0;
-			for (int i = 0; i < 4; i++) {
-				if (empty.value || !g.armor[i].empty()) {
-					list[n++] = g.armor[i];
-				}
-			}
-			if (hand.value && !g.hand.empty()) {
-				list[n++] = g.hand;
-			}
-			if (off.value && !g.offhand.empty()) {
-				list[n++] = g.offhand;
-			}
-			for (int i = 0; i < n; i++) {
-				texts[i] = label(g, list[i]);
-			}
-			return n;
+			return Game.NEED_ARMOR;
 		}
 
 		@Override
 		public boolean visible(Game g) {
-			return g.sample || collect(g) > 0;
-		}
-
-		private static boolean same(Game.Slot a, Game.Slot b) {
-			return a.id.equals(b.id) && (a.model == null ? b.model == null : a.model.equals(b.model))
-					&& (Float.isNaN(a.cmd) ? Float.isNaN(b.cmd) : a.cmd == b.cmd);
-		}
-
-		/** How many of this item the player carries (the held stack plus every matching stack in the inventory). */
-		private int carried(Game g, Game.Slot sl) {
-			if (!total.value || g.sample) {
-				return sl.count;
+			if (g.sample) {
+				return true;
 			}
-			int n = 0;
-			boolean seen = false;
-			for (int i = 0; i < g.inv.length; i++) {
-				Game.Slot o = g.inv[i];
-				if (!o.empty() && same(o, sl)) {
-					n += o.count;
-					seen |= i == g.selected;
+			for (int i = 0; i < 4; i++) {
+				if (!g.armor[i].empty()) {
+					return true;
 				}
 			}
-			if (sl != g.offhand && !g.offhand.empty() && same(g.offhand, sl)) {
-				n += g.offhand.count;
-			}
-			if (sl == g.offhand || !seen) {
-				n = Math.max(n, sl.count); // the off-hand (or an armour slot) is not part of the 36 slots
-			}
-			return Math.max(1, n);
-		}
-
-		private String label(Game g, Game.Slot sl) {
-			if (sl.empty()) {
-				return "";
-			}
-			if (sl.max > 0) {
-				switch (text.value) {
-					case 0:
-						return String.valueOf(sl.max - sl.damage);
-					case 1:
-						return Math.round(sl.durability() * 100) + "%";
-					case 2:
-						return (sl.max - sl.damage) + "/" + sl.max;
-					default:
-						return "";
-				}
-			}
-			return text.value == 3 ? "" : String.valueOf(carried(g, sl));
-		}
-
-		private int textColor(Game.Slot sl, long now) {
-			int col = color.value;
-			if (sl.max > 0 && sl.damage > 0) {
-				if (wear.value) {
-					col = Status.wear(sl.durability());
-				}
-				if (warn.value > 0 && sl.durability() * 100 < warn.value) {
-					col = Theme.mix(col, BAD, 0.5f + 0.5f * (float) Math.sin(now / 160.0));
-				}
-			}
-			return col;
+			return empty.value;
 		}
 
 		@Override
 		void render(Canvas c, Ui ui, Game g, float x, float y) {
-			float s = scale.value, pad = pad();
-			int n = collect(g);
-			if (n == 0) {
+			float s = scale.value;
+			float pad = pad();
+			float itemSize = 16 * s;
+			float itemSpacing = 4 * s;
+			float durabilityBarHeight = 3 * s; // 2px bar + 1px gap
+			float slotHeight = durability.value ? itemSize + durabilityBarHeight : itemSize;
+
+			int visibleCount = 0;
+			for (int i = 0; i < 4; i++) {
+				if (empty.value || !g.armor[i].empty()) {
+					visibleCount++;
+				}
+			}
+
+			if (visibleCount == 0) {
 				done(1, 1);
 				return;
 			}
-			long now = ui == null ? 0 : ui.now;
-			float ic = 16 * s, tf = 11.5f * s, gap = 5 * s;
-			float lh = c.lineHeight(Fonts.SEMIBOLD, tf);
-			if (layout.value == 0) {
-				// icon + number per row, like the classic armour HUDs; on the right half of the screen the numbers sit left of the icons
-				boolean right = fx > 0.5f;
-				float rowH = ic + 3 * s, tw = 0;
-				for (int i = 0; i < n; i++) {
-					tw = Math.max(tw, c.textWidth(Fonts.SEMIBOLD, tf, texts[i]));
-				}
-				float w = ic + (tw > 0 ? gap + tw : 0);
-				if (ui != null) {
-					for (int i = 0; i < n; i++) {
-						Game.Slot sl = list[i];
-						float ry = y + pad + i * rowH;
-						float ix = right ? x + pad + w - ic : x + pad;
-						drawSlot(c, sl, ix, ry, ic);
-						String t = texts[i];
-						if (!t.isEmpty()) {
-							float t0 = c.textWidth(Fonts.SEMIBOLD, tf, t);
-							float tx = right ? ix - gap - t0 : ix + ic + gap;
-							text(c, Fonts.SEMIBOLD, tf, t, tx, ry + (ic - lh) / 2 + s * 0.5f, textColor(sl, now));
+
+			boolean isVertical = layout.value == 0;
+			float width, height;
+			if (isVertical) {
+				width = itemSize + pad * 2;
+				height = visibleCount * slotHeight + (visibleCount - 1) * itemSpacing + pad * 2;
+			} else {
+				width = visibleCount * itemSize + (visibleCount - 1) * itemSpacing + pad * 2;
+				height = slotHeight + pad * 2;
+			}
+
+			if (ui != null) {
+				float ox = 0;
+				float oy = 0;
+				for (int i = 0; i < 4; i++) {
+					Game.Slot sl = g.armor[i];
+					boolean hasItem = !sl.empty();
+					if (!hasItem && !empty.value) {
+						continue;
+					}
+
+					float ix = isVertical ? x + pad : x + pad + ox;
+					float iy = isVertical ? y + pad + oy : y + pad;
+
+					if (hasItem) {
+						item(c, sl, ix, iy, itemSize, 0xFFFFFFFF);
+						if (durability.value && sl.max > 0 && sl.damage > 0) {
+							float pct = sl.durability();
+							float barX = ix + 2 * s;
+							float barY = iy + itemSize + 1 * s;
+							float barWidth = 13 * s;
+							float barHeight = Math.max(1f, 2 * s);
+							float filledWidth = Math.max(1f, Math.round(barWidth * pct));
+
+							c.fill(barX, barY, barWidth, barHeight, 0xFF000000);
+							c.fill(barX, barY, filledWidth, barHeight, Status.wear(pct));
+						}
+					} else {
+						// Empty slot placeholder (leather armor icons like Fast Client)
+						Image placeholder = Vanilla.item(EMPTY_ITEMS[i]);
+						if (placeholder != null) {
+							Vanilla.draw(c, placeholder, ix, iy, itemSize, itemSize, 0x88FFFFFF);
+						} else {
+							c.round(ix + itemSize * 0.1f, iy + itemSize * 0.1f, itemSize * 0.8f, itemSize * 0.8f, 3 * s, 0x14FFFFFF);
 						}
 					}
-				}
-				done(w + 2 * pad, n * rowH - 3 * s + 2 * pad);
-				return;
-			}
-			float rowGap = 4 * s, totalW = 0;
-			float[] tw = new float[n];
-			boolean anyText = false;
-			for (int i = 0; i < n; i++) {
-				anyText |= !texts[i].isEmpty();
-				tw[i] = Math.max(ic, c.textWidth(Fonts.SEMIBOLD, tf, texts[i]));
-				totalW += tw[i] + (i > 0 ? rowGap : 0);
-			}
-			if (ui != null) {
-				float tx = x + pad;
-				for (int i = 0; i < n; i++) {
-					Game.Slot sl = list[i];
-					drawSlot(c, sl, tx + (tw[i] - ic) / 2, y + pad, ic);
-					String t = texts[i];
-					if (!t.isEmpty()) {
-						text(c, Fonts.SEMIBOLD, tf, t, tx + (tw[i] - c.textWidth(Fonts.SEMIBOLD, tf, t)) / 2, y + pad + ic + 2 * s, textColor(sl, now));
-					}
-					tx += tw[i] + rowGap;
-				}
-			}
-			done(totalW + 2 * pad, ic + (anyText ? lh + 2 * s : 0) + 2 * pad);
-		}
 
-		private void drawSlot(Canvas c, Game.Slot sl, float x, float y, float ic) {
-			if (sl.empty()) {
-				c.round(x + ic * 0.1f, y + ic * 0.1f, ic * 0.8f, ic * 0.8f, 3, 0x14FFFFFF);
-				return;
+					if (isVertical) {
+						oy += slotHeight + itemSpacing;
+					} else {
+						ox += itemSize + itemSpacing;
+					}
+				}
 			}
-			item(c, sl, x, y, ic, 0xFFFFFFFF);
-			if (bar.value) {
-				durabilityBar(c, sl, x, y, ic);
-			}
+
+			done(width, height);
 		}
 	}
 
