@@ -44,6 +44,19 @@ public final class RelayClient {
 	public volatile List<Model.Friend> friends = Collections.emptyList();
 	public volatile List<Model.Group> groups = Collections.emptyList();
 	public volatile int requests;
+	/** Friend requests (the Requests tab). */
+	public volatile List<Model.Request> received = Collections.emptyList(), sent = Collections.emptyList();
+	public volatile boolean requestsLoaded;
+	/** "Add friend" search results, and the query they belong to. */
+	public volatile List<Model.Person> found = Collections.emptyList();
+	public volatile String foundFor = "";
+	public volatile boolean searching;
+	/** A short note after a friend action ("Request sent to Steve"), shown in the Requests tab. */
+	public volatile String notice;
+	public volatile boolean noticeError;
+	/** Public profiles by lowercase name for the side panel. */
+	private final Map<String, Model.Profile> profiles = new ConcurrentHashMap<String, Model.Profile>();
+	private final java.util.Set<String> profileLoading = ConcurrentHashMap.newKeySet();
 	public volatile boolean groupsLoaded, friendsLoaded;
 	private final Map<String, Model.Conversation> conversations = new ConcurrentHashMap<String, Model.Conversation>();
 	private final Map<String, Long> typing = new ConcurrentHashMap<String, Long>(); // conv|userId -> until
@@ -179,6 +192,7 @@ public final class RelayClient {
 		}
 		pool.execute(this::loadFriends);
 		pool.execute(this::loadGroups);
+		pool.execute(this::loadRequests);
 	}
 
 	/** Opens a conversation: loads the latest page and marks it read. */
@@ -635,6 +649,204 @@ public final class RelayClient {
 		return t == null ? 0 : t;
 	}
 
+	// ── friends: requests, search, remove, block, profiles ─────────────────
+
+	public void loadRequests() {
+		if (ticket() == null) {
+			return;
+		}
+		try {
+			JsonObject o = getJson("/v1/social/requests").getAsJsonObject("requests");
+			received = requestList(o == null ? null : o.getAsJsonArray("received"));
+			sent = requestList(o == null ? null : o.getAsJsonArray("sent"));
+			requests = received.size();
+			requestsLoaded = true;
+		} catch (Exception e) {
+			Log.debug("Relay requests failed: {}", e.toString());
+		}
+	}
+
+	private static List<Model.Request> requestList(JsonArray arr) {
+		List<Model.Request> out = new ArrayList<Model.Request>();
+		if (arr != null) {
+			for (JsonElement e : arr) {
+				JsonObject r = e.getAsJsonObject();
+				out.add(new Model.Request(str(r, "id"), str(r, "userId"), str(r, "name"), hashOf(str(r, "skinUrl")), lng(r, "createdAt")));
+			}
+		}
+		return Collections.unmodifiableList(out);
+	}
+
+	/** Players whose Native name contains {@code query} (2+ characters). */
+	public void search(final String query) {
+		final String q = query == null ? "" : query.trim();
+		if (q.length() < 2 || ticket() == null) {
+			found = Collections.emptyList();
+			foundFor = q;
+			return;
+		}
+		if (q.equals(foundFor) || searching) {
+			return;
+		}
+		searching = true;
+		foundFor = q;
+		pool.execute(() -> {
+			try {
+				JsonObject o = getJson("/v1/social/search?q=" + enc(q));
+				List<Model.Person> out = new ArrayList<Model.Person>();
+				JsonArray arr = o.getAsJsonArray("results");
+				if (arr != null) {
+					for (JsonElement e : arr) {
+						JsonObject u = e.getAsJsonObject();
+						out.add(new Model.Person(str(u, "id"), str(u, "name") != null ? str(u, "name") : str(u, "username"), hashOf(str(u, "skinUrl"))));
+					}
+				}
+				if (q.equals(foundFor)) {
+					found = Collections.unmodifiableList(out);
+				}
+			} catch (Exception e) {
+				Log.debug("Relay search failed: {}", e.toString());
+			} finally {
+				searching = false;
+			}
+		});
+	}
+
+	public void sendRequest(final String username) {
+		final String name = username == null ? "" : username.trim();
+		if (name.isEmpty() || ticket() == null) {
+			return;
+		}
+		pool.execute(() -> {
+			try {
+				JsonObject body = new JsonObject();
+				body.addProperty("username", name);
+				JsonObject res = postJson("/v1/social/requests/send", body);
+				boolean mutual = res.has("mutual") && res.get("mutual").getAsBoolean();
+				note(mutual ? "You and " + name + " are now friends." : "Friend request sent to " + name + ".", false);
+			} catch (Exception e) {
+				note(errorText(e, "Could not send the request."), true);
+			}
+			loadRequests();
+			loadFriends();
+		});
+	}
+
+	/** @param action accept | decline | cancel */
+	public void respond(final String requestId, final String action) {
+		if (requestId == null || ticket() == null) {
+			return;
+		}
+		// optimistic: drop it from the list straight away
+		List<Model.Request> r = new ArrayList<Model.Request>(received);
+		List<Model.Request> s = new ArrayList<Model.Request>(sent);
+		r.removeIf(x -> requestId.equals(x.id));
+		s.removeIf(x -> requestId.equals(x.id));
+		received = Collections.unmodifiableList(r);
+		sent = Collections.unmodifiableList(s);
+		requests = received.size();
+		pool.execute(() -> {
+			try {
+				JsonObject body = new JsonObject();
+				body.addProperty("requestId", requestId);
+				body.addProperty("action", action);
+				postJson("/v1/social/requests/respond", body);
+			} catch (Exception e) {
+				note(errorText(e, "That didn't work. Try again."), true);
+			}
+			loadRequests();
+			loadFriends();
+		});
+	}
+
+	public void removeFriend(final String friendId) {
+		List<Model.Friend> next = new ArrayList<Model.Friend>(friends);
+		next.removeIf(f -> f.id.equals(friendId));
+		friends = next;
+		pool.execute(() -> {
+			try {
+				HttpURLConnection con = open("/v1/social/friends/" + enc(friendId), "DELETE");
+				try {
+					read(con);
+				} finally {
+					con.disconnect();
+				}
+			} catch (Exception e) {
+				note(errorText(e, "Could not remove that friend."), true);
+			}
+			loadFriends();
+		});
+	}
+
+	public void block(final String userId) {
+		List<Model.Friend> next = new ArrayList<Model.Friend>(friends);
+		next.removeIf(f -> f.id.equals(userId));
+		friends = next;
+		pool.execute(() -> {
+			try {
+				JsonObject body = new JsonObject();
+				body.addProperty("targetId", userId);
+				postJson("/v1/social/block", body);
+				note("Blocked. They can't message you or send requests.", false);
+			} catch (Exception e) {
+				note(errorText(e, "Could not block that player."), true);
+			}
+			loadFriends();
+			loadRequests();
+		});
+	}
+
+	/** The public profile for the side panel; null while it loads (fetched once per name). */
+	public Model.Profile profile(final String name) {
+		if (name == null) {
+			return null;
+		}
+		final String key = name.toLowerCase(java.util.Locale.ROOT);
+		Model.Profile p = profiles.get(key);
+		if (p == null && profileLoading.add(key)) {
+			pool.execute(() -> {
+				try {
+					JsonObject o = getJson("/v1/profiles/" + enc(name)).getAsJsonObject("profile");
+					List<String> badges = new ArrayList<String>();
+					JsonArray b = o.has("badges") && o.get("badges").isJsonArray() ? o.getAsJsonArray("badges") : null;
+					if (b != null) {
+						for (JsonElement e : b) {
+							badges.add(e.isJsonObject() ? str(e.getAsJsonObject(), "name") : e.getAsString());
+						}
+					}
+					int friendCount = 0;
+					if (o.has("friends") && o.get("friends").isJsonArray()) {
+						friendCount = o.getAsJsonArray("friends").size();
+					} else if (o.has("friends") && o.get("friends").isJsonPrimitive()) {
+						friendCount = o.get("friends").getAsInt();
+					} else if (o.has("friends") && o.get("friends").isJsonObject() && o.getAsJsonObject("friends").has("count")) {
+						friendCount = o.getAsJsonObject("friends").get("count").getAsInt();
+					}
+					profiles.put(key, new Model.Profile(str(o, "name"), str(o, "bio"), badges, lng(o, "joinedAt"), friendCount, bool(o, "premium")));
+				} catch (Exception e) {
+					profiles.put(key, new Model.Profile(name, null, Collections.<String>emptyList(), 0, 0, false));
+				} finally {
+					profileLoading.remove(key);
+				}
+			});
+		}
+		return p;
+	}
+
+	private void note(String text, boolean error) {
+		notice = text;
+		noticeError = error;
+		noticeAt = System.currentTimeMillis();
+	}
+
+	public volatile long noticeAt;
+
+	/** The server's own error message ("Already friends."), else the fallback. */
+	private static String errorText(Exception e, String fallback) {
+		String m = e.getMessage();
+		return m != null && m.startsWith("HTTP ") ? fallback : (m == null || m.isEmpty() ? fallback : m);
+	}
+
 	public void clearChat(String key) {
 		clearedMap().put(meId + "|" + key, System.currentTimeMillis() + 1000); // +1 s: tolerate small clock drift to the server
 		try {
@@ -934,6 +1146,7 @@ public final class RelayClient {
 				}
 				pool.execute(this::loadFriends);
 				pool.execute(this::loadGroups);
+				pool.execute(this::loadRequests);
 			}
 			long started = System.currentTimeMillis();
 			try {
@@ -1020,6 +1233,7 @@ public final class RelayClient {
 			case "friends:changed":
 			case "request:changed":
 				pool.execute(this::loadFriends);
+				pool.execute(this::loadRequests);
 				break;
 			case "group:created":
 			case "group:updated":
@@ -1251,11 +1465,29 @@ public final class RelayClient {
 
 	private static JsonObject read(HttpURLConnection con) throws IOException {
 		int status = con.getResponseCode();
-		if (status == 401) {
+		// Only the core game endpoints can say the ticket itself is bad. A 401 from the friend endpoints
+		// (/v1/social/requests, search, ...) means "not allowed here" (e.g. an older server) and must not lock Relay.
+		String path = con.getURL().getPath();
+		if (status == 401 && (path.startsWith("/v1/mod/") || path.startsWith("/v1/social/relay/"))) {
 			Session.rejected(Session.ticket());
 		}
 		if (status / 100 != 2) {
-			throw new IOException("HTTP " + status);
+			String message = null;
+			try (InputStream err = con.getErrorStream()) {
+				if (err != null && status / 100 == 4) {
+					ByteArrayOutputStream eo = new ByteArrayOutputStream();
+					byte[] eb = new byte[4096];
+					int en;
+					while ((en = err.read(eb)) > 0 && eo.size() < 16 * 1024) {
+						eo.write(eb, 0, en);
+					}
+					JsonObject e = new JsonParser().parse(new String(eo.toByteArray(), StandardCharsets.UTF_8)).getAsJsonObject();
+					message = str(e, "error");
+				}
+			} catch (Exception ignored) {
+				// no readable error body
+			}
+			throw new IOException(message != null ? message : "HTTP " + status);
 		}
 		InputStream in = con.getInputStream();
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -1299,6 +1531,15 @@ public final class RelayClient {
 	}
 
 	/** Native skin hash, else "mj:&lt;uuid&gt;" for a linked Mojang account (see Avatars), else null. */
+	/** ".../csl/textures/<sha256>" -> "<sha256>" (the skin reference avatars use), else null. */
+	static String hashOf(String url) {
+		if (url == null) {
+			return null;
+		}
+		String h = url.substring(url.lastIndexOf('/') + 1);
+		return h.matches("[a-f0-9]{64}") ? h : null;
+	}
+
 	static String skinRef(String nativeSkin, String mojangUuid) {
 		if (nativeSkin != null && !nativeSkin.isEmpty()) {
 			return nativeSkin;
