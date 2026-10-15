@@ -247,4 +247,47 @@ public final class Model {
 			this.skin = skin;
 		}
 	}
+
+	/** A friend request: received (they asked you) or sent (you asked them). */
+	public static final class Request {
+		public final String id, userId, name, skin;
+		public final long createdAt;
+
+		public Request(String id, String userId, String name, String skin, long createdAt) {
+			this.id = id;
+			this.userId = userId;
+			this.name = name;
+			this.skin = skin;
+			this.createdAt = createdAt;
+		}
+	}
+
+	/** A player found by "Add friend". */
+	public static final class Person {
+		public final String id, name, skin;
+
+		public Person(String id, String name, String skin) {
+			this.id = id;
+			this.name = name;
+			this.skin = skin;
+		}
+	}
+
+	/** The public Native profile shown in the side panel (null fields when unknown). */
+	public static final class Profile {
+		public final String name, bio;
+		public final java.util.List<String> badges;
+		public final long joinedAt;
+		public final int friends;
+		public final boolean premium;
+
+		public Profile(String name, String bio, java.util.List<String> badges, long joinedAt, int friends, boolean premium) {
+			this.name = name;
+			this.bio = bio;
+			this.badges = badges;
+			this.joinedAt = joinedAt;
+			this.friends = friends;
+			this.premium = premium;
+		}
+	}
 }

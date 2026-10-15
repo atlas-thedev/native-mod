@@ -31,7 +31,15 @@ import java.util.Map;
 public final class RelayView {
 	private static volatile String pendingSelect;
 	private String selected;
-	private int tab; // 0 friends, 1 groups
+	private int tab; // 0 friends, 1 groups, 2 requests
+	private final TextField addField = new TextField("relay:add");
+	private final Scroll requestScroll = new Scroll();
+	private final Scroll profileScroll = new Scroll();
+	/** The friend profile panel on the right of a chat. */
+	private boolean profileOpen = true;
+	/** Two-click confirm for remove / block: which action is armed and since when. */
+	private String armed;
+	private long armedAt;
 	private final TextField search = new TextField("relay:search");
 	private final TextField input = new TextField("relay:input");
 	private final Scroll listScroll = new Scroll();
@@ -200,7 +208,13 @@ public final class RelayView {
 		} else {
 			sidebar(ui, client, px, py, sw, ph, screen);
 			c.fill(px + sw, py, 1, ph, Theme.HAIRLINE);
-			chat(ui, client, px + sw + 1, py, pw - sw - 1, ph, screen);
+			boolean showProfile = profileOpen && selected != null && selected.startsWith("dm:") && pw - sw > 640;
+			float pp = showProfile ? Math.min(270, (pw - sw) * 0.36f) : 0;
+			chat(ui, client, px + sw + 1, py, pw - sw - 1 - pp, ph, screen);
+			if (pp > 0) {
+				c.fill(px + pw - pp, py, 1, ph, Theme.HAIRLINE);
+				profilePanel(ui, client, px + pw - pp + 1, py, pp - 1, ph, screen);
+			}
 		}
 		ui.interactive = true;
 		if (settingsOpen) {
@@ -263,7 +277,7 @@ public final class RelayView {
 		}
 		float ty = y + 60;
 		// tabs
-		float tw = (w - pad * 2) / 2;
+		float tw = (w - pad * 2) / 3;
 		c.round(x + pad, ty, w - pad * 2, 34, 10, Theme.SUBTLE);
 		float tabPos = ui.anim("relay:tab", tab, 16f);
 		c.shadow(x + pad + 3 + tabPos * tw, ty + 4, tw - 6, 28, 8, 6, 0x66000000);
@@ -277,21 +291,29 @@ public final class RelayView {
 				gu += g.unread;
 			}
 		}
-		for (int i = 0; i < 2; i++) {
-			String label = i == 0 ? "Friends" : "Groups";
-			int n = i == 0 ? fu : gu;
+		for (int i = 0; i < 3; i++) {
+			String label = i == 0 ? "Friends" : i == 1 ? "Groups" : "Requests";
+			int n = i == 0 ? fu : i == 1 ? gu : (client == null ? 0 : client.requests);
 			float bx = x + pad + i * tw;
 			if (ui.clicked("relay:tab" + i, bx, ty, tw, 34)) {
 				tab = i;
 			}
-			float lw = c.textWidth(Fonts.SEMIBOLD, 12.5f, label) + (n > 0 ? 24 : 0);
+			float lw = c.textWidth(Fonts.SEMIBOLD, 12f, label) + (n > 0 ? 22 : 0);
 			int col = tab == i ? Theme.TEXT_STRONG : Theme.TEXT_MUTED;
-			c.text(Fonts.SEMIBOLD, 12.5f, label, bx + (tw - lw) / 2, ty + 17 - c.lineHeight(Fonts.SEMIBOLD, 12.5f) / 2, col);
+			c.text(Fonts.SEMIBOLD, 12f, label, bx + (tw - lw) / 2, ty + 17 - c.lineHeight(Fonts.SEMIBOLD, 12f) / 2, col);
 			if (n > 0) {
 				TitleView.badge(c, bx + (tw + lw) / 2, ty + 17, n);
 			}
 		}
 		ty += 46;
+		if (tab == 2) {
+			if (client == null || SessionLock.locked()) {
+				SessionLock.draw(ui, "relay:req:lock", x, ty, w, y + h - ty - 8);
+				return;
+			}
+			requestsPane(ui, client, x, ty, w, y + h - ty - 8);
+			return;
+		}
 		search.draw(ui, x + pad, ty, w - pad * 2, 36, tab == 0 ? "Search friends" : "Search groups", 12.5f);
 		ty += 46;
 		float listH = y + h - ty - 8;
@@ -328,7 +350,7 @@ public final class RelayView {
 				shown++;
 			}
 			if (shown == 0 && client.friendsLoaded) {
-				TitleView.empty(c, x, ty, w, Math.min(listH, 220), Theme.I_USER_PLUS, q.isEmpty() ? "No friends yet" : "No matches", q.isEmpty() ? "Add friends in the launcher's Relay tab." : "Try another name.");
+				TitleView.empty(c, x, ty, w, Math.min(listH, 220), Theme.I_USER_PLUS, q.isEmpty() ? "No friends yet" : "No matches", q.isEmpty() ? "Find players in the Requests tab and add them." : "Try another name.");
 			}
 		} else {
 			for (Model.Group g : client.groups) {
@@ -421,6 +443,10 @@ public final class RelayView {
 		if (ui.iconButton("relay:close", x + w - 46, y + 14, 32, Theme.I_X, "Close (Esc)")) {
 			UiRuntime.closeHost(screen);
 			return;
+		}
+		if (selected != null && selected.startsWith("dm:")
+				&& ui.iconButton("relay:profile", x + w - 46 - 38, y + 14, 32, Theme.I_USER, profileOpen ? "Hide profile" : "Show profile")) {
+			profileOpen = !profileOpen;
 		}
 		if (client == null || selected == null) {
 			TitleView.empty(c, x, y, w, h, Theme.I_MESSAGE, "Pick a chat", "Choose a friend or a group on the left. Press " + UiRuntime.keyName(UiRuntime.config().relayKey) + " in game to open Relay any time.");
@@ -1013,6 +1039,278 @@ public final class RelayView {
 		if (ui.pressed && !ui.hover(px, py, pw, ph) && !ui.hover(anchorX, anchorY, 46, 46)) {
 			shotsOpen = false;
 		}
+	}
+
+	// ── requests tab ──────────────────────────────────────────────────────
+
+	private void requestsPane(Ui ui, RelayClient client, float x, float y, float w, float h) {
+		Canvas c = ui.c;
+		float pad = 16;
+		addField.maxLength = 16;
+		boolean enter = addField.draw(ui, x + pad, y, w - pad * 2 - 42, 36, "Add by Native name", 12.5f);
+		String query = addField.value().trim();
+		boolean send = enter;
+		if (ui.iconButton("relay:add:send", x + w - pad - 34, y + 2, 32, Theme.I_USER_PLUS, "Send friend request")) {
+			send = true;
+		}
+		if (send && !query.isEmpty()) {
+			client.sendRequest(query);
+			addField.set("");
+			query = "";
+		}
+		client.search(query);
+		float ty = y + 44;
+		String note = client.notice;
+		if (note != null && System.currentTimeMillis() - client.noticeAt < 6000) {
+			int col = client.noticeError ? 0xFFFCA5A5 : 0xFF86EFAC;
+			for (String line : xyz.nativelaunch.ui.TextLayout.wrap(c, Fonts.MEDIUM, 11.5f, note, w - pad * 2)) {
+				c.text(Fonts.MEDIUM, 11.5f, line, x + pad, ty, col);
+				ty += 16;
+			}
+			ty += 6;
+		}
+		float listH = y + h - ty;
+		float off = requestScroll.begin(ui, x, ty, w, listH);
+		float ry = ty - off;
+		float rh = 50;
+		// search results
+		if (query.length() >= 2) {
+			ry = heading(c, "Players", x + pad, ry);
+			if (client.found.isEmpty()) {
+				c.text(Fonts.REGULAR, 11.5f, client.searching ? "Searching…" : "No Native player with that name.", x + pad, ry, Theme.TEXT_MUTED);
+				ry += 26;
+			}
+			for (Model.Person p : client.found) {
+				boolean friend = false, pending = false;
+				for (Model.Friend f : client.friends) {
+					friend |= f.id.equals(p.id);
+				}
+				for (Model.Request r : client.sent) {
+					pending |= r.userId != null && r.userId.equals(p.id);
+				}
+				person(ui, client, x + 8, ry, w - 16, rh, p.name, p.skin, friend ? "Already friends" : pending ? "Request sent" : "Native player");
+				if (!friend && !pending && ui.button("relay:find:" + p.id, x + w - 16 - 70, ry + (rh - 28) / 2, 66, 28, "Add", Theme.I_PLUS, Ui.BTN_PRIMARY)) {
+					client.sendRequest(p.name);
+				}
+				ry += rh + 2;
+			}
+			ry += 8;
+		}
+		// received
+		ry = heading(c, "Received" + (client.received.isEmpty() ? "" : " · " + client.received.size()), x + pad, ry);
+		if (client.received.isEmpty()) {
+			c.text(Fonts.REGULAR, 11.5f, client.requestsLoaded ? "No requests waiting." : "Loading…", x + pad, ry, Theme.TEXT_MUTED);
+			ry += 26;
+		}
+		for (Model.Request r : client.received) {
+			person(ui, client, x + 8, ry, w - 16, rh, r.name, r.skin, "Wants to be friends");
+			if (ui.iconButton("relay:req:ok:" + r.id, x + w - 16 - 72, ry + (rh - 30) / 2, 30, Theme.I_CHECK, "Accept")) {
+				client.respond(r.id, "accept");
+			}
+			if (ui.iconButton("relay:req:no:" + r.id, x + w - 16 - 36, ry + (rh - 30) / 2, 30, Theme.I_X, "Decline")) {
+				client.respond(r.id, "decline");
+			}
+			ry += rh + 2;
+		}
+		ry += 8;
+		// sent
+		if (!client.sent.isEmpty()) {
+			ry = heading(c, "Sent · " + client.sent.size(), x + pad, ry);
+			for (Model.Request r : client.sent) {
+				person(ui, client, x + 8, ry, w - 16, rh, r.name, r.skin, "Waiting for them");
+				if (ui.button("relay:req:cancel:" + r.id, x + w - 16 - 78, ry + (rh - 28) / 2, 74, 28, "Cancel", Theme.I_X, Ui.BTN_GLASS)) {
+					client.respond(r.id, "cancel");
+				}
+				ry += rh + 2;
+			}
+		}
+		requestScroll.end(ui, ry + off - ty + 8);
+	}
+
+	private float heading(Canvas c, String label, float x, float y) {
+		c.text(Fonts.SEMIBOLD, 10.5f, label.toUpperCase(Locale.ROOT), x, y + 4, Theme.TEXT_MUTED);
+		return y + 26;
+	}
+
+	/** A player row (avatar, name, a muted line); buttons are drawn by the caller on the right. */
+	private void person(Ui ui, RelayClient client, float x, float y, float w, float h, String name, String skin, String sub) {
+		Canvas c = ui.c;
+		float hv = ui.anim("relay:person:" + name + y, ui.hover(x, y, w, h), 14f);
+		c.round(x, y, w, h, 12, Theme.alpha(Theme.SUBTLE_HOVER, hv * 0.7f));
+		float av = 32;
+		Avatars.draw(c, client.api(), name == null ? "Steve" : name, skin, x + 9, y + (h - av) / 2, av, 9);
+		float tx = x + 9 + av + 11, maxW = w - (tx - x) - 90;
+		c.text(Fonts.SEMIBOLD, 12.5f, c.ellipsize(Fonts.SEMIBOLD, 12.5f, name == null ? "Player" : name, maxW), tx, y + 9, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, sub, maxW), tx, y + 27, Theme.TEXT_MUTED);
+	}
+
+	// ── friend profile panel ──────────────────────────────────────────────
+
+	private void profilePanel(Ui ui, RelayClient client, float x, float y, float w, float h, Object screen) {
+		Canvas c = ui.c;
+		c.pushClip(x, y, w, h);
+		c.round(x - 20, y, w + 20, h, 20, 0xFF0C0D11);
+		Model.Friend f = client.friend(selected.substring(3));
+		if (f == null) {
+			TitleView.empty(c, x, y, w, h, Theme.I_USER, "Not a friend", "This chat is no longer in your friends list.");
+			c.popClip();
+			return;
+		}
+		float pad = 18;
+		float off = profileScroll.begin(ui, x, y, w, h);
+		float ty = y + 26 - off;
+		float cx = x + w / 2;
+		// avatar with a soft glow in the presence colour
+		float av = 84;
+		c.shadow(cx - av / 2, ty + 6, av, av, 22, 26, Theme.alpha(f.dot(), 0.35f));
+		Avatars.draw(c, client.api(), f.name, f.skin, cx - av / 2, ty, av, 20);
+		c.circle(cx + av / 2 - 6, ty + av - 6, 10, 0xFF0C0D11);
+		c.circle(cx + av / 2 - 6, ty + av - 6, 7, f.dot());
+		ty += av + 14;
+		String display = f.display();
+		c.text(Fonts.BOLD, 17, c.ellipsize(Fonts.BOLD, 17, display, w - pad * 2), cx - c.textWidth(Fonts.BOLD, 17, c.ellipsize(Fonts.BOLD, 17, display, w - pad * 2)) / 2, ty, Theme.TEXT_STRONG);
+		ty += 24;
+		if (f.nickname != null && !f.nickname.isEmpty()) {
+			String handle = "@" + f.name;
+			c.text(Fonts.REGULAR, 11.5f, handle, cx - c.textWidth(Fonts.REGULAR, 11.5f, handle) / 2, ty, Theme.TEXT_MUTED);
+			ty += 18;
+		}
+		String line = f.online ? f.line() : f.lastSeen > 0 ? "Last seen " + ago(f.lastSeen) : "Offline";
+		line = c.ellipsize(Fonts.MEDIUM, 11.5f, line, w - pad * 2);
+		c.text(Fonts.MEDIUM, 11.5f, line, cx - c.textWidth(Fonts.MEDIUM, 11.5f, line) / 2, ty, f.online ? Theme.mix(f.dot(), 0xFFFFFFFF, 0.45f) : Theme.TEXT_MUTED);
+		ty += 28;
+
+		// playing on a server: join them
+		if (f.online && f.serverAddress != null && !f.serverAddress.isEmpty()) {
+			float bh = 72;
+			c.round(x + pad, ty, w - pad * 2, bh, 12, Theme.SUBTLE);
+			c.icon(Theme.I_SERVER, 14, x + pad + 18, ty + 20, Theme.TEXT_SECONDARY);
+			c.text(Fonts.SEMIBOLD, 11.5f, c.ellipsize(Fonts.SEMIBOLD, 11.5f, f.serverAddress, w - pad * 2 - 44), x + pad + 32, ty + 13, Theme.TEXT_STRONG);
+			if (ui.button("relay:join:" + f.id, x + pad + 10, ty + 34, w - pad * 2 - 20, 30, "Join " + (f.nickname != null ? f.nickname : f.name), Theme.I_PLAY, Ui.BTN_PRIMARY)) {
+				UiRuntime.closeHost(screen);
+				UiRuntime.mc().connect(f.serverAddress, null);
+			}
+			ty += bh + 14;
+		}
+
+		// public profile
+		Model.Profile p = client.profile(f.name);
+		ty = heading(c, "Profile", x + pad, ty);
+		if (p == null) {
+			c.skeleton(x + pad, ty, w - pad * 2, 10, 5);
+			c.skeleton(x + pad, ty + 18, (w - pad * 2) * 0.6f, 10, 5);
+			ty += 40;
+		} else {
+			if (p.joinedAt > 0) {
+				ty = fact(c, Theme.I_CLOCK, "Member since " + new java.text.SimpleDateFormat("MMM yyyy", Locale.ROOT).format(new java.util.Date(p.joinedAt)), x + pad, ty, w - pad * 2);
+			}
+			if (p.friends > 0) {
+				ty = fact(c, Theme.I_USERS, p.friends + (p.friends == 1 ? " friend" : " friends"), x + pad, ty, w - pad * 2);
+			}
+			if (p.premium) {
+				ty = fact(c, Theme.I_CHECK_CIRCLE, "Minecraft account linked", x + pad, ty, w - pad * 2);
+			}
+			if (!p.badges.isEmpty()) {
+				float bx = x + pad, by = ty + 2;
+				for (String b : p.badges) {
+					String label = badgeName(b);
+					float bw = c.textWidth(Fonts.SEMIBOLD, 10.5f, label) + 18;
+					if (bx + bw > x + w - pad) {
+						bx = x + pad;
+						by += 26;
+					}
+					c.round(bx, by, bw, 22, 11, Theme.alpha(Theme.nameColor(b), 0.18f));
+					c.text(Fonts.SEMIBOLD, 10.5f, label, bx + 9, by + (22 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.mix(Theme.nameColor(b), 0xFFFFFFFF, 0.5f));
+					bx += bw + 6;
+				}
+				ty = by + 32;
+			}
+			if (p.bio != null && !p.bio.trim().isEmpty()) {
+				for (String l : xyz.nativelaunch.ui.TextLayout.wrap(c, Fonts.REGULAR, 12, p.bio.trim(), w - pad * 2)) {
+					c.text(Fonts.REGULAR, 12, l, x + pad, ty, Theme.TEXT);
+					ty += 18;
+				}
+				ty += 6;
+			}
+		}
+		ty += 8;
+
+		// actions
+		ty = heading(c, "Friend", x + pad, ty);
+		float bw = w - pad * 2;
+		if (ui.button("relay:prof:nick", x + pad, ty, bw, 32, f.nickname == null ? "Set nickname" : "Change nickname", Theme.I_PENCIL, Ui.BTN_GLASS)) {
+			nickFor = f.id;
+			nick.maxLength = 28;
+			nick.set(f.nickname == null ? "" : f.nickname);
+			nick.focus(ui);
+			ui.focusClaimed = true;
+		}
+		ty += 38;
+		if (ui.button("relay:prof:pin", x + pad, ty, bw, 32, f.pinned ? "Unpin chat" : "Pin chat", Theme.I_MAP_PIN, Ui.BTN_GLASS)) {
+			client.setPinned("dm:" + f.id, !f.pinned);
+		}
+		ty += 38;
+		if (armed != null && ui.now - armedAt > 3000) {
+			armed = null;
+		}
+		String rk = "remove:" + f.id, bk = "block:" + f.id;
+		if (ui.button("relay:prof:remove", x + pad, ty, bw, 32, rk.equals(armed) ? "Click again to remove" : "Remove friend", Theme.I_TRASH, Ui.BTN_DANGER)) {
+			if (rk.equals(armed)) {
+				armed = null;
+				client.removeFriend(f.id);
+				selected = null;
+			} else {
+				armed = rk;
+				armedAt = ui.now;
+			}
+		}
+		ty += 38;
+		if (ui.button("relay:prof:block", x + pad, ty, bw, 32, bk.equals(armed) ? "Click again to block" : "Block", Theme.I_BAN, Ui.BTN_DANGER)) {
+			if (bk.equals(armed)) {
+				armed = null;
+				client.block(f.id);
+				selected = null;
+			} else {
+				armed = bk;
+				armedAt = ui.now;
+			}
+		}
+		ty += 44;
+		profileScroll.end(ui, ty + off - y);
+		c.popClip();
+	}
+
+	private float fact(Canvas c, int icon, String text, float x, float y, float w) {
+		c.icon(icon, 13, x + 7, y + 8, Theme.TEXT_MUTED);
+		c.text(Fonts.MEDIUM, 12, c.ellipsize(Fonts.MEDIUM, 12, text, w - 24), x + 22, y + 1, Theme.TEXT_SECONDARY);
+		return y + 24;
+	}
+
+	/** "early_supporter" -> "Early Supporter". */
+	private static String badgeName(String id) {
+		StringBuilder out = new StringBuilder();
+		for (String part : String.valueOf(id).replace('-', '_').split("_")) {
+			if (!part.isEmpty()) {
+				out.append(out.length() == 0 ? "" : " ").append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+			}
+		}
+		return out.toString();
+	}
+
+	private static String ago(long at) {
+		long m = Math.max(0, (System.currentTimeMillis() - at) / 60000);
+		if (m < 1) {
+			return "just now";
+		}
+		if (m < 60) {
+			return m + " min ago";
+		}
+		long hrs = m / 60;
+		if (hrs < 24) {
+			return hrs + " h ago";
+		}
+		long d = hrs / 24;
+		return d == 1 ? "yesterday" : d + " days ago";
 	}
 
 	// ── right-click menu + nickname ──────────────────────────────────────────────────────────
