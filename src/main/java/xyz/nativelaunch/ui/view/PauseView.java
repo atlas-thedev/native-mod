@@ -112,7 +112,7 @@ public final class PauseView {
 			if (button(ui, "pause:lan", x + half + gap, y, half, bh, lan, worldOptions != null ? Theme.I_SLIDERS : Theme.I_GLOBE, NORMAL)) {
 				mc.open("lan", screen);
 			}
-		} else if (button(ui, "pause:locker", x + half + gap, y, half, bh, "Cosmetics", Theme.I_SHIRT, NORMAL)) {
+		} else if (button(ui, "pause:locker", x + half + gap, y, half, bh, "Cosmetics", SessionLock.locked() ? Theme.I_LOCK : Theme.I_SHIRT, NORMAL)) {
 			UiRuntime.openMenu(screen, 1);
 		}
 		y += bh + gap;

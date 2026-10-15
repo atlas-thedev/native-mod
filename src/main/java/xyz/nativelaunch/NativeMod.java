@@ -1,7 +1,6 @@
 package xyz.nativelaunch;
 
 import xyz.nativelaunch.core.AnimGate;
-import xyz.nativelaunch.core.Handoff;
 import xyz.nativelaunch.presence.PresenceService;
 import xyz.nativelaunch.core.Log;
 import xyz.nativelaunch.core.NativeState;
@@ -19,12 +18,6 @@ public final class NativeMod implements ClientModInitializer {
 		startCosmetics();
 		startPresence(gameDir);
 		startUi(gameDir);
-	}
-
-	/** The ticket read once at start, so presence, Relay and the account all use the same one. */
-	private static String ticket() {
-		Handoff handoff = NativeState.get().handoff();
-		return handoff == null ? null : handoff.ticket;
 	}
 
 	/** Custom title screen + in-game Relay chat (Minecraft 1.16 - 1.21.11 through intermediary names, 26.x through official names). */
@@ -47,7 +40,7 @@ public final class NativeMod implements ClientModInitializer {
 			return;
 		}
 		try {
-			xyz.nativelaunch.relay.RelayClient.start(NativeState.get().api(), ticket());
+			xyz.nativelaunch.relay.RelayClient.start(NativeState.get().api());
 		} catch (Throwable t) {
 			Log.warn("Relay chat is unavailable ({}).", t.toString());
 		}
@@ -65,7 +58,7 @@ public final class NativeMod implements ClientModInitializer {
 	/** Discord Rich Presence + the launcher's Relay status (server, world, player count). */
 	private static void startPresence(java.nio.file.Path gameDir) {
 		try {
-			PresenceService.start(gameDir, NativeState.get().api(), ticket());
+			PresenceService.start(gameDir, NativeState.get().api(), null);
 		} catch (Throwable t) {
 			Log.warn("Presence is unavailable ({}).", t.toString());
 		}

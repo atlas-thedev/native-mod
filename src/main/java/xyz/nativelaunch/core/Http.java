@@ -20,6 +20,21 @@ public final class Http {
 	private Http() {
 	}
 
+	/** A non-2xx reply. Callers that care (401 = ticket rejected) read {@link #status}. */
+	public static final class StatusException extends IOException {
+		public final int status;
+
+		StatusException(int status, String url) {
+			super("HTTP " + status + " from " + url);
+			this.status = status;
+		}
+	}
+
+	/** True when the error is the server refusing the ticket (as opposed to the network failing). */
+	public static boolean unauthorized(Throwable error) {
+		return error instanceof StatusException && ((StatusException) error).status == 401;
+	}
+
 	static HttpURLConnection open(String url, String bearer, int connectTimeoutMs, int readTimeoutMs, String accept) throws IOException {
 		HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
 		connection.setConnectTimeout(connectTimeoutMs);
@@ -39,7 +54,7 @@ public final class Http {
 		try {
 			int status = connection.getResponseCode();
 			if (status / 100 != 2) {
-				throw new IOException("HTTP " + status + " from " + url);
+				throw new StatusException(status, url);
 			}
 			InputStream in = connection.getInputStream();
 			if ("gzip".equalsIgnoreCase(connection.getContentEncoding())) {
@@ -78,7 +93,7 @@ public final class Http {
 			}
 			int status = connection.getResponseCode();
 			if (status / 100 != 2) {
-				throw new IOException("HTTP " + status + " from " + url);
+				throw new StatusException(status, url);
 			}
 			InputStream in = connection.getInputStream();
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -103,7 +118,7 @@ public final class Http {
 		try {
 			int status = connection.getResponseCode();
 			if (status / 100 != 2) {
-				throw new IOException("HTTP " + status + " from " + url);
+				throw new StatusException(status, url);
 			}
 			InputStream in = connection.getInputStream();
 			ByteArrayOutputStream out = new ByteArrayOutputStream();

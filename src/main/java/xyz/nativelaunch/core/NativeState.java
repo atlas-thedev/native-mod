@@ -1,9 +1,5 @@
 package xyz.nativelaunch.core;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.UUID;
@@ -24,7 +20,6 @@ public final class NativeState {
 	private final SkinDirectory directory = new SkinDirectory();
 	private volatile SkinSync sync;
 	private volatile boolean started;
-	private volatile AccountInfo account;
 	private volatile String api = DEFAULT_API;
 	private volatile Path gameDir;
 	private volatile Handoff handoff;
@@ -40,9 +35,9 @@ public final class NativeState {
 		return directory;
 	}
 
-	/** The Native account the launcher connected, or null in guest mode. */
+	/** The Native account the launcher connected, or null in guest mode / before it is checked. */
 	public AccountInfo account() {
-		return account;
+		return Session.account();
 	}
 
 	public String api() {
@@ -77,40 +72,11 @@ public final class NativeState {
 		SkinRefresh.install(directory);
 		sync = new SkinSync(directory, api);
 		sync.start();
-		if (handoff != null) {
-			final Handoff h = handoff;
-			Thread thread = new Thread(new Runnable() {
-				@Override
-				public void run() {
-					verify(h);
-				}
-			}, "Native-Account");
-			thread.setDaemon(true);
-			thread.start();
-		} else {
+		// Checks the ticket, retries offline, and picks up the fresh tickets the launcher writes.
+		Session.start(gameDir, api, handoff);
+		if (handoff == null) {
 			Log.info("No launcher hand-off found: running as a guest (skins and capes still load).");
 		}
-	}
-
-	private void verify(Handoff handoff) {
-		try {
-			String body = Http.getJson(api + "/v1/mod/me", handoff.ticket);
-			JsonObject account = new JsonParser().parse(body).getAsJsonObject().getAsJsonObject("account");
-			this.account = new AccountInfo(
-					text(account, "id"), text(account, "name"), text(account, "uuid"), text(account, "model"));
-			Log.info("Connected to Native account {}", this.account.name);
-		} catch (Exception e) {
-			Log.warn("Could not verify the Native account ({}). Continuing as a guest.", e.getMessage());
-		}
-	}
-
-	/** Strings and numbers only: an object or array here is a malformed reply, not a value. */
-	private static String text(JsonObject o, String key) {
-		if (o == null || !o.has(key)) {
-			return null;
-		}
-		JsonElement value = o.get(key);
-		return value.isJsonPrimitive() ? value.getAsString() : null;
 	}
 
 	/** Only the Native API over https (or loopback http, for development) is ever accepted. */

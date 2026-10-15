@@ -286,7 +286,7 @@ public final class TitleView {
 				online++;
 			}
 		}
-		if (client != null && client.state != RelayClient.State.NO_ACCOUNT) {
+		if (client != null && !SessionLock.locked()) {
 			String chip = online + " online";
 			float tw = c.textWidth(Fonts.SEMIBOLD, 11, chip);
 			float chx = x + w - pad - tw - 22;
@@ -296,8 +296,9 @@ public final class TitleView {
 		}
 		c.fill(x + pad, y + 50, w - pad * 2, 1, Theme.HAIRLINE);
 		float listY = y + 58, listH = h - 58 - 64;
-		if (client == null || client.state == RelayClient.State.NO_ACCOUNT) {
-			empty(c, x, listY, w, listH, Theme.I_LOCK, "Not signed in", "Start Minecraft from the Native Client to chat with your friends here.");
+		if (client == null || SessionLock.locked()) {
+			empty(c, x, listY, w, listH, xyz.nativelaunch.core.Session.status() == xyz.nativelaunch.core.Session.Status.OFFLINE ? Theme.I_WIFI_OFF : Theme.I_LOCK,
+					xyz.nativelaunch.core.Session.lockTitle(), xyz.nativelaunch.core.Session.lockBody());
 		} else if (!client.friendsLoaded) {
 			if (client.state == RelayClient.State.OFFLINE) {
 				empty(c, x, listY, w, listH, Theme.I_WIFI_OFF, "Relay is offline", "Retrying in the background.");

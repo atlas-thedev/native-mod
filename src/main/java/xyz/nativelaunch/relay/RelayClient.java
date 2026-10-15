@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import xyz.nativelaunch.core.Log;
+import xyz.nativelaunch.core.Session;
 import xyz.nativelaunch.ui.ChatMedia;
 
 import java.io.BufferedReader;
@@ -37,7 +38,7 @@ public final class RelayClient {
 
 	private static RelayClient instance;
 
-	private final String api, ticket;
+	private final String api;
 	public volatile State state = State.CONNECTING;
 	public volatile String meId, meName, meSkin;
 	public volatile List<Model.Friend> friends = Collections.emptyList();
@@ -56,10 +57,9 @@ public final class RelayClient {
 	});
 	private volatile long lastTypingSent;
 
-	private RelayClient(String api, String ticket) {
+	private RelayClient(String api) {
 		this.api = api;
-		this.ticket = ticket;
-		if (ticket == null) {
+		if (ticket() == null) {
 			state = State.NO_ACCOUNT;
 		}
 	}
@@ -68,22 +68,21 @@ public final class RelayClient {
 		return instance;
 	}
 
-	public static synchronized void start(String api, String ticket) {
+	public static synchronized void start(String api) {
 		if (instance != null) {
 			return;
 		}
-		instance = new RelayClient(api, ticket);
-		if (ticket != null) {
-			Thread t = new Thread(instance::streamLoop, "Native-Relay-Stream");
-			t.setDaemon(true);
-			t.setPriority(Thread.MIN_PRIORITY);
-			t.start();
-		}
+		instance = new RelayClient(api);
+		// Always runs: it waits for a sign-in, so a ticket that arrives (or comes back) mid-game connects Relay.
+		Thread t = new Thread(instance::streamLoop, "Native-Relay-Stream");
+		t.setDaemon(true);
+		t.setPriority(Thread.MIN_PRIORITY);
+		t.start();
 	}
 
-	/** The game ticket the launcher handed over (null in guest mode). */
+	/** The current game ticket (null when signed out or rejected). The launcher may replace it mid-game. */
 	public String ticket() {
-		return ticket;
+		return Session.ticket();
 	}
 
 	public String api() {
@@ -175,7 +174,7 @@ public final class RelayClient {
 	// ── actions (called from the render thread; never block) ──────────────
 
 	public void refresh() {
-		if (ticket == null) {
+		if (ticket() == null) {
 			return;
 		}
 		pool.execute(this::loadFriends);
@@ -188,7 +187,7 @@ public final class RelayClient {
 		final Model.Conversation c = conversation(key);
 		clearUnread(key);
 		markReadLater(key);
-		if (ticket == null || c.loading) {
+		if (ticket() == null || c.loading) {
 			return;
 		}
 		c.loading = true;
@@ -244,7 +243,7 @@ public final class RelayClient {
 	/** Loads the page before the oldest loaded message. */
 	public void loadOlder(final String key) {
 		final Model.Conversation c = conversation(key);
-		if (ticket == null || c.loading || !c.hasMore || c.messages.isEmpty()) {
+		if (ticket() == null || c.loading || !c.hasMore || c.messages.isEmpty()) {
 			return;
 		}
 		c.loading = true;
@@ -283,7 +282,7 @@ public final class RelayClient {
 	/** Sends text, as an answer to {@code replyTo} when given. */
 	public void send(final String key, String text, final Model.Message replyTo) {
 		final String content = text == null ? "" : text.trim();
-		if (content.isEmpty() || ticket == null) {
+		if (content.isEmpty() || ticket() == null) {
 			return;
 		}
 		final Model.Conversation c = conversation(key);
@@ -315,7 +314,7 @@ public final class RelayClient {
 
 	/** Uploads a pasted picture (PNG/JPEG/GIF/WebP bytes) and posts it. Shows at once with a local preview. */
 	public void sendImage(final String key, final byte[] bytes, final String mime) {
-		if (ticket == null || bytes == null || bytes.length == 0 || bytes.length > 8 * 1024 * 1024) {
+		if (ticket() == null || bytes == null || bytes.length == 0 || bytes.length > 8 * 1024 * 1024) {
 			return;
 		}
 		final Model.Conversation c = conversation(key);
@@ -343,7 +342,7 @@ public final class RelayClient {
 
 	/** Sends a GIF picked from the picker (Giphy URL). */
 	public void sendGif(final String key, final String url, final String title) {
-		if (ticket == null || url == null) {
+		if (ticket() == null || url == null) {
 			return;
 		}
 		final Model.Conversation c = conversation(key);
@@ -443,7 +442,7 @@ public final class RelayClient {
 	/** Toggles your reaction on a group message (the server flips it); shows at once, then takes the server's list. */
 	public void react(final String key, final String messageId, final String emoji) {
 		final Model.Conversation c = conversation(key);
-		if (ticket == null || !c.isGroup() || messageId == null || messageId.startsWith("local-")) {
+		if (ticket() == null || !c.isGroup() || messageId == null || messageId.startsWith("local-")) {
 			return;
 		}
 		change(c, messageId, m -> {
@@ -486,7 +485,7 @@ public final class RelayClient {
 	public void edit(final String key, final String messageId, String text) {
 		final String content = text == null ? "" : text.trim();
 		final Model.Conversation c = conversation(key);
-		if (ticket == null || content.isEmpty() || messageId == null || messageId.startsWith("local-")) {
+		if (ticket() == null || content.isEmpty() || messageId == null || messageId.startsWith("local-")) {
 			return;
 		}
 		pool.execute(() -> {
@@ -505,7 +504,7 @@ public final class RelayClient {
 	/** Deletes a message (yours, or anyone's when you are a group admin). It stays as "This message was deleted". */
 	public void delete(final String key, final String messageId) {
 		final Model.Conversation c = conversation(key);
-		if (ticket == null || messageId == null) {
+		if (ticket() == null || messageId == null) {
 			return;
 		}
 		if (messageId.startsWith("local-")) { // never sent: just drop it
@@ -534,7 +533,7 @@ public final class RelayClient {
 	/** Tells the other side we are typing, at most every 3 s. */
 	public void typingPing(final String key) {
 		long now = System.currentTimeMillis();
-		if (ticket == null || now - lastTypingSent < 3000) {
+		if (ticket() == null || now - lastTypingSent < 3000) {
 			return;
 		}
 		lastTypingSent = now;
@@ -590,7 +589,7 @@ public final class RelayClient {
 	}
 
 	private void prefs(final String key, final JsonObject body) {
-		if (ticket == null) {
+		if (ticket() == null) {
 			return;
 		}
 		pool.execute(() -> {
@@ -813,7 +812,7 @@ public final class RelayClient {
 	/** Warms a chat's latest page in the background (doesn't mark it read) so it opens instantly. */
 	private void prefetch(final String key) {
 		final Model.Conversation c = conversation(key);
-		if (c.loaded || c.loading || ticket == null) {
+		if (c.loaded || c.loading || ticket() == null) {
 			return;
 		}
 		pool.execute(() -> {
@@ -913,9 +912,29 @@ public final class RelayClient {
 
 	private void streamLoop() {
 		long backoff = 2000;
-		pool.execute(this::loadFriends);
-		pool.execute(this::loadGroups);
+		boolean loaded = false;
 		while (true) {
+			// Not signed in (guest, checking, expired): wait for the session instead of hammering Native.
+			if (!Session.signedIn()) {
+				if (ticket() == null) {
+					state = State.NO_ACCOUNT;
+				}
+				loaded = false;
+				try {
+					Thread.sleep(1500);
+				} catch (InterruptedException e) {
+					return;
+				}
+				continue;
+			}
+			if (!loaded) {
+				loaded = true;
+				if (state == State.NO_ACCOUNT) {
+					state = State.CONNECTING;
+				}
+				pool.execute(this::loadFriends);
+				pool.execute(this::loadGroups);
+			}
 			long started = System.currentTimeMillis();
 			try {
 				stream();
@@ -945,6 +964,7 @@ public final class RelayClient {
 		int status = con.getResponseCode();
 		if (status == 401) {
 			state = State.NO_ACCOUNT;
+			Session.rejected(Session.ticket());
 			throw new IOException("ticket rejected");
 		}
 		if (status / 100 != 2) {
@@ -1191,12 +1211,15 @@ public final class RelayClient {
 	// ── HTTP ──────────────────────────────────────────────────────────────
 
 	private HttpURLConnection open(String path, String method) throws IOException {
+		if (ticket() == null) {
+			throw new IOException("not signed in");
+		}
 		HttpURLConnection con = (HttpURLConnection) new URL(api + path).openConnection();
 		con.setRequestMethod(method);
 		con.setConnectTimeout(8000);
 		con.setReadTimeout(15000);
 		con.setRequestProperty("User-Agent", "NativeMod-Relay (Minecraft)");
-		con.setRequestProperty("Authorization", "Bearer " + ticket);
+		con.setRequestProperty("Authorization", "Bearer " + ticket());
 		return con;
 	}
 
@@ -1228,6 +1251,9 @@ public final class RelayClient {
 
 	private static JsonObject read(HttpURLConnection con) throws IOException {
 		int status = con.getResponseCode();
+		if (status == 401) {
+			Session.rejected(Session.ticket());
+		}
 		if (status / 100 != 2) {
 			throw new IOException("HTTP " + status);
 		}
