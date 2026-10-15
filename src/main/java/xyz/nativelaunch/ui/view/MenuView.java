@@ -804,12 +804,16 @@ public final class MenuView {
 		// locker
 		float lx = x + sw + 20, lw = w - sw - 20;
 		Wardrobe.State st = Wardrobe.state;
-		if (st == Wardrobe.State.IDLE || st == Wardrobe.State.LOADING) {
-			ui.dots(lx + lw / 2, y + h / 2, Theme.TEXT_SECONDARY);
+		if (SessionLock.locked()) {
+			// Guest, expired or offline: no locker to show (and nothing stale to equip).
+			SessionLock.draw(ui, "menu:locker:lock", lx, y, lw, h);
 			return;
 		}
 		if (st == Wardrobe.State.NO_ACCOUNT) {
-			empty(c, lx, y, lw, h, Theme.I_LOCK, "Not signed in", "Start Minecraft from the Native Client to use your cosmetics.");
+			Wardrobe.refresh(false); // signed in again: reload the locker
+		}
+		if (st == Wardrobe.State.IDLE || st == Wardrobe.State.LOADING || st == Wardrobe.State.NO_ACCOUNT) {
+			ui.dots(lx + lw / 2, y + h / 2, Theme.TEXT_SECONDARY);
 			return;
 		}
 		if (st == Wardrobe.State.ERROR) {
@@ -1201,7 +1205,7 @@ public final class MenuView {
 		glow(c, x, y, w, 90, 16, 0x10FFFFFF);
 		String who = UiRuntime.mc().username();
 		xyz.nativelaunch.relay.RelayClient rc = xyz.nativelaunch.relay.RelayClient.get();
-		boolean signed = rc != null && rc.state != xyz.nativelaunch.relay.RelayClient.State.NO_ACCOUNT;
+		boolean signed = rc != null && xyz.nativelaunch.core.Session.signedIn();
 		float av = 56;
 		Avatars.draw(c, Avatars.api(), who == null ? "Steve" : who, who == null ? null : Avatars.self(who), x + 18, y + 18, av, 12f);
 		int dot = !signed ? 0xFF71717A : rc.state == xyz.nativelaunch.relay.RelayClient.State.ONLINE ? Theme.ONLINE : Theme.IDLE;
@@ -1209,7 +1213,8 @@ public final class MenuView {
 		c.circle(x + 18 + av - 4, y + 18 + av - 4, 5f, dot);
 		float tx = x + 18 + av + 14;
 		c.text(Fonts.SEMIBOLD, 16, c.ellipsize(Fonts.SEMIBOLD, 16, who == null ? "Player" : who, w - (tx - x) - 16), tx, y + 24, Theme.TEXT_STRONG);
-		String status = !signed ? "Guest \u00b7 start from the Native Client to sign in"
+		String status = !signed ? (xyz.nativelaunch.core.Session.status() == xyz.nativelaunch.core.Session.Status.GUEST
+				? "Guest \u00b7 start from the Native Client to sign in" : xyz.nativelaunch.core.Session.lockTitle())
 				: rc.state == xyz.nativelaunch.relay.RelayClient.State.ONLINE ? "Signed in \u00b7 Relay online"
 				: rc.state == xyz.nativelaunch.relay.RelayClient.State.CONNECTING ? "Signed in \u00b7 connecting\u2026" : "Signed in \u00b7 Relay offline";
 		c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, status, w - (tx - x) - 16), tx, y + 48, Theme.TEXT_MUTED);

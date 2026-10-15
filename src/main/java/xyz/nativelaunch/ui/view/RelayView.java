@@ -193,9 +193,15 @@ public final class RelayView {
 		}
 		ui.interactive = !settingsOpen && menuKey == null && nickFor == null;
 		float sw = Math.min(300, pw * 0.34f);
-		sidebar(ui, client, px, py, sw, ph, screen);
-		c.fill(px + sw, py, 1, ph, Theme.HAIRLINE);
-		chat(ui, client, px + sw + 1, py, pw - sw - 1, ph, screen);
+		if (SessionLock.locked()) {
+			// Not signed in / sign-in expired: lock the whole page instead of showing stale chats.
+			c.text(Fonts.BOLD, 19, "Relay", px + 16, py + 18, Theme.TEXT_STRONG);
+			SessionLock.draw(ui, "relay:lock", px, py + 48, pw, ph - 48);
+		} else {
+			sidebar(ui, client, px, py, sw, ph, screen);
+			c.fill(px + sw, py, 1, ph, Theme.HAIRLINE);
+			chat(ui, client, px + sw + 1, py, pw - sw - 1, ph, screen);
+		}
 		ui.interactive = true;
 		if (settingsOpen) {
 			settings(ui, px, py, sw);
@@ -289,8 +295,8 @@ public final class RelayView {
 		search.draw(ui, x + pad, ty, w - pad * 2, 36, tab == 0 ? "Search friends" : "Search groups", 12.5f);
 		ty += 46;
 		float listH = y + h - ty - 8;
-		if (client == null || client.state == RelayClient.State.NO_ACCOUNT) {
-			TitleView.empty(c, x, ty, w, listH, Theme.I_LOCK, "Not signed in", "Start Minecraft from the Native Client to use Relay in game.");
+		if (client == null || SessionLock.locked()) {
+			SessionLock.draw(ui, "relay:list:lock", x, ty, w, listH);
 			return;
 		}
 		String q = search.value().trim().toLowerCase(Locale.ROOT);

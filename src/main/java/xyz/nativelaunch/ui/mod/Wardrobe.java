@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import xyz.nativelaunch.core.Http;
 import xyz.nativelaunch.core.Log;
 import xyz.nativelaunch.core.NativeState;
+import xyz.nativelaunch.core.Session;
 import xyz.nativelaunch.relay.RelayClient;
 import xyz.nativelaunch.ui.gfx.Image;
 
@@ -121,8 +122,7 @@ public final class Wardrobe {
 	}
 
 	static String ticket() {
-		RelayClient r = RelayClient.get();
-		return r == null ? null : r.ticket();
+		return Session.ticket();
 	}
 
 	/** Loads (or reloads when older than 30 s) the catalogue and the locker. */
@@ -147,7 +147,8 @@ public final class Wardrobe {
 				}
 				catalog = Collections.unmodifiableList(items);
 				String ticket = ticket();
-				if (ticket == null) {
+				if (ticket == null || !Session.signedIn()) {
+					// Guest, expired or still checking: the menu shows why (Session.lockTitle) and retries.
 					state = State.NO_ACCOUNT;
 					return;
 				}
@@ -157,6 +158,12 @@ public final class Wardrobe {
 				state = State.READY;
 				warm();
 			} catch (Throwable t) {
+				if (Http.unauthorized(t)) {
+					Session.rejected(ticket());
+					state = State.NO_ACCOUNT;
+					return;
+				}
+				Session.unreachable();
 				Log.warn("Wardrobe unavailable: {}", t.toString());
 				error = "Could not load your locker.";
 				if (state != State.READY) {
@@ -357,6 +364,11 @@ public final class Wardrobe {
 				apply(parse(res));
 				error = null;
 			} catch (Throwable t) {
+				if (Http.unauthorized(t)) {
+					Session.rejected(ticket());
+					state = State.NO_ACCOUNT;
+					return;
+				}
 				if (t.getMessage() != null && t.getMessage().contains("too large")) {
 					loadedAt = 0; // it worked, the reply was just big: read the locker again
 					error = null;

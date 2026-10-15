@@ -310,6 +310,7 @@ public final class PresenceService implements Runnable {
 			return iconUrls.get(cacheKey);
 		}
 		String url = null;
+		String ticket = this.ticket != null ? this.ticket : xyz.nativelaunch.core.Session.ticket();
 		if (ticket != null && png != null && png.length > 8 && png.length <= 256 * 1024) {
 			try {
 				String body = Http.postBytes(api + "/v1/mod/presence-icon", ticket, png, "image/png");
