@@ -74,7 +74,7 @@ public final class SkinSync {
 				streamStarted = System.nanoTime();
 				stream();
 			} catch (IOException | RuntimeException e) {
-				Log.debug("Skin sync interrupted: {}", e.toString());
+				Log.warn("Skin sync interrupted ({}). Retrying; skins show once Native answers.", e.toString());
 			} finally {
 				firstAttempt.countDown();
 			}

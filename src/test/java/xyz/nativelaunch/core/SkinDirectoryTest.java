@@ -50,6 +50,20 @@ class SkinDirectoryTest {
 	}
 
 	@Test
+	void theSignedInAccountKeepsItsLookWhateverUuidAServerGivesIt() {
+		SkinDirectory directory = directory(new SkinEntry("Me", true, SKIN, CAPE, null, 1));
+		UUID odd = UUID.fromString("11111111-2222-4333-8444-555555555555");
+		assertNull(directory.find("Me", odd), "without a signed-in account an unusual UUID still gets nothing");
+		directory.selfName = () -> "me";
+		assertNotNull(directory.find("Me", odd), "your own account is never dropped because of a server's UUID");
+		assertTrue(directory.has("Me", odd));
+		assertNull(directory.find("Someone", odd), "other names are unaffected");
+		SkinDirectory other = directory(new SkinEntry("Notch", false, SKIN, null, null, 1));
+		other.selfName = () -> "me";
+		assertNull(other.find("Notch", UUID.fromString("069a79f4-44e9-4726-a5be-fca90e38aaf5")), "a premium player with another name is not hijacked");
+	}
+
+	@Test
 	void unknownPlayersAndEmptyDirectoriesGiveNothing() {
 		assertNull(directory().find("Nobody", offlineUuid("Nobody")));
 		assertNull(new SkinDirectory().find("Alice", offlineUuid("Alice")), "no texture base yet");

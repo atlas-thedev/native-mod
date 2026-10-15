@@ -21,6 +21,19 @@ public final class SkinDirectory {
 	private volatile long revision = -1;
 	/** The offline account's own look (launcher.json), shown on this PC only. */
 	private volatile SkinEntry local;
+	/**
+	 * The name of the signed-in Native account (null when guest or not yet checked). A player with that name is
+	 * this player, so their look is never dropped because a server gave them an unusual UUID.
+	 */
+	volatile java.util.function.Supplier<String> selfName = new java.util.function.Supplier<String>() {
+		@Override
+		public String get() {
+			AccountInfo account = Session.signedIn() ? Session.account() : null;
+			return account == null ? null : account.name;
+		}
+	};
+	/** Reasons already logged, so a skipped skin is reported once and not on every frame. */
+	private final java.util.Set<String> reported = ConcurrentHashMap.newKeySet();
 	private final CopyOnWriteArrayList<Consumer<SkinEntry>> listeners = new CopyOnWriteArrayList<Consumer<SkinEntry>>();
 	private final CopyOnWriteArrayList<Runnable> resetListeners = new CopyOnWriteArrayList<Runnable>();
 
@@ -177,10 +190,14 @@ public final class SkinDirectory {
 					mine.slim, null, 0, 0, hide);
 		}
 		SkinEntry entry = entries.get(key(name));
+		boolean self = isSelf(name);
 		if (entry == null) {
+			if (self && !textureBase.isEmpty()) {
+				report(name, "none", "Native has no published skin for " + name + " yet (set one in the launcher's Locker), so the game shows its default skin.");
+			}
 			return null;
 		}
-		if (id != null && id.version() != 3) {
+		if (id != null && id.version() != 3 && !self) {
 			String linked = entry.minecraftUuid;
 			if (linked == null || !linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT))) {
 				return null;
@@ -189,6 +206,9 @@ public final class SkinDirectory {
 		String base = textureBase;
 		if (base.isEmpty()) {
 			return null;
+		}
+		if (self && id != null && id.version() != 3) {
+			report(name, id.toString(), "Showing the Native skin for your own account " + name + " although the server gave it UUID " + id + " (not a name-based UUID).");
 		}
 		boolean hideCape = entry.hidesCape();
 		if (premiumSession && entry.hasPremium && id != null && id.version() != 3) {
@@ -235,7 +255,7 @@ public final class SkinDirectory {
 		if (entry == null) {
 			return false;
 		}
-		if (id != null && id.version() != 3) {
+		if (id != null && id.version() != 3 && !isSelf(name)) {
 			String linked = entry.minecraftUuid;
 			return linked != null && linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT));
 		}
@@ -254,7 +274,7 @@ public final class SkinDirectory {
 		if (entry == null || entry.cosmetics.isEmpty()) {
 			return java.util.Collections.emptyList();
 		}
-		if (id != null && id.version() != 3) {
+		if (id != null && id.version() != 3 && !isSelf(name)) {
 			String linked = entry.minecraftUuid;
 			if (linked == null || !linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT))) {
 				return java.util.Collections.emptyList();
@@ -266,6 +286,22 @@ public final class SkinDirectory {
 	/** The directory row of a player by name (case-insensitive), or null. */
 	public SkinEntry entry(String name) {
 		return name == null || name.isEmpty() ? null : entries.get(key(name));
+	}
+
+	private boolean isSelf(String name) {
+		try {
+			String mine = selfName.get();
+			return mine != null && key(mine).equals(key(name));
+		} catch (RuntimeException e) {
+			return false;
+		}
+	}
+
+	/** Logs a skipped or unusual skin once per distinct reason (it is looked up on every refresh). */
+	private void report(String name, String detail, String message) {
+		if (reported.add(key(name) + "|" + detail)) {
+			Log.info(message);
+		}
 	}
 
 	private static String key(String name) {
