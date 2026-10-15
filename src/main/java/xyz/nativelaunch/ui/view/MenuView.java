@@ -932,6 +932,9 @@ public final class MenuView {
 				c.icon(SLOT_ICONS[slot], 22, ix + iw / 2, iy + ih / 2, Theme.TEXT_MUTED);
 			}
 		}
+		if (it != null && it.partnerName != null) {
+			partnerTag(c, it, ix + 5, iy + 5, iw - 34);
+		}
 		float on = ui.anim(id + "#on", isWorn, 14f);
 		if (on > 0.01f) {
 			c.circle(x + w - 17, y + 17, 9, Theme.alpha(0xFFF4F4F5, on));
@@ -952,6 +955,21 @@ public final class MenuView {
 				c.text(Fonts.MEDIUM, 10, tag, x + w - 11 - tagW + 8, my - c.lineHeight(Fonts.MEDIUM, 10) / 2, Theme.ACCENT);
 			}
 		}
+	}
+
+	/** "Aurex" with the partner's logo: the item was made with a Native partner. */
+	private static void partnerTag(Canvas c, Wardrobe.Item it, float x, float y, float maxW) {
+		String label = it.partnerName.replaceAll("(?i)\\s+(hosting|host|network|studios?)$", "");
+		float h = 18, logo = 14;
+		label = c.ellipsize(Fonts.SEMIBOLD, 10, label, Math.max(20, maxW - logo - 14));
+		float w = c.textWidth(Fonts.SEMIBOLD, 10, label) + logo + 12;
+		c.round(x, y, w, h, 9, Theme.mix(it.partnerAccent, 0xFF000000, 0.15f));
+		c.circle(x + 2 + logo / 2, y + h / 2, logo / 2, 0xFFFFFFFF);
+		Image img = it.partnerLogo == null ? Wardrobe.NONE : Wardrobe.url(it.partnerLogo, false, 64);
+		if (img != null && img != Wardrobe.NONE) {
+			c.image(img, x + 3, y + 3, logo - 2, logo - 2, 0, 0, 1, 1, 0xFFFFFFFF);
+		}
+		c.text(Fonts.SEMIBOLD, 10, label, x + logo + 6, y + (h - c.lineHeight(Fonts.SEMIBOLD, 10)) / 2, 0xFFFFFFFF);
 	}
 
 	private static String name(Wardrobe.Item it) {

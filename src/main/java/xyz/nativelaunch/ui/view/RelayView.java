@@ -1219,8 +1219,9 @@ public final class RelayView {
 						bx = x + pad;
 						by += 26;
 					}
-					c.round(bx, by, bw, 22, 11, Theme.alpha(Theme.nameColor(b), 0.18f));
-					c.text(Fonts.SEMIBOLD, 10.5f, label, bx + 9, by + (22 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.mix(Theme.nameColor(b), 0xFFFFFFFF, 0.5f));
+					int tint = badgeColor(b);
+					c.round(bx, by, bw, 22, 11, Theme.alpha(tint, 0.2f));
+					c.text(Fonts.SEMIBOLD, 10.5f, label, bx + 9, by + (22 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.mix(tint, 0xFFFFFFFF, 0.45f));
 					bx += bw + 6;
 				}
 				ty = by + 32;
@@ -1287,7 +1288,19 @@ public final class RelayView {
 	}
 
 	/** "early_supporter" -> "Early Supporter". */
+	/** Same names and colours as the launcher's badges. */
 	private static String badgeName(String id) {
+		switch (String.valueOf(id)) {
+			case "developer": return "Active Developer";
+			case "early_supporter": return "Early Supporter";
+			case "bug_hunter": return "Bug Hunter";
+			case "staff": return "Native Staff";
+			case "super_beta_tester": return "Super Beta Tester";
+			case "partner": return "Native Partner";
+			case "plus": return "Native+";
+			case "verified": return "Verified";
+			default: break;
+		}
 		StringBuilder out = new StringBuilder();
 		for (String part : String.valueOf(id).replace('-', '_').split("_")) {
 			if (!part.isEmpty()) {
@@ -1295,6 +1308,20 @@ public final class RelayView {
 			}
 		}
 		return out.toString();
+	}
+
+	private static int badgeColor(String id) {
+		switch (String.valueOf(id)) {
+			case "developer": return 0xFF5865F2;
+			case "early_supporter": return 0xFFF47B67;
+			case "bug_hunter": return 0xFF3BA55D;
+			case "staff": return 0xFFEB459E;
+			case "super_beta_tester": return 0xFF2FD4C9;
+			case "partner": return 0xFF8B5CF6;
+			case "plus": return 0xFFF5B94A;
+			case "verified": return 0xFF3B82F6;
+			default: return Theme.nameColor(id);
+		}
 	}
 
 	private static String ago(long at) {

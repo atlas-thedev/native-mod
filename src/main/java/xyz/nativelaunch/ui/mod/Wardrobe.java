@@ -37,6 +37,9 @@ public final class Wardrobe {
 		public final String stripUrl;
 		public final int frames;
 		public final float fps;
+		/** Made with a Native partner (e.g. Aurex): its name, PNG logo and colour; partnerName is null otherwise. */
+		public String partnerName, partnerLogo;
+		public int partnerAccent = 0xFF8B5CF6;
 
 		Item(String id, String name, String kind, String slot, String stillUrl, String modelUrl, String textureUrl, String dyeUrl,
 				String stripUrl, int frames, float fps) {
@@ -144,6 +147,16 @@ public final class Wardrobe {
 							str(o, "textureUrl"), str(o, "dyeUrl"), str(o, "stripUrl"),
 							o.has("frames") && !o.get("frames").isJsonNull() ? o.get("frames").getAsInt() : 1,
 							o.has("fps") && !o.get("fps").isJsonNull() ? o.get("fps").getAsFloat() : 0f));
+					if (o.has("partner") && o.get("partner").isJsonObject()) {
+						JsonObject pt = o.getAsJsonObject("partner");
+						Item it = items.get(items.size() - 1);
+						it.partnerName = str(pt, "name");
+						it.partnerLogo = str(pt, "logoPng");
+						String accent = str(pt, "accent");
+						if (accent != null && accent.matches("#[0-9a-fA-F]{6}")) {
+							it.partnerAccent = 0xFF000000 | Integer.parseInt(accent.substring(1), 16);
+						}
+					}
 				}
 				catalog = Collections.unmodifiableList(items);
 				String ticket = ticket();
