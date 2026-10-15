@@ -261,10 +261,11 @@ public final class RelayView {
 		Canvas c = ui.c;
 		float pad = 16;
 		c.text(Fonts.BOLD, 19, "Relay", x + pad, y + 18, Theme.TEXT_STRONG);
-		if (client != null) {
+		// connection pill: only while Relay is not connected
+		if (client != null && client.state != RelayClient.State.ONLINE) {
 			RelayClient.State st = client.state;
-			int dot = st == RelayClient.State.ONLINE ? Theme.ONLINE : (st == RelayClient.State.CONNECTING ? Theme.IDLE : 0xFF71717A);
-			String label = st == RelayClient.State.ONLINE ? "Live" : st == RelayClient.State.CONNECTING ? "Connecting" : "Offline";
+			int dot = st == RelayClient.State.CONNECTING ? Theme.IDLE : 0xFF71717A;
+			String label = st == RelayClient.State.CONNECTING ? "Connecting" : "Offline";
 			float tx = x + pad + c.textWidth(Fonts.BOLD, 19, "Relay") + 10;
 			float lw = c.textWidth(Fonts.SEMIBOLD, 10, label) + 22;
 			float ly = y + 18 + c.lineHeight(Fonts.BOLD, 19) / 2 - 10;
