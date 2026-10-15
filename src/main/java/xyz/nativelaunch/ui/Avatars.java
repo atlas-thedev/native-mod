@@ -73,6 +73,49 @@ public final class Avatars {
 		c.outline(x, y, size, size, radius, 1, 0x1FFFFFFF);
 	}
 
+	private static final java.util.Map<Image, Image> ROUND = new java.util.WeakHashMap<Image, Image>();
+
+	/** A round face (like the launcher's profile avatar): the pixel face cut to a circle with a smooth edge. */
+	public static void drawRound(Canvas c, String api, String name, String skin, float x, float y, float size) {
+		Image face = skin == null ? null : face(api, skin);
+		if (skin != null && face == null) {
+			c.skeleton(x, y, size, size, size / 2);
+			return;
+		}
+		if (face == null || face == NONE) {
+			face = steveFace();
+		}
+		Image round;
+		synchronized (ROUND) {
+			round = ROUND.get(face);
+			if (round == null) {
+				round = circle(face);
+				ROUND.put(face, round);
+			}
+		}
+		c.circle(x + size / 2, y + size / 2, size / 2, 0xFF1A1B20);
+		c.stamp(round, round, x, y, size, size, true, 0xFFFFFFFF);
+	}
+
+	private static Image circle(Image face) {
+		int n = 128;
+		int[] out = new int[n * n];
+		float r = n / 2f;
+		for (int y = 0; y < n; y++) {
+			for (int x = 0; x < n; x++) {
+				float d = (float) Math.hypot(x + 0.5f - r, y + 0.5f - r);
+				float a = Math.max(0f, Math.min(1f, r - d));
+				if (a <= 0) {
+					continue;
+				}
+				int px = face.argb[(y * face.height / n) * face.width + (x * face.width / n)];
+				int alpha = Math.round(((px >>> 24) & 0xFF) * a);
+				out[y * n + x] = (alpha << 24) | (px & 0xFFFFFF);
+			}
+		}
+		return new Image(n, n, out);
+	}
+
 	private static Image steve;
 
 	/** Steve's face: cut from the game's own default skin, with a drawn copy for when the assets can't be read. */

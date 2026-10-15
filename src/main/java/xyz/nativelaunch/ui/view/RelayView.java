@@ -6,6 +6,7 @@ import xyz.nativelaunch.ui.Ads;
 import xyz.nativelaunch.ui.Avatars;
 import xyz.nativelaunch.ui.ChatMedia;
 import xyz.nativelaunch.ui.ClipboardImage;
+import xyz.nativelaunch.ui.gfx.Image;
 import xyz.nativelaunch.ui.McBridge;
 import xyz.nativelaunch.ui.Scroll;
 import xyz.nativelaunch.ui.TextField;
@@ -1159,83 +1160,126 @@ public final class RelayView {
 		}
 		float pad = 18;
 		float off = profileScroll.begin(ui, x, y, w, h);
-		float ty = y + 26 - off;
-		float cx = x + w / 2;
-		// avatar with a soft glow in the presence colour
-		float av = 84;
-		c.shadow(cx - av / 2, ty + 6, av, av, 22, 26, Theme.alpha(f.dot(), 0.35f));
-		Avatars.draw(c, client.api(), f.name, f.skin, cx - av / 2, ty, av, 20);
-		c.circle(cx + av / 2 - 6, ty + av - 6, 10, 0xFF0C0D11);
-		c.circle(cx + av / 2 - 6, ty + av - 6, 7, f.dot());
-		ty += av + 14;
-		String display = f.display();
-		c.text(Fonts.BOLD, 17, c.ellipsize(Fonts.BOLD, 17, display, w - pad * 2), cx - c.textWidth(Fonts.BOLD, 17, c.ellipsize(Fonts.BOLD, 17, display, w - pad * 2)) / 2, ty, Theme.TEXT_STRONG);
-		ty += 24;
-		if (f.nickname != null && !f.nickname.isEmpty()) {
-			String handle = "@" + f.name;
-			c.text(Fonts.REGULAR, 11.5f, handle, cx - c.textWidth(Fonts.REGULAR, 11.5f, handle) / 2, ty, Theme.TEXT_MUTED);
-			ty += 18;
-		}
-		String line = f.online ? f.line() : f.lastSeen > 0 ? "Last seen " + ago(f.lastSeen) : "Offline";
-		line = c.ellipsize(Fonts.MEDIUM, 11.5f, line, w - pad * 2);
-		c.text(Fonts.MEDIUM, 11.5f, line, cx - c.textWidth(Fonts.MEDIUM, 11.5f, line) / 2, ty, f.online ? Theme.mix(f.dot(), 0xFFFFFFFF, 0.45f) : Theme.TEXT_MUTED);
-		ty += 28;
-
-		// playing on a server: join them
-		if (f.online && f.serverAddress != null && !f.serverAddress.isEmpty()) {
-			float bh = 72;
-			c.round(x + pad, ty, w - pad * 2, bh, 12, Theme.SUBTLE);
-			c.icon(Theme.I_SERVER, 14, x + pad + 18, ty + 20, Theme.TEXT_SECONDARY);
-			c.text(Fonts.SEMIBOLD, 11.5f, c.ellipsize(Fonts.SEMIBOLD, 11.5f, f.serverAddress, w - pad * 2 - 44), x + pad + 32, ty + 13, Theme.TEXT_STRONG);
-			if (ui.button("relay:join:" + f.id, x + pad + 10, ty + 34, w - pad * 2 - 20, 30, "Join " + (f.nickname != null ? f.nickname : f.name), Theme.I_PLAY, Ui.BTN_PRIMARY)) {
-				UiRuntime.closeHost(screen);
-				UiRuntime.mc().connect(f.serverAddress, null);
-			}
-			ty += bh + 14;
-		}
-
-		// public profile
+		float ty = y + 22 - off;
+		float iw = w - pad * 2;
 		Model.Profile p = client.profile(f.name);
-		ty = heading(c, "Profile", x + pad, ty);
+		boolean plus = p != null && p.badges.contains("plus");
+
+		// round avatar with the presence dot, like the launcher's profile panel
+		float av = 76;
+		c.shadow(x + pad, ty + 6, av, av, av / 2, 22, Theme.alpha(f.dot(), 0.22f));
+		Avatars.drawRound(c, client.api(), f.name, f.skin, x + pad, ty, av);
+		c.circle(x + pad + av - 9, ty + av - 9, 11, 0xFF0C0D11);
+		c.circle(x + pad + av - 9, ty + av - 9, 7.5f, f.dot());
+		ty += av + 12;
+
+		// name (+ Native+ mark), @handle, presence
+		String display = c.ellipsize(Fonts.BOLD, 19, f.display(), iw - (plus ? 26 : 0));
+		c.text(Fonts.BOLD, 19, display, x + pad, ty, Theme.TEXT_STRONG);
+		if (plus) {
+			float mx = x + pad + c.textWidth(Fonts.BOLD, 19, display) + 7;
+			Image mark = badgeArt("plus");
+			if (mark != null) {
+				c.image(mark, mx, ty + 3, 17, 17, 0, 0, 1, 1, 0xFFFFFFFF);
+			}
+			if (ui.hover(mx, ty + 3, 17, 17)) {
+				ui.tip("Native+ member");
+			}
+		}
+		ty += 26;
+		c.text(Fonts.REGULAR, 12, "@" + f.name, x + pad, ty, Theme.TEXT_MUTED);
+		ty += 19;
+		String line = f.online ? f.line() : f.lastSeen > 0 ? "Last seen " + ago(f.lastSeen) : "Offline";
+		c.text(Fonts.MEDIUM, 11.5f, c.ellipsize(Fonts.MEDIUM, 11.5f, line, iw), x + pad, ty, f.online ? Theme.mix(f.dot(), 0xFFFFFFFF, 0.45f) : Theme.TEXT_MUTED);
+		ty += 26;
+
 		if (p == null) {
-			c.skeleton(x + pad, ty, w - pad * 2, 10, 5);
-			c.skeleton(x + pad, ty + 18, (w - pad * 2) * 0.6f, 10, 5);
-			ty += 40;
+			c.skeleton(x + pad, ty, iw, 46, 12);
+			c.skeleton(x + pad, ty + 60, iw * 0.6f, 10, 5);
+			ty += 90;
 		} else {
-			if (p.joinedAt > 0) {
-				ty = fact(c, Theme.I_CLOCK, "Member since " + new java.text.SimpleDateFormat("MMM yyyy", Locale.ROOT).format(new java.util.Date(p.joinedAt)), x + pad, ty, w - pad * 2);
-			}
-			if (p.friends > 0) {
-				ty = fact(c, Theme.I_USERS, p.friends + (p.friends == 1 ? " friend" : " friends"), x + pad, ty, w - pad * 2);
-			}
-			if (p.premium) {
-				ty = fact(c, Theme.I_CHECK_CIRCLE, "Minecraft account linked", x + pad, ty, w - pad * 2);
-			}
-			if (!p.badges.isEmpty()) {
-				float bx = x + pad, by = ty + 2;
-				for (String b : p.badges) {
-					String label = badgeName(b);
-					float bw = c.textWidth(Fonts.SEMIBOLD, 10.5f, label) + 18;
-					if (bx + bw > x + w - pad) {
-						bx = x + pad;
-						by += 26;
-					}
-					int tint = badgeColor(b);
-					c.round(bx, by, bw, 22, 11, Theme.alpha(tint, 0.2f));
-					c.text(Fonts.SEMIBOLD, 10.5f, label, bx + 9, by + (22 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.mix(tint, 0xFFFFFFFF, 0.45f));
-					bx += bw + 6;
+			// badges: the launcher's own badge art in a pill, name on hover
+			java.util.List<String> shown = new java.util.ArrayList<String>();
+			for (String b : p.badges) { // the player's own order, like the launcher
+				if (badgeArt(b) != null && !shown.contains(b)) {
+					shown.add(b);
 				}
-				ty = by + 32;
 			}
+			if (!shown.isEmpty()) {
+				float ch = 46;
+				c.round(x + pad, ty, iw, ch, 12, Theme.SUBTLE);
+				c.outline(x + pad, ty, iw, ch, 12, 1, Theme.HAIRLINE);
+				c.text(Fonts.SEMIBOLD, 9.5f, "BADGES", x + pad + 14, ty + (ch - c.lineHeight(Fonts.SEMIBOLD, 9.5f)) / 2, Theme.TEXT_MUTED);
+				float icon = 22, gap = 6;
+				int fit = Math.max(1, Math.min(shown.size(), (int) ((iw - 90) / (icon + gap))));
+				float pw = fit * icon + (fit - 1) * gap + 14;
+				float px = x + pad + iw - pw - 8, py = ty + (ch - 32) / 2;
+				c.round(px, py, pw, 32, 16, 0xFF15121F);
+				c.outline(px, py, pw, 32, 16, 1, Theme.HAIRLINE);
+				for (int i = 0; i < fit; i++) {
+					String b = shown.get(i);
+					float bx = px + 7 + i * (icon + gap), by = py + 5;
+					boolean over = ui.hover(bx - 2, by - 2, icon + 4, icon + 4);
+					float lift = ui.anim("relay:badge:" + b, over, 16f) * 2;
+					c.image(badgeArt(b), bx, by - lift, icon, icon, 0, 0, 1, 1, 0xFFFFFFFF);
+					if (over) {
+						ui.tip(badgeName(b));
+					}
+				}
+				ty += ch + 12;
+			}
+			if (ui.button("relay:prof:web", x + pad, ty, iw, 32, "View full profile", Theme.I_USER, Ui.BTN_GLASS)) {
+				if (f.name.matches("[A-Za-z0-9_]{1,32}")) {
+					xyz.nativelaunch.ui.Ads.open("https://playnative.net/u/" + f.name);
+				}
+			}
+			ty += 44;
+
+			// connections: the linked Minecraft account
+			if (p.premium) {
+				ty = heading(c, "Connections", x + pad, ty);
+				Avatars.draw(c, client.api(), f.name, f.skin, x + pad, ty, 32, 8);
+				c.text(Fonts.SEMIBOLD, 12.5f, f.name, x + pad + 42, ty + 1, Theme.TEXT_STRONG);
+				c.icon(Theme.I_CHECK_CIRCLE, 12, x + pad + 42 + c.textWidth(Fonts.SEMIBOLD, 12.5f, f.name) + 10, ty + 8, Theme.ONLINE);
+				c.text(Fonts.REGULAR, 11, "Minecraft · Premium", x + pad + 42, ty + 18, Theme.TEXT_MUTED);
+				ty += 46;
+			}
+
+			// activity: playing on a server, with Join
+			if (f.online && f.serverAddress != null && !f.serverAddress.isEmpty()) {
+				ty = heading(c, "Activity", x + pad, ty);
+				float bh = 106;
+				c.round(x + pad, ty, iw, bh, 12, Theme.SUBTLE);
+				c.outline(x + pad, ty, iw, bh, 12, 1, Theme.HAIRLINE);
+				c.text(Fonts.SEMIBOLD, 9.5f, "PLAYING ON A SERVER", x + pad + 14, ty + 12, Theme.TEXT_MUTED);
+				c.round(x + pad + 14, ty + 30, 34, 34, 9, 0xFF000000);
+				c.icon(Theme.I_SERVER, 16, x + pad + 31, ty + 47, Theme.TEXT_SECONDARY);
+				c.text(Fonts.BOLD, 12.5f, c.ellipsize(Fonts.BOLD, 12.5f, f.serverAddress, iw - 76), x + pad + 58, ty + 32, Theme.TEXT_STRONG);
+				c.text(Fonts.REGULAR, 11, "Minecraft server", x + pad + 58, ty + 50, Theme.TEXT_MUTED);
+				if (ui.button("relay:join:" + f.id, x + pad + 12, ty + bh - 38, iw - 24, 28, "Join server", Theme.I_PLAY, Ui.BTN_PRIMARY)) {
+					UiRuntime.closeHost(screen);
+					UiRuntime.mc().connect(f.serverAddress, null);
+				}
+				ty += bh + 16;
+			}
+
+			// details
+			ty = heading(c, "Details", x + pad, ty);
+			if (p.joinedAt > 0) {
+				ty = detail(c, "Member since", new java.text.SimpleDateFormat("MMM d, yyyy", Locale.ROOT).format(new java.util.Date(p.joinedAt)), x + pad, ty, iw);
+			}
+			ty = detail(c, "Friends", String.valueOf(p.friends), x + pad, ty, iw);
+			ty += 8;
 			if (p.bio != null && !p.bio.trim().isEmpty()) {
-				for (String l : xyz.nativelaunch.ui.TextLayout.wrap(c, Fonts.REGULAR, 12, p.bio.trim(), w - pad * 2)) {
+				ty = heading(c, "About me", x + pad, ty);
+				for (String l : xyz.nativelaunch.ui.TextLayout.wrap(c, Fonts.REGULAR, 12, p.bio.trim(), iw)) {
 					c.text(Fonts.REGULAR, 12, l, x + pad, ty, Theme.TEXT);
 					ty += 18;
 				}
-				ty += 6;
+				ty += 10;
 			}
 		}
-		ty += 8;
+		ty += 4;
 
 		// actions
 		ty = heading(c, "Friend", x + pad, ty);
@@ -1280,6 +1324,31 @@ public final class RelayView {
 		ty += 44;
 		profileScroll.end(ui, ty + off - y);
 		c.popClip();
+	}
+
+	/** "Member since ........ Oct 11, 2026" with a hairline under it. */
+	private float detail(Canvas c, String label, String value, float x, float y, float w) {
+		c.text(Fonts.REGULAR, 12, label, x, y, Theme.TEXT_MUTED);
+		c.text(Fonts.SEMIBOLD, 12, value, x + w - c.textWidth(Fonts.SEMIBOLD, 12, value), y, Theme.TEXT_STRONG);
+		c.fill(x, y + 24, w, 1, Theme.HAIRLINE);
+		return y + 34;
+	}
+
+	/** The launcher's badge art, bundled with the mod (null for unknown badges). */
+	private static final java.util.Map<String, Image> BADGE_ART = new java.util.HashMap<String, Image>();
+
+	private static Image badgeArt(String id) {
+		if (id == null || !id.matches("[a-z_]{2,32}")) {
+			return null;
+		}
+		if (!BADGE_ART.containsKey(id)) {
+			Image img = Image.resource("/assets/native/badges/" + id + ".png");
+			if (img != null) {
+				img.linear = true;
+			}
+			BADGE_ART.put(id, img);
+		}
+		return BADGE_ART.get(id);
 	}
 
 	private float fact(Canvas c, int icon, String text, float x, float y, float w) {
