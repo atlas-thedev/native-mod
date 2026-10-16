@@ -247,6 +247,27 @@
       "codepoint": "F422",
       "glyph": "native_damage_tint",
       "sha256": "02ed121564114a32d27184c4ce08ab1ca0567002145188cd91c69ebc89f144d4"
+    },
+    {
+      "id": "combo",
+      "label": "Combo Counter",
+      "codepoint": "F423",
+      "glyph": "native_combo",
+      "sha256": "d7c5b7a86b184208c5c574ac38366fda0abdad5e260d5e553bd43e2d5e2475b2"
+    },
+    {
+      "id": "cooldowns",
+      "label": "Item Cooldowns",
+      "codepoint": "F424",
+      "glyph": "native_cooldowns",
+      "sha256": "532f978d043de242de7fc667759159c2b1b78eff1d8cda0e04e011750e4c0799"
+    },
+    {
+      "id": "block-overlay",
+      "label": "Block Overlay",
+      "codepoint": "F425",
+      "glyph": "native_block_overlay",
+      "sha256": "d3c5a36e3a1001572b3dd8a106b4d4531770bd3498bb33f84e75a480c1eac576"
     }
   ]
 }

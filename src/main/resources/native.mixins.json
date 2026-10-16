@@ -44,7 +44,9 @@
     "HitboxColoursMixin116",
     "HitboxDirectionMixin",
     "LowFireMixin",
-    "LowFireMixin26"
+    "LowFireMixin26",
+    "BlockOverlayMixin",
+    "BlockOverlayMixin26"
   ],
   "injectors": {
     "defaultRequire": 0

@@ -3,7 +3,7 @@ package xyz.nativelaunch.ui.gfx;
 /** Original, CC0 Native module artwork. Codepoints mirror native-modules.json; append only. */
 public final class ModuleIcons {
     public static final int FIRST = 0xF400;
-    private static final String[] IDS = {"fps", "cps", "keystrokes", "coords", "direction", "clock", "memory", "ping", "server", "speed", "scoreboard", "bossbar", "togglesprint", "zoom", "fullbright", "bgfps", "effects", "armor", "inventory", "crosshair", "hitbox-colours", "critical-colours", "watermark", "voice", "voice-overlay", "nether-coords", "moon-phase", "day-night", "totem-counter", "item-counter", "playtime", "reach", "shulker-preview", "low-fire", "damage-tint"};
+    private static final String[] IDS = {"fps", "cps", "keystrokes", "coords", "direction", "clock", "memory", "ping", "server", "speed", "scoreboard", "bossbar", "togglesprint", "zoom", "fullbright", "bgfps", "effects", "armor", "inventory", "crosshair", "hitbox-colours", "critical-colours", "watermark", "voice", "voice-overlay", "nether-coords", "moon-phase", "day-night", "totem-counter", "item-counter", "playtime", "reach", "shulker-preview", "low-fire", "damage-tint", "combo", "cooldowns", "block-overlay"};
     private ModuleIcons() {}
 
     public static int forModule(String id, int fallback) {

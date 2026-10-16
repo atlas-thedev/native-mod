@@ -885,6 +885,47 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
+	public int cooldowns(String[] ids, float[] progress) {
+		try {
+			Object p = localPlayer();
+			Object manager = p == null ? null : call(p, "method_7357"); // getItemCooldownManager
+			Method get = manager == null ? null : named(manager.getClass(), "method_7905", 2); // getCooldownProgress(Item | ItemStack, tickDelta)
+			if (get == null) {
+				return 0;
+			}
+			boolean byStack = get.getParameterTypes()[0].getName().equals("net.minecraft.class_1799"); // ItemStack from 1.21.2
+			java.util.List<Object> stacks = new java.util.ArrayList<Object>();
+			Object inv = get(p, "field_7514");
+			Object main = get(inv, "field_7547");
+			if (main instanceof java.util.List) {
+				stacks.addAll((java.util.List<?>) main);
+			}
+			stacks.add(call(p, "method_6079")); // off hand
+			int n = 0;
+			java.util.Set<String> seen = new java.util.HashSet<String>();
+			for (Object st : stacks) {
+				if (st == null || Boolean.TRUE.equals(call(st, "method_7960"))) { // isEmpty
+					continue;
+				}
+				Object item = call(st, "method_7909"); // getItem
+				String id = item == null ? null : xyz.nativelaunch.ui.mod.Game.bareId(item.toString());
+				if (id == null || !seen.add(id)) {
+					continue;
+				}
+				Object v = get.invoke(manager, byStack ? st : item, 0f);
+				float f = v instanceof Number ? ((Number) v).floatValue() : 0f;
+				if (f > 0.001f && n < ids.length) {
+					ids[n] = id;
+					progress[n++] = f;
+				}
+			}
+			return n;
+		} catch (Throwable t) {
+			return 0;
+		}
+	}
+
+	@Override
 	public boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		Object p = localPlayer();
 		Object st = p == null ? null : call(p, "method_6047"); // getMainHandStack
