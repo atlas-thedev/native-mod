@@ -229,7 +229,7 @@
     },
     {
       "id": "shulker-preview",
-      "label": "Shulker Tooltip",
+      "label": "Shulker Preview",
       "codepoint": "F420",
       "glyph": "native_shulker_preview",
       "sha256": "cdfda5e64fdbbd55911c33e9aa257aad4aff8e1f081a815f0bffc4336c56a81d"

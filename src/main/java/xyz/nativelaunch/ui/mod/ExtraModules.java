@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * More client modules: Nether coordinates, moon phase, day / night cycle, totem and item counters, playtime, reach
- * display and the shulker box tooltip. (Low Fire and Damage Tint have their own files: the game hooks live next to them.)
+ * display and shulker box preview. (Low Fire and Damage Tint have their own files: the game hooks live next to them.)
  */
 public final class ExtraModules {
 	private ExtraModules() {
@@ -32,7 +32,7 @@ public final class ExtraModules {
 		Modules.register(new ItemCounter());
 		Modules.register(new Playtime());
 		Modules.register(new ReachDisplay());
-		Modules.register(new ShulkerTooltip());
+		Modules.register(new ShulkerPreview());
 		Modules.register(new Combo());
 		Modules.register(new Cooldowns());
 		Modules.register(new BlockOverlay());
@@ -774,6 +774,81 @@ public final class ExtraModules {
 			l[0] = "Reach";
 			v[0] = fresh ? String.format(Locale.ROOT, "%." + (decimals.value + 1) + "f", d) + " blocks" : "-";
 			return 1;
+		}
+	}
+
+	// ── shulker box preview ─────────────────────────────────────────────────
+
+	static final class ShulkerPreview extends StatusModules.Box {
+		final Setting.Bool counts = add(new Setting.Bool("counts", "Item counts", true));
+		private final Game.Slot[] slots = new Game.Slot[27];
+		private final Game.Slot[] demo = new Game.Slot[27];
+		private boolean has;
+		private long next;
+
+		ShulkerPreview() {
+			super("shulker-preview", "Shulker Preview", "Hold a shulker box to see what is inside it, without placing it or opening it.", Theme.I_BACKPACK, false, 1f, 0.6f);
+			drop(labels, color);
+			style.initial(STYLE_CARD);
+			for (int i = 0; i < 27; i++) {
+				slots[i] = new Game.Slot();
+				demo[i] = new Game.Slot();
+			}
+			String[] ids = {"diamond_sword", "golden_apple", "ender_pearl", "totem_of_undying", "end_crystal", "obsidian", "experience_bottle", "firework_rocket",
+					"cooked_beef", "arrow", "shield", "water_bucket", "diamond", "gold_ingot", "oak_planks"};
+			int[] cnt = {1, 12, 16, 3, 64, 48, 32, 64, 24, 128, 1, 1, 9, 31, 64};
+			for (int i = 0; i < ids.length; i++) {
+				demo[(i * 7) % 27].set(ids[i], cnt[i], 0, 0);
+			}
+		}
+
+		@Override
+		public int needs() {
+			return Game.NEED_ARMOR;
+		}
+
+		@Override
+		public void frame(Game g) {
+			long now = System.currentTimeMillis();
+			if (now < next) {
+				return;
+			}
+			next = now + 250;
+			boolean held = !g.hand.empty() && g.hand.id != null && g.hand.id.endsWith("shulker_box");
+			has = held && HudModules.mc().shulkerInHand(slots);
+		}
+
+		@Override
+		public boolean visible(Game g) {
+			return g.sample || has;
+		}
+
+		@Override
+		void render(Canvas c, Ui ui, Game g, float x, float y) {
+			float s = scale.value, pad = pad();
+			float cell = 20 * s, gap = 2 * s, step = cell + gap, ic = 16 * s;
+			float w = 9 * step - gap + 2 * pad, h = 3 * step - gap + 2 * pad;
+			if (ui != null) {
+				Game.Slot[] src = g.sample ? demo : slots;
+				float cr = 4 * s, fs = 10f * s, flh = c.lineHeight(Fonts.BOLD, fs);
+				for (int i = 0; i < 27; i++) {
+					float sx = x + pad + (i % 9) * step, sy = y + pad + (i / 9) * step;
+					c.round(sx, sy, cell, cell, cr, 0x40000000);
+					c.outline(sx, sy, cell, cell, cr, 1, 0x14FFFFFF);
+					Game.Slot sl = src[i];
+					if (sl.empty()) {
+						continue;
+					}
+					StatusModules.item(c, sl, sx + (cell - ic) / 2f, sy + (cell - ic) / 2f, ic, 0xFFFFFFFF);
+					if (counts.value && sl.count > 1) {
+						String t = String.valueOf(sl.count);
+						float tx = sx + cell - c.textWidth(Fonts.BOLD, fs, t) - 1.5f * s, ty = sy + cell - flh + 1f * s;
+						c.text(Fonts.BOLD, fs, t, tx + 1f, ty + 1f, 0xDD000000);
+						c.text(Fonts.BOLD, fs, t, tx, ty, 0xFFFFFFFF);
+					}
+				}
+			}
+			done(w, h);
 		}
 	}
 }
