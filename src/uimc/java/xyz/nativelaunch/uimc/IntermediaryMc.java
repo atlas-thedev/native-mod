@@ -312,11 +312,11 @@ public final class IntermediaryMc implements McBridge {
 	//    checked against Yarn for 1.16.5, 1.17.1, 1.20.1, 1.20.4, 1.21.1, 1.21.4, 1.21.9 and 1.21.11) ──────────
 
 	private static final Object MISSING = new Object();
-	private final Map<String, Object> members = new HashMap<String, Object>();
+	private final xyz.nativelaunch.ui.MemberCache members = new xyz.nativelaunch.ui.MemberCache();
 
 	Field field(Class<?> owner, String name) {
-		String key = owner.getName() + "#" + name;
-		Object m = members.get(key);
+		Map<String, Object> table = members.fields(owner);
+		Object m = table.get(name);
 		if (m == null) {
 			m = MISSING;
 			for (Class<?> c = owner; c != null && m == MISSING; c = c.getSuperclass()) {
@@ -328,14 +328,21 @@ public final class IntermediaryMc implements McBridge {
 					// keep looking up the hierarchy
 				}
 			}
-			members.put(key, m);
+			table.put(name, m);
 		}
 		return m == MISSING ? null : (Field) m;
 	}
 
+	private static final Class<?>[] NO_PARAMS = new Class<?>[0];
+
+	/** A no-argument method (no varargs array is built per call). */
+	Method method(Class<?> owner, String name) {
+		return method(owner, name, NO_PARAMS);
+	}
+
 	Method method(Class<?> owner, String name, Class<?>... params) {
-		String key = owner.getName() + "." + name + params.length;
-		Object m = members.get(key);
+		Map<String, Object> table = members.methods(owner, params.length);
+		Object m = table.get(name);
 		if (m == null) {
 			m = MISSING;
 			try {
@@ -353,7 +360,7 @@ public final class IntermediaryMc implements McBridge {
 					}
 				}
 			}
-			members.put(key, m);
+			table.put(name, m);
 		}
 		return m == MISSING ? null : (Method) m;
 	}
@@ -957,8 +964,8 @@ public final class IntermediaryMc implements McBridge {
 	private Method visitMethod;
 
 	Method named(Class<?> owner, String name, int params) {
-		String key = owner.getName() + "~" + name + params;
-		Object m = members.get(key);
+		Map<String, Object> table = members.named(owner, params);
+		Object m = table.get(name);
 		if (m == null) {
 			m = MISSING;
 			for (Method x : owner.getMethods()) {
@@ -979,7 +986,7 @@ public final class IntermediaryMc implements McBridge {
 					}
 				}
 			}
-			members.put(key, m);
+			table.put(name, m);
 		}
 		return m == MISSING ? null : (Method) m;
 	}

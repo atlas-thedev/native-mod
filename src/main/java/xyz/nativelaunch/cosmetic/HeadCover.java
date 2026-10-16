@@ -1,10 +1,10 @@
 package xyz.nativelaunch.cosmetic;
 
 import xyz.nativelaunch.core.Log;
+import xyz.nativelaunch.core.MethodCache;
 import xyz.nativelaunch.core.ProfileAccess;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.List;
 
@@ -15,7 +15,7 @@ import java.util.List;
  */
 public final class HeadCover {
 	private static final String[] PLAYER_CLASSES = {"net.minecraft.class_742", "net.minecraft.client.player.AbstractClientPlayer"};
-	private static final String[] PROFILE_GETTERS = {"method_7334", "getGameProfile"};
+	private static final MethodCache PROFILE_GETTERS = new MethodCache("method_7334", "getGameProfile");
 	/** PlayerModelPart.HAT and EquipmentSlot.HEAD: same position in every version since 1.16. */
 	private static final int HAT = 6;
 	private static final int HEAD = 5;
@@ -37,10 +37,14 @@ public final class HeadCover {
 	/** The player whose render state / model is being built on the render thread, or null. */
 	private static volatile Object scope;
 	private static volatile boolean broken;
-	private static Object lastEntity;
-	private static long lastAt;
-	private static boolean lastCovers;
+	/** Per player, so several players on screen do not keep evicting each other (weak: players that leave are forgotten). */
+	private static final java.util.Map<Object, Verdict> verdicts = new java.util.WeakHashMap<Object, Verdict>();
 	private static volatile Object empty;
+
+	private static final class Verdict {
+		long at;
+		boolean covers;
+	}
 
 	private HeadCover() {
 	}
@@ -82,12 +86,13 @@ public final class HeadCover {
 		}
 		synchronized (HeadCover.class) {
 			long now = System.nanoTime();
-			if (entity == lastEntity && now - lastAt < 100_000_000L) {
-				return lastCovers;
+			Verdict verdict = verdicts.get(entity);
+			if (verdict != null && now - verdict.at < 100_000_000L) {
+				return verdict.covers;
 			}
 			boolean covers = false;
 			try {
-				Object profile = profile(entity);
+				Object profile = PROFILE_GETTERS.call(entity);
 				String name = ProfileAccess.name(profile);
 				if (name != null) {
 					covers = any(CosmeticLibrary.worn(name, ProfileAccess.id(profile)));
@@ -96,23 +101,14 @@ public final class HeadCover {
 				broken = true;
 				Log.warn("Hood helmet hiding is off ({}).", t.toString());
 			}
-			lastEntity = entity;
-			lastAt = now;
-			lastCovers = covers;
+			if (verdict == null) {
+				verdict = new Verdict();
+				verdicts.put(entity, verdict);
+			}
+			verdict.at = now;
+			verdict.covers = covers;
 			return covers;
 		}
-	}
-
-	private static Object profile(Object entity) throws Exception {
-		for (String name : PROFILE_GETTERS) {
-			try {
-				Method m = entity.getClass().getMethod(name);
-				return m.invoke(entity);
-			} catch (NoSuchMethodException ignored) {
-				// next spelling
-			}
-		}
-		throw new NoSuchMethodException(PROFILE_GETTERS[0]);
 	}
 
 	/** ItemStack.EMPTY (field_8037 / EMPTY), found from a stack's class. */

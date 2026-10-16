@@ -30,6 +30,9 @@ public final class GlRenderer implements Renderer {
 	private int program, vao, vbo, atlasTex, uScreen, uTex;
 	private ByteBuffer vertices = MemoryUtil.memAlloc(6 * 4 * FLOATS_PER_VERTEX * 4096);
 	private final List<Image> uploaded = new ArrayList<Image>();
+	/** Reused every frame instead of allocating a snapshot object and native scratch buffers per frame. */
+	private final Saved saved = new Saved();
+	private ByteBuffer atlasUpload;
 
 	public boolean failed() {
 		return failed;
@@ -129,7 +132,7 @@ public final class GlRenderer implements Renderer {
 		if (failed || c.quads == 0) {
 			return;
 		}
-		Saved saved = new Saved();
+		Saved saved = this.saved;
 		try {
 			if (!detected) {
 				detect();
@@ -184,18 +187,26 @@ public final class GlRenderer implements Renderer {
 		GL11.glBindTexture(GL11.GL_TEXTURE_2D, atlasTex);
 		int[] dirty = c.atlas.takeDirty();
 		if (dirty != null) {
-			ByteBuffer up = MemoryUtil.memAlloc(dirty[2] * dirty[3] * 4);
-			try {
-				for (int row = 0; row < dirty[3]; row++) {
-					up.put(c.atlas.pixels, ((dirty[1] + row) * c.atlas.size + dirty[0]) * 4, dirty[2] * 4);
+			int bytes = dirty[2] * dirty[3] * 4;
+			if (atlasUpload == null || atlasUpload.capacity() < bytes) {
+				if (atlasUpload != null) {
+					MemoryUtil.memFree(atlasUpload);
 				}
-				up.flip();
-				GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, 0);
-				GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, 0);
-				GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0);
-				GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, dirty[0], dirty[1], dirty[2], dirty[3], GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, up);
-			} finally {
-				MemoryUtil.memFree(up);
+				atlasUpload = MemoryUtil.memAlloc(Math.max(bytes, 64 * 1024));
+			}
+			ByteBuffer up = atlasUpload;
+			up.clear();
+			for (int row = 0; row < dirty[3]; row++) {
+				up.put(c.atlas.pixels, ((dirty[1] + row) * c.atlas.size + dirty[0]) * 4, dirty[2] * 4);
+			}
+			up.flip();
+			GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, 0);
+			GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, 0);
+			GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0);
+			GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, dirty[0], dirty[1], dirty[2], dirty[3], GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, up);
+			if (atlasUpload.capacity() > (1 << 20)) {
+				MemoryUtil.memFree(atlasUpload); // a whole-atlas upload (after a reset) is not worth keeping 16 MB for
+				atlasUpload = null;
 			}
 		}
 
@@ -372,14 +383,12 @@ public final class GlRenderer implements Renderer {
 				alphaTest = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
 			}
 			depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
-			java.nio.ByteBuffer mask = MemoryUtil.memAlloc(16);
-			try {
+			try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+				java.nio.ByteBuffer mask = stack.malloc(16);
 				GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, mask);
 				for (int i = 0; i < 4; i++) {
 					colorMask[i] = mask.get(i) != 0;
 				}
-			} finally {
-				MemoryUtil.memFree(mask);
 			}
 			GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
 			unpackAlign = GL11.glGetInteger(GL11.GL_UNPACK_ALIGNMENT);

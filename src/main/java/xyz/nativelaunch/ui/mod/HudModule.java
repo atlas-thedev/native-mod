@@ -142,6 +142,22 @@ public abstract class HudModule extends Module {
 
 	private static final float FONT = 12f;
 
+	private static int frameStamp;
+
+	/** Called once at the start of every UI frame. */
+	public static void nextFrame() {
+		frameStamp++;
+	}
+
+	/**
+	 * What the last {@link #measure} worked out, so the {@link #paint} that follows it in the same frame does not ask
+	 * the module for its lines and measure every one of them a second time.
+	 */
+	private int measuredLines = -1, measuredStamp = -1, measuredStyle;
+	private float measuredScale;
+	private boolean measuredLabels;
+	private Game measuredFor;
+
 	private String join(int i) {
 		String l = lineLabels[i], v = lineValues[i];
 		if (l == null || l.isEmpty()) {
@@ -172,14 +188,29 @@ public abstract class HudModule extends Module {
 		boolean card = style.value == STYLE_CARD;
 		size[0] = w + (card ? 16 * s : 2 * s);
 		size[1] = n * lh + Math.max(0, n - 1) * 2 * s + (card ? 10 * s : 2 * s);
+		measuredLines = n;
+		measuredStamp = frameStamp;
+		measuredFor = g;
+		measuredScale = s;
+		measuredStyle = style.value;
+		measuredLabels = labels.value;
 		return size;
 	}
 
 	public void paint(Ui ui, float x, float y, Game g) {
 		Canvas c = ui.c;
 		float s = scale.value;
-		float[] sz = measure(c, g);
-		int n = lines(g, lineLabels, lineValues);
+		int n;
+		float[] sz;
+		if (measuredStamp == frameStamp && measuredFor == g && measuredScale == s && measuredStyle == style.value
+				&& measuredLabels == labels.value) {
+			n = measuredLines; // measured a moment ago this frame: lineLabels / lineValues / size are current
+			sz = size;
+		} else {
+			sz = measure(c, g);
+			n = lines(g, lineLabels, lineValues);
+		}
+		measuredStamp = -1; // consumed: the next frame (or a changed setting) measures again
 		boolean card = style.value == STYLE_CARD;
 		if (card) {
 			background(c, x, y, sz[0], sz[1], s);

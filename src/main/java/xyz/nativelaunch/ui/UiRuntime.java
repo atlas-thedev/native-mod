@@ -8,6 +8,7 @@ import xyz.nativelaunch.ui.gfx.Fonts;
 import xyz.nativelaunch.ui.gfx.GlRenderer;
 import xyz.nativelaunch.ui.gfx.Renderer;
 import xyz.nativelaunch.ui.mod.Game;
+import xyz.nativelaunch.ui.mod.HudModule;
 import xyz.nativelaunch.ui.mod.Module;
 import xyz.nativelaunch.ui.mod.Modules;
 import xyz.nativelaunch.ui.view.HudEditor;
@@ -228,6 +229,7 @@ public final class UiRuntime {
 			input.install();
 		}
 		Game.countFrame();
+		HudModule.nextFrame();
 		Object screen = mc.screen();
 		if (config.customTitle && !classic && mc.isVanillaTitle(screen)) {
 			mc.setScreen(mc.newHost(McBridge.TITLE, null));
@@ -244,7 +246,13 @@ public final class UiRuntime {
 		}
 		game.playing = inWorld && screen == null;
 		playing = game.playing;
-		game.hudAllowed = kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !mc.hudHidden() && !mc.debugOpen();
+		Module brand = watermark != null ? watermark : (watermark = Modules.get("watermark"));
+		// F1 / F3 state is read through reflection on most versions: once per frame, and only when something asks
+		boolean hudBlocked = false;
+		if (inWorld || brand != null && brand.enabled) {
+			hudBlocked = mc.hudHidden() || mc.debugOpen();
+		}
+		game.hudAllowed = kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !hudBlocked;
 		modulesFrame();
 		Modules.tick();
 		if (System.currentTimeMillis() - lastWarm > 3000) {
@@ -255,9 +263,8 @@ public final class UiRuntime {
 		if (game.hudAllowed) {
 			hud = HudOverlay.any(game);
 		}
-		Module brand = Modules.get("watermark");
-        boolean wantBrand = brand != null && brand.enabled && !game.hudAllowed
-                && !mc.hudHidden() && !mc.debugOpen()
+		boolean wantBrand = brand != null && brand.enabled && !game.hudAllowed
+                && !hudBlocked
                 && kind != McBridge.TITLE && kind != McBridge.MENU && kind != McBridge.HUD;
         boolean overlay = mc.overlay();
 		boolean classicTitle = classic && mc.isVanillaTitle(screen);
@@ -383,6 +390,7 @@ public final class UiRuntime {
 	}
 
 	private static long lastWarm;
+	private static Module watermark;
 
 	/** Runs every enabled module; one that throws is switched off instead of taking the UI down. */
 	private static void modulesFrame() {

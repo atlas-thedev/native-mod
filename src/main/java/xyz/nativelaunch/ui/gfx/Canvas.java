@@ -33,6 +33,10 @@ public final class Canvas {
 	private float alpha = 1;
 	private final float[] alphaStack = new float[32];
 	private int alphaDepth;
+	/**
+	 * Atlas regions of stamped images: per key, runs of {w, h, x, y}. Looked up for every icon and face on every frame,
+	 * so a hit allocates nothing (the old key was a fresh List of boxed values per call).
+	 */
 	private final Map<Object, int[]> stamped = new HashMap<Object, int[]>();
 	private int stampedGeneration = -1;
 
@@ -261,13 +265,15 @@ public final class Canvas {
 
 	private static final int WATERMARK = ModuleIcons.forModule("watermark", -1);
 	private Image logo;
+	private static final Object LOGO_KEY = new Object();
 
 	/** A Native module or navigation icon centred on (cx, cy). */
 	public void icon(int codepoint, float size, float cx, float cy, int argb) {
 		if (NavIcons.has(codepoint)) {
 			int p = Math.max(1, px(size));
 			float s = p / scale;
-			stamp("nav:" + codepoint, NavIcons.get(codepoint, p), Math.round(cx * scale - p / 2f) / scale, Math.round(cy * scale - p / 2f) / scale, s, s, false, argb);
+			Image nav = NavIcons.get(codepoint, p); // cached per (icon, size): the image itself is the key
+				stamp(nav, nav, Math.round(cx * scale - p / 2f) / scale, Math.round(cy * scale - p / 2f) / scale, s, s, false, argb);
 			return;
 		}
 		if (codepoint == WATERMARK) {
@@ -275,7 +281,7 @@ public final class Canvas {
 				logo = Image.resource("/assets/native/ui/logo.png");
 			}
 			if (logo != null) {
-				stamp("native:logo-icon", logo, cx - size / 2, cy - size / 2, size, size, true, argb);
+				stamp(LOGO_KEY, logo, cx - size / 2, cy - size / 2, size, size, true, argb);
 				return;
 			}
 		}
@@ -337,19 +343,36 @@ public final class Canvas {
 			stampedGeneration = atlas.generation;
 		}
 		int bw = smooth ? pw : src.width, bh = smooth ? ph : src.height;
-		java.util.List<Object> k = java.util.Arrays.asList(key, bw, bh);
-		int[] at = stamped.get(k);
-		if (at == null) {
+		int[] runs = stamped.get(key);
+		int ax = -1, ay = -1;
+		if (runs != null) {
+			for (int i = 0; i + 3 < runs.length; i += 4) {
+				if (runs[i] == bw && runs[i + 1] == bh) {
+					ax = runs[i + 2];
+					ay = runs[i + 3];
+					break;
+				}
+			}
+		}
+		if (ax < 0) {
 			Image s = smooth ? src.scaled(bw, bh) : src;
-			at = atlas.alloc(bw, bh);
+			int[] at = atlas.alloc(bw, bh);
 			if (at == null) {
 				return;
 			}
-			atlas.putArgb(at[0], at[1], bw, bh, s.argb);
-			stamped.put(k, at);
+			ax = at[0];
+			ay = at[1];
+			atlas.putArgb(ax, ay, bw, bh, s.argb);
+			int n = runs == null ? 0 : runs.length;
+			int[] grown = runs == null ? new int[4] : java.util.Arrays.copyOf(runs, n + 4);
+			grown[n] = bw;
+			grown[n + 1] = bh;
+			grown[n + 2] = ax;
+			grown[n + 3] = ay;
+			stamped.put(key, grown);
 		}
 		float inv = 1f / atlas.size;
-		quad(null, X0, Y0, X1, Y1, at[0] * inv, at[1] * inv, (at[0] + bw) * inv, (at[1] + bh) * inv, argb, argb, argb, argb);
+		quad(null, X0, Y0, X1, Y1, ax * inv, ay * inv, (ax + bw) * inv, (ay + bh) * inv, argb, argb, argb, argb);
 	}
 
 	// ── core ─────────────────────────────────────────────────────────────
