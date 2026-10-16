@@ -190,6 +190,19 @@ public interface McBridge {
 		return 0;
 	}
 
+	/** The local player's entity object (what the game passes to its look-direction hook), or null. */
+	default Object playerEntity() {
+		return null;
+	}
+
+	/** Camera perspective: 0 first person, 1 third person (behind), 2 third person (front); -1 when unknown. */
+	default int perspective() {
+		return -1;
+	}
+
+	default void setPerspective(int perspective) {
+	}
+
 	/** Reads the scoreboard sidebar; false when this version can't be read (the vanilla one then stays). */
 	default boolean sidebar(xyz.nativelaunch.ui.mod.Overlays.Sidebar out) {
 		return false;

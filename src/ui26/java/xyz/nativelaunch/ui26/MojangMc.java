@@ -622,9 +622,15 @@ public final class MojangMc implements McBridge {
 	@Override
 	public long dayTime() {
 		Object level = client().level;
-		Object t = call(level, "getOverworldClockTime"); // 26.3: world clocks
-		if (!(t instanceof Number)) {
-			t = call(level, "getDayTime");
+		Object t;
+		xyz.nativelaunch.ui.mod.TimeChanger.bypass = true; // the real time, not the one Time Changer shows
+		try {
+			t = call(level, "getOverworldClockTime"); // 26.3: world clocks
+			if (!(t instanceof Number)) {
+				t = call(level, "getDayTime");
+			}
+		} finally {
+			xyz.nativelaunch.ui.mod.TimeChanger.bypass = false;
 		}
 		return t instanceof Number ? ((Number) t).longValue() : -1;
 	}
@@ -661,6 +667,29 @@ public final class MojangMc implements McBridge {
 			return true;
 		} catch (Throwable t) {
 			return false;
+		}
+	}
+
+	@Override
+	public Object playerEntity() {
+		return client().player;
+	}
+
+	@Override
+	public int perspective() {
+		Object p = call(client().options, "getCameraType");
+		return p instanceof Enum ? ((Enum<?>) p).ordinal() : -1;
+	}
+
+	@Override
+	public void setPerspective(int perspective) {
+		try {
+			net.minecraft.client.CameraType[] all = net.minecraft.client.CameraType.values();
+			if (perspective >= 0 && perspective < all.length) {
+				client().options.setCameraType(all[perspective]);
+			}
+		} catch (Throwable ignored) {
+			// leave the perspective as it is
 		}
 	}
 

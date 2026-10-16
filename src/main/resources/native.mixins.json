@@ -46,7 +46,17 @@
     "LowFireMixin",
     "LowFireMixin26",
     "BlockOverlayMixin",
-    "BlockOverlayMixin26"
+    "BlockOverlayMixin26",
+    "FreelookMixin",
+    "FreelookMixin26",
+    "FreelookCameraMixin",
+    "FreelookCameraMixin26",
+    "NoHurtCamMixin",
+    "NoHurtCamMixin26",
+    "TimeChangerMixin",
+    "TimeChangerMixin26",
+    "WeatherMixin",
+    "WeatherMixin26"
   ],
   "injectors": {
     "defaultRequire": 0

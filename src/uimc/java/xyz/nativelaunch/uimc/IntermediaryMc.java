@@ -835,7 +835,13 @@ public final class IntermediaryMc implements McBridge {
 
 	@Override
 	public long dayTime() {
-		Object t = call(get(client(), "field_1687"), "method_8532"); // World.getTimeOfDay()
+		Object t;
+		xyz.nativelaunch.ui.mod.TimeChanger.bypass = true; // the real time, not the one Time Changer shows
+		try {
+			t = call(get(client(), "field_1687"), "method_8532"); // World.getTimeOfDay()
+		} finally {
+			xyz.nativelaunch.ui.mod.TimeChanger.bypass = false;
+		}
 		return t instanceof Number ? ((Number) t).longValue() : -1;
 	}
 
@@ -881,6 +887,33 @@ public final class IntermediaryMc implements McBridge {
 			return true;
 		} catch (Throwable t) {
 			return false;
+		}
+	}
+
+	@Override
+	public Object playerEntity() {
+		return localPlayer();
+	}
+
+	@Override
+	public int perspective() {
+		Object p = call(options(), "method_31044"); // GameOptions.getPerspective()
+		return p instanceof Enum ? ((Enum<?>) p).ordinal() : -1;
+	}
+
+	@Override
+	public void setPerspective(int perspective) {
+		try {
+			Object current = call(options(), "method_31044");
+			if (current instanceof Enum) {
+				Object[] all = ((Enum<?>) current).getDeclaringClass().getEnumConstants();
+				Method set = method(options().getClass(), "method_31043", ((Enum<?>) current).getDeclaringClass());
+				if (set != null && perspective >= 0 && perspective < all.length) {
+					set.invoke(options(), all[perspective]);
+				}
+			}
+		} catch (Throwable ignored) {
+			// leave the perspective as it is
 		}
 	}
 

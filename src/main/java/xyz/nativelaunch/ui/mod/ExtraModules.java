@@ -38,6 +38,10 @@ public final class ExtraModules {
 		Modules.register(new BlockOverlay());
 		Modules.register(new LowFire());
 		Modules.register(new DamageTint());
+		Modules.register(new Freelook());
+		Modules.register(new NoHurtCam());
+		Modules.register(new TimeChanger());
+		Modules.register(new WeatherChanger());
 	}
 
 	/** Called once per UI frame (also while no Playtime module is on: the total keeps counting). */
