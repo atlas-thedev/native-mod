@@ -450,26 +450,26 @@ public final class HudEditor {
 		// the big button
 		float bw = 236, bh = 42, bx = W / 2 - bw / 2, by = y0 + 70;
 		boolean over = ui.hover(bx, by, bw, bh);
-		boolean click = ui.clicked("hud:hub:settings", bx, by, bw, bh);
-		float hv = ui.anim("hud:hub:settings#h", over, 16f);
-		float pr = ui.anim("hud:hub:settings#p", ui.isPressing("hud:hub:settings"), 24f);
+		boolean click = ui.clicked("hud:hub:mods", bx, by, bw, bh);
+		float hv = ui.anim("hud:hub:mods#h", over, 16f);
+		float pr = ui.anim("hud:hub:mods#p", ui.isPressing("hud:hub:mods"), 24f);
 		c.shadow(bx, by + 3, bw, bh, bh / 2, 18, Theme.alpha(0x99000000, a));
 		c.round(bx, by, bw, bh, bh / 2, Theme.alpha(Theme.mix(Theme.mix(0xFFF4F4F5, 0xFFFFFFFF, hv), 0xFFD4D4D8, pr), a));
-		String label = "NATIVE SETTINGS";
+		String label = "NATIVE MODS";
 		float fs = 12.5f, tw = c.textWidth(Fonts.SEMIBOLD, fs, label);
 		float tx = bx + (bw - tw - 24) / 2;
-		c.icon(Theme.I_SETTINGS, 15, tx + 7, by + bh / 2, Theme.alpha(Theme.SOLID_FG, a));
+		c.icon(Theme.I_NAV_MODS, 15, tx + 7, by + bh / 2, Theme.alpha(Theme.SOLID_FG, a));
 		c.text(Fonts.SEMIBOLD, fs, label, tx + 24, by + (bh - c.lineHeight(Fonts.SEMIBOLD, fs)) / 2, Theme.alpha(Theme.SOLID_FG, a));
 		if (over) {
 			ui.cursorHand = true;
 		}
 		if (click) {
-			openMenu(screen, 2);
+			openMenu(screen, 0); // the Mods page
 			return true;
 		}
 		// round shortcuts
-		int[] icons = {Theme.I_PLUS, Theme.I_NAV_MODS, Theme.I_SHIRT, Theme.I_MESSAGE, Theme.I_RESET};
-		String[] tips = {"HUD modules", "Mods", "Cosmetics", "Relay chat", "Reset layout"};
+		int[] icons = {Theme.I_PLUS, Theme.I_SETTINGS, Theme.I_SHIRT, Theme.I_MESSAGE, Theme.I_RESET};
+		String[] tips = {"HUD modules", "Settings", "Cosmetics", "Relay chat", "Reset layout"};
 		float d = 42, gap = 10, rowW = icons.length * d + (icons.length - 1) * gap;
 		float rx = W / 2 - rowW / 2, ry = by + bh + 16;
 		for (int i = 0; i < icons.length; i++) {
@@ -481,7 +481,7 @@ public final class HudEditor {
 						drawerOpen = !drawerOpen;
 						break;
 					case 1:
-						openMenu(screen, 0);
+						openMenu(screen, 2);
 						return true;
 					case 2:
 						openMenu(screen, 1);

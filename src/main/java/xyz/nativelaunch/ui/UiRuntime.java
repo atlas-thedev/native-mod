@@ -274,11 +274,10 @@ public final class UiRuntime {
 			client.notices.clear(); // only shown while playing; the chat itself shows everything else
 		}
 		boolean callCard = kind == 0 && (xyz.nativelaunch.voice.Voice.hasIncoming() || xyz.nativelaunch.voice.Voice.calling() != null);
-		boolean shulkerTip = kind == 0 && inWorld && screen != null && xyz.nativelaunch.ui.mod.ShulkerTooltip.active();
 		boolean wantToasts = kind == 0 && client != null && (config.notifications && (toasts != null && toasts.active() || !client.notices.isEmpty()) || callCard);
 		capturing = kind != 0 && !overlay;
 		pillVisible = classicTitle && !overlay;
-		if ((kind == 0 && !classicTitle && !wantToasts && !hud && !wantBrand && !shulkerTip) || overlay) {
+		if ((kind == 0 && !classicTitle && !wantToasts && !hud && !wantBrand) || overlay) {
 			if (kind == 0 && client != null && relay != null) {
 				client.viewing = null;
 			}
@@ -332,9 +331,6 @@ public final class UiRuntime {
 				float[] sz = mark.measure(canvas, game);
 				mark.paint(ui, xyz.nativelaunch.ui.mod.HudModule.pos(mark.fx, canvas.width(), sz[0]),
 						xyz.nativelaunch.ui.mod.HudModule.pos(mark.fy, canvas.height(), sz[1]), game);
-			}
-			if (shulkerTip) {
-				xyz.nativelaunch.ui.mod.ShulkerTooltip.drawTip(ui);
 			}
 			ui.tooltips();
 			ui.end();

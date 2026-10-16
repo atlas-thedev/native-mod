@@ -175,29 +175,6 @@ public interface McBridge {
 	}
 
 	/**
-	 * The contents of the shulker box in your main hand, else your off hand (27 slots into {@code out}, in slot order).
-	 * Returns the box's item id ("purple_shulker_box"), null when neither hand holds one or this version cannot read it.
-	 */
-	default String shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
-		return null;
-	}
-
-	/** The item stack under the cursor in an open inventory / chest screen, null when there is none. */
-	default Object hoveredStack() {
-		return null;
-	}
-
-	/** The name an item stack shows (its custom name when renamed, in the game's language), null when unknown. */
-	default String stackName(Object stack) {
-		return null;
-	}
-
-	/** Like {@link #shulkerInHand} for any item stack: its id when it is a shulker box (contents into {@code out}), else null. */
-	default String shulkerContents(Object stack, xyz.nativelaunch.ui.mod.Game.Slot[] out) {
-		return null;
-	}
-
-	/**
 	 * Items of yours that are on cooldown right now (ender pearl, shield, chorus fruit ...): fills {@code ids} (bare item ids)
 	 * and {@code progress} (1 = just started, 0 = ready) and returns how many. 0 when none or this version cannot be read.
 	 */

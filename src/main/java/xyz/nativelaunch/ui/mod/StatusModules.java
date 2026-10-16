@@ -449,6 +449,8 @@ public final class StatusModules {
 
 	static final class InventoryGrid extends Box {
 		final Setting.Choice layout = add(new Setting.Choice("layout", "Layout", 0, "Horizontal", "Vertical"));
+		/** Off: just the items, no card behind them and no slot squares. */
+		final Setting.Bool background = add(new Setting.Bool("background", "Background", true));
 		final Setting.Bool hotbar = fixed(new Setting.Bool("hotbar", "Show the hotbar row", false));
 		final Setting.Bool slots = fixed(new Setting.Bool("slots", "Slot backgrounds", true));
 		final Setting.Bool counts = fixed(new Setting.Bool("counts", "Item counts", true));
@@ -483,7 +485,17 @@ public final class StatusModules {
 		@Override
 		float pad() {
 			float s = scale.value;
-			return style.value == STYLE_CARD ? 6 * s : style.value == STYLE_BRACKETS ? 4 * s : 2 * s;
+			return style.value == STYLE_CARD && background.value ? 6 * s : style.value == STYLE_BRACKETS ? 4 * s : 2 * s;
+		}
+
+		@Override
+		public void paint(Ui ui, float x, float y, Game g) {
+			if (background.value || style.value != STYLE_CARD) {
+				super.paint(ui, x, y, g);
+				return;
+			}
+			measure(ui.c, g);
+			render(ui.c, ui, g, x, y); // no card behind the items
 		}
 
 		@Override
@@ -513,7 +525,7 @@ public final class StatusModules {
 					for (int col = 0; col < 9; col++) {
 						Game.Slot sl = g.inv[hot ? col : 9 + r * 9 + col];
 						float sx = x + pad + (vertical ? off : col * step), sy = y + pad + (vertical ? col * step : off);
-						if (slots.value) {
+						if (slots.value && background.value) {
 							c.round(sx, sy, cell, cell, cr, 0x40000000);
 							c.outline(sx, sy, cell, cell, cr, 1, 0x14FFFFFF);
 							c.fill(sx + cr, sy + 1, cell - 2 * cr, Math.max(1f, s * 0.75f), 0x0AFFFFFF);

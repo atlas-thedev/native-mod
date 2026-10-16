@@ -56,9 +56,7 @@
     "TimeChangerMixin",
     "TimeChangerMixin26",
     "WeatherMixin",
-    "WeatherMixin26",
-    "ShulkerTooltipMixin",
-    "ShulkerTooltipMixin26"
+    "WeatherMixin26"
   ],
   "injectors": {
     "defaultRequire": 0

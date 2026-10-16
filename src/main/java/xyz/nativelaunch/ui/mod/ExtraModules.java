@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * More client modules: Nether coordinates, moon phase, day / night cycle, totem and item counters, playtime, reach
- * display and the shulker box tooltip. (Low Fire and Damage Tint have their own files: the game hooks live next to them.)
+ * display. (Low Fire and Damage Tint have their own files: the game hooks live next to them.)
  */
 public final class ExtraModules {
 	private ExtraModules() {
@@ -32,7 +32,6 @@ public final class ExtraModules {
 		Modules.register(new ItemCounter());
 		Modules.register(new Playtime());
 		Modules.register(new ReachDisplay());
-		Modules.register(new ShulkerTooltip());
 		Modules.register(new Combo());
 		Modules.register(new Cooldowns());
 		Modules.register(new BlockOverlay());
