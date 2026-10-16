@@ -11,13 +11,17 @@ import java.util.UUID;
 /**
  * The Native logo in front of the name of every player who plays from Native, on name tags and in the tab list.
  *
- * The logo is a glyph (U+E000) of the default font, added by this mod's resources (assets/minecraft/font/default.json),
+ * The logo is a glyph (U+10FFFD) of the default and uniform fonts, added by this mod's resources (assets/minecraft/font/default.json),
  * so it works as plain text in every Minecraft version. The game's Text classes change between versions and are not
  * compiled against here, so the one Text this needs ("logo " + the original name) is built reflectively; any
  * failure just leaves the original name untouched.
  */
 public final class NameTags {
-	public static final String GLYPH = "\uE000";
+	/**
+	 * U+10FFFD: the last code point of the last private-use plane. Server resource packs put their own rank icons
+	 * at U+E000 and up (and newer Minecraft fills that range too), which turned the logo into their icon or a box.
+	 */
+	public static final String GLYPH = new String(Character.toChars(0x10FFFD));
 	private static final String PREFIX = GLYPH + " ";
 
 	private static final String[] PLAYER_CLASSES = {"net.minecraft.class_742", "net.minecraft.client.player.AbstractClientPlayer"};
@@ -76,8 +80,39 @@ public final class NameTags {
 		}
 	}
 
+	/**
+	 * The logo glyph comes from this mod's font file, which only reaches the game when a resource loader adds mod
+	 * assets (Fabric API / QSL). Without one the glyph would draw as a box, so the name is left as it is.
+	 */
+	private static volatile Boolean fontReady;
+
+	private static boolean fontReady() {
+		Boolean ready = fontReady;
+		if (ready == null) {
+			ready = Boolean.FALSE;
+			try {
+				Class<?> loader = Class.forName("net.fabricmc.loader.api.FabricLoader");
+				Object instance = loader.getMethod("getInstance").invoke(null);
+				Method loaded = loader.getMethod("isModLoaded", String.class);
+				for (String id : new String[] {"fabric-resource-loader-v0", "fabric-api", "quilted_fabric_api", "quilt_resource_loader"}) {
+					if (Boolean.TRUE.equals(loaded.invoke(instance, id))) {
+						ready = Boolean.TRUE;
+						break;
+					}
+				}
+			} catch (Throwable ignored) {
+				// not Fabric/Quilt: no way to know, keep the plain name
+			}
+			if (!ready) {
+				Log.info("Native logo on name tags is off: Fabric API is not installed, so the logo font can't load.");
+			}
+			fontReady = ready;
+		}
+		return ready;
+	}
+
 	private static Object decorate(Object text, String name, UUID id) throws Exception {
-		if (name == null || !NativeState.get().directory().has(name, id)) {
+		if (name == null || !fontReady() || !NativeState.get().directory().has(name, id)) {
 			return text;
 		}
 		resolve();
