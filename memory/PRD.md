@@ -20,3 +20,7 @@
   (AbstractContainerScreen.extractTooltip|renderTooltip) cancel at HEAD while ShulkerTooltip.hidesVanilla().
 - Panel then sits where vanilla tooltip would (cursor +12, -12), header shows the stack's real/custom name (McBridge.stackName).
 - NOT built / NOT tested.
+
+## Pin panel key – Jun 2026
+- Setting.Key "lock" (default Left Alt 342): press to pin the current panel in place (snapshot), press again or close the screen to unpin.
+- Pinned panel shows a "Pinned · LAlt to unpin" chip; vanilla tooltips are not hidden while pinned. NOT built / NOT tested.
