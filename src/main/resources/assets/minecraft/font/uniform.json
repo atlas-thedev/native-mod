@@ -1,5 +1,22 @@
 {
   "providers": [
-    { "type": "bitmap", "file": "native:font/logo.png", "ascent": 7, "height": 8, "chars": ["\udbff\udffd"] }
+    {
+      "type": "bitmap",
+      "file": "native:font/logo.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\udbff\udffd"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "native:font/logo_plus.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        "\udbff\udffc"
+      ]
+    }
   ]
 }

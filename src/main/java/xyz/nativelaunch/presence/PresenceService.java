@@ -236,11 +236,8 @@ public final class PresenceService implements Runnable {
 					party.add("size", size);
 					a.add("party", party);
 				}
-				String icon = open && ping != null && ping.icon != null ? iconUrl("server:" + normalizeAddress(s.address), ping.icon) : null;
-				if (icon == null && open) {
-					icon = "https://api.mcsrvstat.us/icon/" + normalizeAddress(s.address);
-				}
-				assets.addProperty("large_image", icon == null ? "logo" : icon);
+				// never the server's own icon: the default Minecraft picture, like the game shows for a server without one
+				assets.addProperty("large_image", largeImage());
 				assets.addProperty("large_text", open ? displayHost(s.address) : (s.lan ? "LAN world" : "Private server"));
 				break;
 			}
@@ -248,21 +245,20 @@ public final class PresenceService implements Runnable {
 				String world = s.worldName == null || s.worldName.trim().isEmpty() ? "a world" : s.worldName.trim();
 				a.addProperty("details", "Playing Singleplayer");
 				a.addProperty("state", s.published ? world + " · Open to LAN" : world);
-				String icon = worldIcon(s.worldId);
-				assets.addProperty("large_image", icon == null ? "logo" : icon);
+				assets.addProperty("large_image", largeImage());
 				assets.addProperty("large_text", world);
 				break;
 			}
 			case REALMS:
 				a.addProperty("details", "Playing on Realms");
 				a.addProperty("state", version);
-				assets.addProperty("large_image", "logo");
+				assets.addProperty("large_image", largeImage());
 				assets.addProperty("large_text", "Minecraft Realms");
 				break;
 			default:
 				a.addProperty("details", "In the menus");
 				a.addProperty("state", version);
-				assets.addProperty("large_image", "logo");
+				assets.addProperty("large_image", largeImage());
 				assets.addProperty("large_text", "Native Client");
 				break;
 		}
@@ -290,19 +286,52 @@ public final class PresenceService implements Runnable {
 
 	/* ── Icons (Discord needs a URL, so they are hosted by Native) ── */
 
-	private String worldIcon(String worldId) {
-		if (worldId == null || worldId.contains("..") || worldId.contains("/") || worldId.contains("\\")) {
-			return null;
+	/** Game asset of the picture Minecraft shows for a server that has no icon of its own (every version ships it). */
+	private static final String[] DEFAULT_ICON_PATHS = {
+		"assets/minecraft/textures/misc/unknown_server.png",
+		"assets/minecraft/textures/gui/sprites/server_list/unknown_server.png",
+		"assets/minecraft/textures/gui/unknown_server.png"
+	};
+
+	/**
+	 * Discord's big picture: the default Minecraft "no server icon" image (hosted by Native like other icons), or the Native
+	 * logo asset until that is ready. Servers' and worlds' own icons are not shown.
+	 */
+	private String largeImage() {
+		String url = null;
+		byte[] png = defaultIconBytes();
+		if (png != null) {
+			url = iconUrl("default-minecraft", png);
 		}
-		Path icon = gameDir.resolve("saves").resolve(worldId).resolve("icon.png");
-		try {
-			if (!Files.isRegularFile(icon) || Files.size(icon) > 256 * 1024) {
-				return null;
+		return url == null ? "logo" : url;
+	}
+
+	private static byte[] defaultIconBytes() {
+		ClassLoader[] loaders = {PresenceService.class.getClassLoader(), Thread.currentThread().getContextClassLoader(), ClassLoader.getSystemClassLoader()};
+		for (String path : DEFAULT_ICON_PATHS) {
+			for (ClassLoader loader : loaders) {
+				if (loader == null) {
+					continue;
+				}
+				try (java.io.InputStream in = loader.getResourceAsStream(path)) {
+					if (in == null) {
+						continue;
+					}
+					java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+					byte[] buf = new byte[4096];
+					int n;
+					while ((n = in.read(buf)) > 0 && out.size() <= 256 * 1024) {
+						out.write(buf, 0, n);
+					}
+					if (out.size() > 8 && out.size() <= 256 * 1024) {
+						return out.toByteArray();
+					}
+				} catch (IOException | RuntimeException ignored) {
+					// try the next place
+				}
 			}
-			return iconUrl("world:" + worldId + ":" + Files.getLastModifiedTime(icon).toMillis(), Files.readAllBytes(icon));
-		} catch (IOException | RuntimeException e) {
-			return null;
 		}
+		return null;
 	}
 
 	private String iconUrl(String cacheKey, byte[] png) {
@@ -325,7 +354,9 @@ public final class PresenceService implements Runnable {
 				Log.debug("Could not share the presence icon: {}", e.toString());
 			}
 		}
-		iconUrls.put(cacheKey, url);
+		if (url != null || ticket != null) {
+			iconUrls.put(cacheKey, url); // no ticket yet is not a failure: ask again on the next update
+		}
 		return url;
 	}
 

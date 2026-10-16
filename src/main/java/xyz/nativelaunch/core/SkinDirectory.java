@@ -263,6 +263,25 @@ public final class SkinDirectory {
 	}
 
 	/**
+	 * Whether this player is a Native+ member (their directory row says so). Same identity rule as {@link #has}, so a
+	 * premium UUID that is not the linked account never borrows someone else's mark.
+	 */
+	public boolean plus(String name, UUID id) {
+		if (name == null || name.isEmpty()) {
+			return false;
+		}
+		SkinEntry entry = entries.get(key(name));
+		if (entry == null || !entry.plus) {
+			return false;
+		}
+		if (id != null && id.version() != 3 && !isSelf(name)) {
+			String linked = entry.minecraftUuid;
+			return linked != null && linked.equals(plain(id));
+		}
+		return true;
+	}
+
+	/**
 	 * The 3D cosmetics a player wears (never null). Same rule as {@link #find}: premium UUIDs only match the
 	 * account linked to exactly that UUID, offline (version 3) players match by name.
 	 */

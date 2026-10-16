@@ -28,11 +28,11 @@ import java.util.Locale;
  * client mods, the cosmetics locker and the UI settings. Same glass look as the launcher.
  */
 public final class MenuView {
-	private static final String[] TABS = {"Mods", "Cosmetics", "Settings"};
+	private static final String[] TABS = {"Mods", "Cosmetics", "Settings", "Screenshots"};
 	private static final float RAIL = 54;
 	/** Corner radius of the floating top bars — squared off a little so square avatars sit well. */
 	private static final float PILL_R = 13;
-	private static final int[] TAB_ICONS = {Theme.I_NAV_MODS, Theme.I_NAV_LOCKER, Theme.I_NAV_SETTINGS};
+	private static final int[] TAB_ICONS = {Theme.I_NAV_MODS, Theme.I_NAV_LOCKER, Theme.I_NAV_SETTINGS, xyz.nativelaunch.ui.gfx.NavIcons.CAMERA};
 	private static final String[] CHIPS = {"All", "Favorites", Module.HUD, Module.MECHANIC, Module.VISUAL, Module.PERFORMANCE};
 	private static final int[] SLOT_ICONS = {Theme.I_LAYERS, Theme.I_HAT, Theme.I_GLASSES, Theme.I_BACKPACK, Theme.I_FOOTPRINTS, Theme.I_HAND};
 	private static final int PANEL_BG = 0xF205060A;
@@ -61,6 +61,7 @@ public final class MenuView {
 	private final Setting.Key sMenu = new Setting.Key("menukey", "Menu key", 344);
 	private final Setting.Key sChat = new Setting.Key("chatkey", "Chat key", 89);
 	private boolean confirmReset;
+	private final ScreenshotsView shots = new ScreenshotsView();
 
 	public MenuView() {
 		search.maxLength = 40;
@@ -82,6 +83,9 @@ public final class MenuView {
 			confirmReset = false;
 			return true;
 		}
+		if (tab == 3 && shots.escape()) {
+			return true;
+		}
 		if (selected != null) {
 			selected = null;
 			pageAt = System.currentTimeMillis();
@@ -94,6 +98,9 @@ public final class MenuView {
 		setTab(t);
 		if (t == 1) {
 			Wardrobe.refresh(false); // also when the tab was already open
+		}
+		if (t == 3) {
+			shots.refresh();
 		}
 	}
 
@@ -117,6 +124,9 @@ public final class MenuView {
 		pageAt = System.currentTimeMillis();
 		if (t == 1) {
 			Wardrobe.refresh(false);
+		}
+		if (t == 3) {
+			shots.refresh();
 		}
 	}
 
@@ -219,6 +229,11 @@ public final class MenuView {
 			c.text(Fonts.MEDIUM, 11.5f, store, mx + mw - 20 - sw, py + (hh - c.lineHeight(Fonts.MEDIUM, 11.5f)) / 2, Theme.TEXT_MUTED);
 			c.pushAlpha(pe);
 			cosmetics(ui, bx, by + (1 - pe) * 10, bw, bh);
+			c.popAlpha();
+		} else if (tab == 3) {
+			header(c, "Screenshots", mx, py, hh);
+			c.pushAlpha(pe);
+			shots.draw(ui, bx, by + (1 - pe) * 10, bw, bh);
 			c.popAlpha();
 		} else {
 			header(c, "Settings", mx, py, hh);
@@ -611,9 +626,9 @@ public final class MenuView {
 			curRight = hudX;
 		}
 
-		float resetW = 86;
+		float resetW = 138;
 		float resetX = curRight - 10 - resetW;
-		if (ui.button("menu:page:reset", resetX, stateY, resetW, stateH, "Reset", Theme.I_RESET, Ui.BTN_GHOST)) {
+		if (ui.button("menu:page:reset", resetX, stateY, resetW, stateH, "Reset Settings", Theme.I_RESET, Ui.BTN_GHOST)) {
 			m.resetSettings();
 			if (m instanceof HudModule) {
 				((HudModule) m).resetPosition();
@@ -621,127 +636,154 @@ public final class MenuView {
 			Modules.changed();
 		}
 
-		// ── Content Area ──
-		float bx = x + pad, by = y + hh + 16, bw = w - pad * 2, bh = h - hh - 32;
-		float off = detail.begin(ui, bx, by, bw, bh);
-		float ry = by - off;
-
-		boolean twoCols = bw >= 620;
-		if (twoCols) {
-			float lw = Math.min(320, Math.max(260, bw * 0.36f));
-			float rx = bx + lw + 24, rw = bw - lw - 24;
-
-			// Left column: About & Live Preview
-			float ly = ry;
-
-			// About card
-			float descPad = 14;
-			c.text(Fonts.SEMIBOLD, 10, "ABOUT", bx + 2, ly + 2, Theme.TEXT_MUTED);
-			ly += 18;
-			float descH = wrapHeight(c, Fonts.REGULAR, 11.5f, m.description, lw - descPad * 2, 17, 6) + descPad * 2;
-			c.round(bx, ly, lw, descH, 12, CARD);
-			c.outline(bx, ly, lw, descH, 12, 1, Theme.HAIRLINE);
-			wrap(c, Fonts.REGULAR, 11.5f, m.description, bx + descPad, ly + descPad, lw - descPad * 2, 17, Theme.TEXT_SECONDARY, 6);
-			ly += descH + 16;
-
-			// Live Preview card
-			c.text(Fonts.SEMIBOLD, 10, "LIVE PREVIEW", bx + 2, ly + 2, Theme.TEXT_MUTED);
-			ly += 18;
-			float prevH = 170;
-			c.round(bx, ly, lw, prevH, 12, 0x66000000);
-			c.outline(bx, ly, lw, prevH, 12, 1, Theme.HAIRLINE);
-			if (m instanceof HudModule) {
-				HudModule hm = (HudModule) m;
-				c.pushClip(bx + 1, ly + 1, lw - 2, prevH - 2);
-				float keep = hm.scale.value;
-				float[] sz = hm.measure(c, sample);
-				float k = Math.min(1.4f, Math.min((lw - 40) / Math.max(1, sz[0]), (prevH - 36) / Math.max(1, sz[1])));
-				hm.scale.value = keep * Math.min(k, Math.max(1f, k * 0.6f));
-				sz = hm.measure(c, sample);
-				c.pushAlpha(m.enabled ? 1f : 0.35f);
-				hm.paint(ui, bx + (lw - sz[0]) / 2, ly + 8 + (prevH - sz[1]) / 2, sample);
-				c.popAlpha();
-				hm.scale.value = keep;
-				c.popClip();
-			} else if (!m.preview(ui, sample, bx + 1, ly + 1, lw - 2, prevH - 2)) {
-				c.circle(bx + lw / 2, ly + prevH / 2, 32, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
-				c.icon(m.icon, 24, bx + lw / 2, ly + prevH / 2, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
-			}
-			ly += prevH + 16;
-
-			// Right column: Settings & Appearance
-			float rColY = ry;
-			rColY = settingsCard(ui, m, "SETTINGS", m.shownSettings(), rx, rColY, rw);
-			if (m instanceof HudModule) {
-				rColY = settingsCard(ui, m, "APPEARANCE", ((HudModule) m).shownAppearance(), rx, rColY, rw);
-			}
-
-			float totalH = Math.max(ly, rColY) - ry;
-			detail.end(ui, totalH + 16);
+		// ── Content: settings on the left, a tall live preview on the right (stacked on narrow windows) ──
+		float bx = x + pad, by = y + hh + 4, bw = w - pad * 2, bh = h - hh - 20;
+		float gap = 16;
+		if (bw >= 640) {
+			float lw = Math.max(340, Math.min(bw * 0.56f, 600));
+			settingsPanel(ui, m, bx, by, lw, bh);
+			stage(ui, m, bx + lw + gap, by, bw - lw - gap, bh);
 		} else {
-			// Single column for small screens
-			float cy = ry;
-			float prevH = 140;
-			c.text(Fonts.SEMIBOLD, 10, "LIVE PREVIEW", bx + 2, cy + 2, Theme.TEXT_MUTED);
-			cy += 18;
-			c.round(bx, cy, bw, prevH, 12, 0x66000000);
-			c.outline(bx, cy, bw, prevH, 12, 1, Theme.HAIRLINE);
-			if (m instanceof HudModule) {
-				HudModule hm = (HudModule) m;
-				c.pushClip(bx + 1, cy + 1, bw - 2, prevH - 2);
-				float keep = hm.scale.value;
-				float[] sz = hm.measure(c, sample);
-				float k = Math.min(1.4f, Math.min((bw - 40) / Math.max(1, sz[0]), (prevH - 34) / Math.max(1, sz[1])));
-				hm.scale.value = keep * Math.min(k, Math.max(1f, k * 0.6f));
-				sz = hm.measure(c, sample);
-				c.pushAlpha(m.enabled ? 1f : 0.35f);
-				hm.paint(ui, bx + (bw - sz[0]) / 2, cy + 8 + (prevH - sz[1]) / 2, sample);
-				c.popAlpha();
-				hm.scale.value = keep;
-				c.popClip();
-			} else if (!m.preview(ui, sample, bx + 1, cy + 1, bw - 2, prevH - 2)) {
-				c.circle(bx + bw / 2, cy + prevH / 2, 30, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
-				c.icon(m.icon, 24, bx + bw / 2, cy + prevH / 2, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
-			}
-			cy += prevH + 14;
-			float descPad = 14;
-			c.text(Fonts.SEMIBOLD, 10, "ABOUT", bx + 2, cy + 2, Theme.TEXT_MUTED);
-			cy += 18;
-			float descH = wrapHeight(c, Fonts.REGULAR, 11.5f, m.description, bw - descPad * 2, 17, 6) + descPad * 2;
-			c.round(bx, cy, bw, descH, 12, CARD);
-			c.outline(bx, cy, bw, descH, 12, 1, Theme.HAIRLINE);
-			wrap(c, Fonts.REGULAR, 11.5f, m.description, bx + descPad, cy + descPad, bw - descPad * 2, 17, Theme.TEXT_SECONDARY, 6);
-			cy += descH + 16;
-			cy = settingsCard(ui, m, "SETTINGS", m.shownSettings(), bx, cy, bw);
-			if (m instanceof HudModule) {
-				cy = settingsCard(ui, m, "APPEARANCE", ((HudModule) m).shownAppearance(), bx, cy, bw);
-			}
-			detail.end(ui, cy - ry + 16);
+			float stageH = Math.max(120, Math.min(200, bh * 0.38f));
+			stage(ui, m, bx, by, bw, stageH);
+			settingsPanel(ui, m, bx, by + stageH + gap, bw, bh - stageH - gap);
 		}
 	}
 
-	private float settingsCard(Ui ui, Module m, String title, List<Setting> rows, float x, float y, float w) {
+	/** Sections the player folded on a module's page (module id + title). */
+	private final java.util.Set<String> folded = new java.util.HashSet<String>();
+	private Image stageBackdrop;
+	private boolean stageBackdropTried;
+
+	/** The live preview: the module drawn large over a game scene, inside its own card. */
+	private void stage(Ui ui, Module m, float x, float y, float w, float h) {
+		Canvas c = ui.c;
+		c.round(x, y, w, h, 12, CARD);
+		c.outline(x, y, w, h, 12, 1, Theme.HAIRLINE);
+		float in = 6, ix = x + in, iy = y + in, iw = w - in * 2, ih = h - in * 2;
+		if (!stageBackdropTried) {
+			stageBackdropTried = true;
+			stageBackdrop = Image.resource("/assets/native/ui/hudbg.jpg");
+		}
+		c.pushClip(ix, iy, iw, ih);
+		if (stageBackdrop != null) {
+			c.imageCover(stageBackdrop, ix, iy, iw, ih, 1f, 0.5f, 0.5f, 0xFFFFFFFF);
+			c.fill(ix, iy, iw, ih, 0x40000000);
+		} else {
+			c.fill(ix, iy, iw, ih, 0xFF0B0C10);
+		}
+		if (m instanceof HudModule) {
+			HudModule hm = (HudModule) m;
+			float keep = hm.scale.value;
+			float[] sz = hm.measure(c, sample);
+			float k = Math.min(2.2f, Math.min((iw - 48) / Math.max(1, sz[0]), (ih - 56) / Math.max(1, sz[1])));
+			hm.scale.value = Math.max(0.5f, keep * k);
+			sz = hm.measure(c, sample);
+			float fit = Math.min(1f, Math.min((iw - 24) / Math.max(1, sz[0]), (ih - 40) / Math.max(1, sz[1])));
+			if (fit < 1f) {
+				hm.scale.value = Math.max(0.3f, hm.scale.value * fit);
+				sz = hm.measure(c, sample);
+			}
+			c.pushAlpha(m.enabled ? 1f : 0.4f);
+			hm.paint(ui, ix + (iw - sz[0]) / 2, iy + (ih - sz[1]) / 2, sample);
+			c.popAlpha();
+			hm.scale.value = keep;
+		} else if (!m.preview(ui, sample, ix, iy, iw, ih)) {
+			float cy = iy + ih / 2;
+			c.circle(ix + iw / 2, cy, 32, m.enabled ? 0xFFF4F4F5 : Theme.SUBTLE_HOVER);
+			c.icon(m.icon, 24, ix + iw / 2, cy, m.enabled ? Theme.SOLID_FG : Theme.TEXT_STRONG);
+		}
+		c.popClip();
+		// tag in the corner
+		String tag = m.enabled ? "LIVE PREVIEW" : "PREVIEW  \u00b7  OFF";
+		float tw = c.textWidth(Fonts.SEMIBOLD, 9.5f, tag) + 18;
+		c.round(ix + 10, iy + 10, tw, 20, 10, 0xB0000000);
+		c.outline(ix + 10, iy + 10, tw, 20, 10, 1, Theme.HAIRLINE);
+		c.text(Fonts.SEMIBOLD, 9.5f, tag, ix + 19, iy + 10 + (20 - c.lineHeight(Fonts.SEMIBOLD, 9.5f)) / 2, Theme.TEXT_SECONDARY);
+	}
+
+	/** What the module does, then its options in foldable sections (like a game client's module screen). */
+	private void settingsPanel(Ui ui, Module m, float x, float y, float w, float h) {
+		Canvas c = ui.c;
+		c.round(x, y, w, h, 12, CARD);
+		c.outline(x, y, w, h, 12, 1, Theme.HAIRLINE);
+		float pad = 18;
+		// info row
+		float textW = w - pad * 2 - 26;
+		float descH = wrapHeight(c, Fonts.REGULAR, 11.5f, m.description, textW, 16, 2);
+		float infoH = Math.max(34, descH + 20);
+		float iy = y + infoH / 2;
+		c.circle(x + pad + 8, iy, 8, Theme.SUBTLE_HOVER);
+		c.text(Fonts.BOLD, 10, "i", x + pad + 8 - c.textWidth(Fonts.BOLD, 10, "i") / 2, iy - c.lineHeight(Fonts.BOLD, 10) / 2, Theme.TEXT_SECONDARY);
+		wrap(c, Fonts.REGULAR, 11.5f, m.description, x + pad + 26, y + (infoH - descH) / 2, textW, 16, Theme.TEXT_SECONDARY, 2);
+		c.fill(x + 1, y + infoH, w - 2, 1, Theme.HAIRLINE);
+
+		float top = y + infoH + 1, ph = h - infoH - 2;
+		float off = detail.begin(ui, x + 1, top, w - 2, ph);
+		float cy = top - off + 6;
+		boolean any = false;
+		cy = section(ui, m, "Options", m.shownSettings(), x, cy, w);
+		any |= !m.shownSettings().isEmpty();
+		if (m instanceof HudModule) {
+			float before = cy;
+			cy = section(ui, m, "Appearance", ((HudModule) m).shownAppearance(), x, cy, w);
+			any |= cy != before;
+		}
+		if (!any) {
+			String t = "Nothing to set up: this works as soon as it is on.";
+			float my = top + ph / 2 - 30;
+			c.circle(x + w / 2, my, 22, Theme.SUBTLE_HOVER);
+			c.icon(m.icon, 18, x + w / 2, my, Theme.TEXT_SECONDARY);
+			c.text(Fonts.MEDIUM, 12, t, x + (w - c.textWidth(Fonts.MEDIUM, 12, t)) / 2, my + 36, Theme.TEXT_MUTED);
+		}
+		detail.end(ui, cy - (top - off) + 8);
+	}
+
+	/** One foldable group: a header row (chevron, title, option count) and, when open, the option rows. Returns the y below it. */
+	private float section(Ui ui, Module m, String title, List<Setting> rows, float x, float y, float w) {
 		if (rows.isEmpty()) {
 			return y;
 		}
 		Canvas c = ui.c;
-		y = section(c, title, x + 2, y);
-		float ch = 0;
-		for (Setting s : rows) {
-			ch += Widgets.rowHeight(s);
+		String key = m.id + ":" + title;
+		boolean open = !folded.contains(key);
+		float pad = 18, hh = 34;
+		String id = "menu:sec:" + key;
+		boolean over = ui.hover(x + 6, y, w - 12, hh);
+		float hv = ui.anim(id + "#h", over, 14f);
+		if (hv > 0.01f) {
+			c.round(x + 6, y + 1, w - 12, hh - 2, 8, Theme.alpha(0xFFFFFFFF, 0.04f * hv));
 		}
-		c.round(x, y, w, ch + 4, 12, CARD);
-		c.outline(x, y, w, ch + 4, 12, 1, Theme.HAIRLINE);
-		float cy = y + 2;
+		float rot = ui.anim(id + "#o", open, 14f);
+		c.icon(rot > 0.5f ? Theme.I_CHEVRON_DOWN : Theme.I_CHEVRON_RIGHT, 12, x + pad + 6, y + hh / 2, Theme.mix(Theme.TEXT_MUTED, Theme.TEXT_STRONG, hv));
+		c.text(Fonts.SEMIBOLD, 12.5f, title, x + pad + 22, y + (hh - c.lineHeight(Fonts.SEMIBOLD, 12.5f)) / 2, Theme.TEXT_STRONG);
+		String count = rows.size() + (rows.size() == 1 ? " option" : " options");
+		c.text(Fonts.REGULAR, 10.5f, count, x + w - pad - 8 - c.textWidth(Fonts.REGULAR, 10.5f, count), y + (hh - c.lineHeight(Fonts.REGULAR, 10.5f)) / 2,
+				Theme.TEXT_MUTED);
+		if (over) {
+			ui.cursorHand = true;
+		}
+		if (ui.clicked(id, x + 6, y, w - 12, hh)) {
+			if (open) {
+				folded.add(key);
+			} else {
+				folded.remove(key);
+			}
+		}
+		y += hh;
+		if (!open) {
+			return y + 4;
+		}
+		float rx = x + pad + 4, rw = w - pad * 2 - 14;
 		for (int i = 0; i < rows.size(); i++) {
 			Setting s = rows.get(i);
 			if (i > 0) {
-				c.fill(x + 14, cy, w - 28, 1, Theme.HAIRLINE);
+				c.fill(rx, y, rw, 1, Theme.HAIRLINE);
 			}
-			Widgets.row(ui, "menu:set:" + m.id + ":" + s.id, x + 14, cy, w - 28, s);
-			cy += Widgets.rowHeight(s);
+			Widgets.row(ui, "menu:set:" + m.id + ":" + s.id, rx, y, rw, s);
+			y += Widgets.rowHeight(s);
 		}
-		return y + ch + 4 + 16;
+		return y + 10;
 	}
 
 	private void openEditor(Object screen) {
@@ -1072,6 +1114,7 @@ public final class MenuView {
 		float cw = lw - 6;
 		ry = group(ui, "general", x, ry, cw, Theme.I_SLIDERS, "General", "How Native looks and talks to you",
 				new Setting[] {sTitle, sNotify, sScale});
+		ry = audioCard(ui, x, ry, cw);
 		ry = group(ui, "keys", x, ry, cw, Theme.I_KEYBOARD, "Controls", "Click a key, then press the one you want",
 				new Setting[] {sMenu, sChat});
 		ry = hudCard(ui, x, ry, cw, screen);
@@ -1122,6 +1165,60 @@ public final class MenuView {
 		if (save) {
 			cfg.save();
 		}
+	}
+
+	/** One of the Voice Chat module's own settings (its devices and mic test), so this card and the module page stay one setting. */
+	private static Setting voiceSetting(String id) {
+		Module v = Modules.get("voice");
+		if (v != null) {
+			for (Setting s : v.settings) {
+				if (s.id.equals(id)) {
+					return s;
+				}
+			}
+		}
+		return null;
+	}
+
+	/** Microphone and speakers: pick them, see the microphone move, and play a sound to check the speakers. */
+	private float audioCard(Ui ui, float x, float y, float w) {
+		Setting mic = voiceSetting("micdevice"), out = voiceSetting("outdevice"), test = voiceSetting("mictest");
+		if (mic == null || out == null || test == null) {
+			return y;
+		}
+		Canvas c = ui.c;
+		// the devices apply right here, even while the Voice Chat module itself is switched off
+		xyz.nativelaunch.voice.Voice.micDevice = ((Setting.Device) mic).value;
+		xyz.nativelaunch.voice.Voice.outDevice = ((Setting.Device) out).value;
+		Setting[] rows = {mic, test, out};
+		float head = 62, rh = 0;
+		for (Setting s : rows) {
+			rh += Widgets.rowHeight(s);
+		}
+		float testRow = 52;
+		float h = head + rh + testRow + 8;
+		cardFrame(ui, "menu:pref:card:audio", x, y, w, h);
+		cardHead(c, x, y, w, Theme.I_MIC, "Microphone and speakers", "What Native Voice uses by default. Speak to see the bar move, then play a sound.");
+		float cy = y + head;
+		for (Setting s : rows) {
+			c.fill(x + 18, cy, w - 36, 1, Theme.HAIRLINE);
+			Widgets.row(ui, "menu:pref:" + s.id, x + 18, cy, w - 36, s);
+			cy += Widgets.rowHeight(s);
+		}
+		c.fill(x + 18, cy, w - 36, 1, Theme.HAIRLINE);
+		c.text(Fonts.MEDIUM, 12.5f, "Test the speakers", x + 18, cy + (testRow - c.lineHeight(Fonts.MEDIUM, 12.5f)) / 2, Theme.TEXT);
+		float bw = 140, bx = x + w - 18 - bw;
+		String status = xyz.nativelaunch.voice.Voice.speakerTestStatus();
+		if (ui.button("menu:pref:speakertest", bx, cy + (testRow - 32) / 2, bw, 32, "Play a sound", Theme.I_VOLUME, Ui.BTN_GLASS)) {
+			xyz.nativelaunch.voice.Voice.testSpeakers();
+		}
+		if (status != null) {
+			boolean bad = status.startsWith("Could not");
+			float sw = bx - 14 - (x + 18 + c.textWidth(Fonts.MEDIUM, 12.5f, "Test the speakers") + 16);
+			c.text(Fonts.MEDIUM, 11.5f, c.ellipsize(Fonts.MEDIUM, 11.5f, status, Math.max(60, sw)), bx - 14 - Math.min(Math.max(60, sw), c.textWidth(Fonts.MEDIUM, 11.5f, status)),
+					cy + (testRow - c.lineHeight(Fonts.MEDIUM, 11.5f)) / 2, bad ? Theme.DANGER : Theme.TEXT_SECONDARY);
+		}
+		return y + h + 16;
 	}
 
 	/** A settings card: icon tile, title and a hint on top, then the rows. Returns the y below it. */

@@ -254,6 +254,7 @@ public final class UiRuntime {
 		}
 		game.hudAllowed = kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !hudBlocked;
 		modulesFrame();
+		xyz.nativelaunch.ui.mod.ExtraModules.tick(game);
 		Modules.tick();
 		if (System.currentTimeMillis() - lastWarm > 3000) {
 			lastWarm = System.currentTimeMillis();
@@ -272,7 +273,8 @@ public final class UiRuntime {
 		if (client != null && (kind != 0 || !config.notifications || !mc.inWorld())) {
 			client.notices.clear(); // only shown while playing; the chat itself shows everything else
 		}
-		boolean wantToasts = kind == 0 && config.notifications && client != null && (toasts != null && toasts.active() || !client.notices.isEmpty());
+		boolean callCard = kind == 0 && (xyz.nativelaunch.voice.Voice.hasIncoming() || xyz.nativelaunch.voice.Voice.calling() != null);
+		boolean wantToasts = kind == 0 && client != null && (config.notifications && (toasts != null && toasts.active() || !client.notices.isEmpty()) || callCard);
 		capturing = kind != 0 && !overlay;
 		pillVisible = classicTitle && !overlay;
 		if ((kind == 0 && !classicTitle && !wantToasts && !hud && !wantBrand) || overlay) {
@@ -634,6 +636,26 @@ public final class UiRuntime {
 				}
 			} catch (Throwable t) {
 				Log.warn("Module key failed: {}", t.toString());
+			}
+		}
+		if (action == 1 && mods == 0 && playing && !failed) {
+			// answering a call from the game: V picks up, N declines (or cancels the call you are making)
+			try {
+				xyz.nativelaunch.voice.Voice.Ring ring = xyz.nativelaunch.voice.Voice.incoming();
+				if (ring != null && key == 86) {
+					xyz.nativelaunch.voice.Voice.accept(ring.key);
+					return true;
+				}
+				if (ring != null && key == 78) {
+					xyz.nativelaunch.voice.Voice.decline(ring.key);
+					return true;
+				}
+				if (ring == null && key == 78 && xyz.nativelaunch.voice.Voice.calling() != null) {
+					xyz.nativelaunch.voice.Voice.leaveCall();
+					return true;
+				}
+			} catch (Throwable t) {
+				Log.warn("Call key failed: {}", t.toString());
 			}
 		}
 		if (action == 1 && key == config.relayKey && mods == 0) {

@@ -52,6 +52,7 @@ public final class Voice {
 		volatile List<Member> members;
 		volatile int rtt = -1;
 		volatile long lastPong, lastPing;
+		final long joinedAt = System.currentTimeMillis();
 
 		Room(String convKey, JsonObject o) {
 			this.key = convKey;
@@ -84,6 +85,7 @@ public final class Voice {
 	private static volatile Room call, prox;
 	private static volatile String joining;
 	private static volatile String error;
+	private static volatile long errorUntil;
 	private static final Map<String, List<Member>> live = new ConcurrentHashMap<String, List<Member>>();
 	private static final Map<Integer, RemoteStream> streams = new ConcurrentHashMap<Integer, RemoteStream>();
 	private static final ExecutorService pool = Executors.newSingleThreadExecutor(r -> {
@@ -223,8 +225,40 @@ public final class Voice {
 	}
 
 	public static String error() {
-		return error;
+		String e = error;
+		if (e != null && errorUntil != 0 && System.currentTimeMillis() > errorUntil) {
+			error = null; // a "declined" note fades by itself
+			e = null;
+		}
+		return e;
 	}
+
+	/** Shows a message for a few seconds where the call status is shown. */
+	private static void note(String message) {
+		error = message;
+		errorUntil = System.currentTimeMillis() + 10_000;
+	}
+
+	/**
+	 * Why the call has no audio: the voice server never answered our pings (a firewall, a VPN or a network that blocks
+	 * UDP), or null when it is fine / still connecting.
+	 */
+	public static String linkProblem(String convKey) {
+		Room r = call;
+		if (r == null || !r.key.equals(convKey)) {
+			return null;
+		}
+		long now = System.currentTimeMillis();
+		boolean silent = r.lastPong == 0 ? now - r.joinedAt > 6000 : now - r.lastPong > 8000;
+		return silent ? "Can't reach the voice server. A firewall or VPN may be blocking UDP." : null;
+	}
+
+	/** Push to talk is on: hold {@link #pttKey} to be heard. */
+	public static boolean pushToTalkOn() {
+		return pushToTalk;
+	}
+
+	public static volatile String pttKey = "";
 
 	public static String micError() {
 		AudioEngine a = audio;
@@ -292,6 +326,7 @@ public final class Voice {
 		if (joining != null) {
 			return;
 		}
+		incoming.remove(convKey);
 		joining = convKey;
 		error = null;
 		pool.execute(() -> {
@@ -595,8 +630,8 @@ public final class Voice {
 			}
 			JsonObject started = p.has("started") && p.get("started").isJsonObject() ? p.getAsJsonObject("started") : null;
 			String me = me();
-			if (started != null && me != null && !me.equals(str(started, "userId"))) {
-				ring(key, str(started, "name"), started);
+			if (started != null && me != null && !me.equals(str(started, "userId")) && key.startsWith("g:")) {
+				ring(key, str(started, "name"), started); // private calls ring through voice:ring (accept / decline)
 			}
 		}
 		for (Member m : members) {
@@ -621,6 +656,11 @@ public final class Voice {
 					Room c = call;
 					if (key != null && !m.isEmpty() && (c == null || !c.key.equals(key))) {
 						live.put(key, m);
+					}
+					JsonObject ringing = o.has("ringing") && o.get("ringing").isJsonObject() ? o.getAsJsonObject("ringing") : null;
+					if (key != null && ringing != null && (c == null || !c.key.equals(key))) {
+						addIncoming(key, str(ringing, "userId"), str(ringing, "name"), null,
+								ringing.has("timeoutMs") ? ringing.get("timeoutMs").getAsLong() : 45_000);
 					}
 				}
 			} catch (Throwable t) {
@@ -647,6 +687,278 @@ public final class Voice {
 			}
 		}
 		client.notices.add(new Model.Notice(key, title, (key.startsWith("g:") && who != null ? who + " started" : "Started") + " a voice call", who, skin));
+	}
+
+	// ── speaker test (Settings) ───────────────────────────────────────────
+
+	private static volatile String speakerStatus;
+
+	/** "Playing...", "Played ...", or "Could not play: ..."; null before the first test. */
+	public static String speakerTestStatus() {
+		return speakerStatus;
+	}
+
+	/** Plays a short three-note chime through the chosen output device so the player can check it. */
+	public static void testSpeakers() {
+		if ("Playing...".equals(speakerStatus)) {
+			return;
+		}
+		speakerStatus = "Playing...";
+		final String device = outDevice;
+		final float gain = Math.max(0.25f, Math.min(1f, outVolume)) * 0.4f;
+		Thread t = new Thread(() -> {
+			javax.sound.sampled.SourceDataLine line = null;
+			try {
+				javax.sound.sampled.AudioFormat fmt = new javax.sound.sampled.AudioFormat(48000, 16, 1, true, false);
+				line = VoiceDevices.open(javax.sound.sampled.SourceDataLine.class, fmt, device);
+				line.open(fmt, 48000 / 5 * 2);
+				line.start();
+				byte[] pcm = chime(48000, gain);
+				line.write(pcm, 0, pcm.length);
+				line.drain();
+				speakerStatus = "Played: did you hear it?";
+			} catch (Throwable e) {
+				String m = e.getMessage();
+				speakerStatus = "Could not play: " + (m == null || m.isEmpty() ? e.getClass().getSimpleName() : m);
+			} finally {
+				if (line != null) {
+					try {
+						line.close();
+					} catch (Throwable ignored) {
+						// already gone
+					}
+				}
+			}
+		}, "Native-Voice-SpeakerTest");
+		t.setDaemon(true);
+		t.start();
+	}
+
+	/** Three rising notes (C5, E5, G5) as 16-bit mono PCM, each with a quick fade in and a slow fade out. */
+	static byte[] chime(int rate, float gain) {
+		double[] freq = {523.25, 659.25, 783.99};
+		int note = rate * 28 / 100;
+		byte[] out = new byte[note * freq.length * 2];
+		for (int n = 0; n < freq.length; n++) {
+			for (int i = 0; i < note; i++) {
+				double env = Math.min(1.0, i / (rate * 0.01)) * Math.pow(1.0 - i / (double) note, 1.6);
+				short v = (short) (Math.sin(2 * Math.PI * freq[n] * i / rate) * env * gain * 32767);
+				int at = (n * note + i) * 2;
+				out[at] = (byte) v;
+				out[at + 1] = (byte) (v >> 8);
+			}
+		}
+		return out;
+	}
+
+	// ── private calls: ringing, accept, decline ───────────────────────────
+
+	/** Someone is calling you: shown as a card with accept / decline until it is answered, cancelled or times out. */
+	public static final class Ring {
+		public final String key, userId, name, skin;
+		public final long at, until;
+
+		Ring(String key, String userId, String name, String skin, long timeoutMs) {
+			this.key = key;
+			this.userId = userId;
+			this.name = name;
+			this.skin = skin;
+			this.at = System.currentTimeMillis();
+			this.until = at + Math.max(5000, Math.min(120_000, timeoutMs));
+		}
+	}
+
+	private static final Map<String, Ring> incoming = new ConcurrentHashMap<String, Ring>();
+	private static volatile Thread ringer;
+
+	/** The newest call that is ringing, or null. */
+	public static Ring incoming() {
+		long now = System.currentTimeMillis();
+		Ring best = null;
+		for (Ring r : incoming.values()) {
+			if (now > r.until) {
+				incoming.remove(r.key);
+			} else if (best == null || r.at > best.at) {
+				best = r;
+			}
+		}
+		return best;
+	}
+
+	public static boolean hasIncoming() {
+		return incoming() != null;
+	}
+
+	/** The ring for one conversation, or null. */
+	public static Ring ringing(String convKey) {
+		Ring r = incoming.get(convKey);
+		return r != null && System.currentTimeMillis() <= r.until ? r : null;
+	}
+
+	/** Conversation key of your private call that nobody has joined yet ("Calling..."), or null. */
+	public static String calling() {
+		Room r = call;
+		if (r == null || !r.key.startsWith("dm:")) {
+			return null;
+		}
+		String me = me();
+		for (Member m : r.members) {
+			if (me == null || !me.equals(m.userId)) {
+				return null;
+			}
+		}
+		return r.key;
+	}
+
+	/** Picks up: joins the call (and switches Voice Chat on if it was off). */
+	public static void accept(String convKey) {
+		xyz.nativelaunch.ui.mod.Module m = xyz.nativelaunch.ui.mod.Modules.get("voice");
+		if (m != null && !m.enabled) {
+			m.setEnabled(true);
+			xyz.nativelaunch.ui.mod.Modules.changed();
+		}
+		incoming.remove(convKey);
+		joinCall(convKey);
+	}
+
+	/** Says no: the caller's call ends too (the server tells their game). */
+	public static void decline(final String convKey) {
+		incoming.remove(convKey);
+		pool.execute(() -> {
+			try {
+				JsonObject body = new JsonObject();
+				body.addProperty("room", convKey);
+				RelayClient.get().apiPost("/v1/voice/decline", body);
+			} catch (Throwable t) {
+				Log.debug("Voice decline: {}", t.toString());
+			}
+		});
+	}
+
+	private static void addIncoming(String key, String userId, String name, String skin, long timeoutMs) {
+		Room c = call;
+		if (key == null || !key.startsWith("dm:") || c != null && c.key.equals(key)) {
+			return;
+		}
+		RelayClient client = RelayClient.get();
+		Model.Friend f = client == null ? null : client.friend(key.substring(3));
+		if (f != null) {
+			name = f.display();
+			skin = f.skin;
+		}
+		incoming.put(key, new Ring(key, userId, name == null ? "Someone" : name, skin, timeoutMs));
+		startRinger();
+	}
+
+	/** `voice:ring`: a friend is calling you. */
+	public static void onRing(JsonObject p) {
+		String key = convKey(str(p, "room") == null ? "" : str(p, "room"));
+		JsonObject from = p.has("from") && p.get("from").isJsonObject() ? p.getAsJsonObject("from") : null;
+		addIncoming(key, str(from, "userId"), str(from, "name"), str(from, "skin"), p.has("timeoutMs") ? p.get("timeoutMs").getAsLong() : 45_000);
+	}
+
+	/** `voice:ring-end`: the ring stopped (answered here or elsewhere, declined, the caller hung up, nobody answered). */
+	public static void onRingEnd(JsonObject p) {
+		String key = convKey(str(p, "room") == null ? "" : str(p, "room"));
+		if (key == null) {
+			return;
+		}
+		Ring r = incoming.remove(key);
+		String reason = str(p, "reason");
+		if (r != null && ("cancelled".equals(reason) || "missed".equals(reason) || "no-answer".equals(reason))) {
+			RelayClient client = RelayClient.get();
+			if (client != null) {
+				client.notices.add(new Model.Notice(key, "Missed call", r.name + " tried to call you", r.name, r.skin));
+			}
+		}
+	}
+
+	/** `voice:declined`: the friend you were calling said no (or did not answer): your side of the call ends. */
+	public static void onDeclined(JsonObject p) {
+		String room = str(p, "room");
+		Room c = call;
+		if (room == null || c == null || !room.equals(c.room)) {
+			return;
+		}
+		JsonObject by = p.has("by") && p.get("by").isJsonObject() ? p.getAsJsonObject("by") : null;
+		String name = str(by, "name");
+		RelayClient client = RelayClient.get();
+		Model.Friend f = client == null || c.key.length() < 4 ? null : client.friend(c.key.substring(3));
+		if (f != null) {
+			name = f.display();
+		}
+		String who = name == null || name.isEmpty() ? "They" : name;
+		boolean unanswered = "no-answer".equals(str(p, "reason"));
+		call = null;
+		final Room ended = c;
+		pool.execute(() -> bye(ended));
+		note(unanswered ? who + " did not answer" : who + " declined the call");
+		if (client != null) {
+			client.notices.add(new Model.Notice(c.key, unanswered ? "No answer" : "Call declined", unanswered ? who + " did not answer" : who + " declined your call", name,
+					f == null ? null : f.skin));
+		}
+	}
+
+	private static void startRinger() {
+		Thread t = ringer;
+		if (t != null && t.isAlive()) {
+			return;
+		}
+		t = new Thread(Voice::ringLoop, "Native-Voice-Ring");
+		t.setDaemon(true);
+		ringer = t;
+		t.start();
+	}
+
+	/** The ring tone: two short beeps every three seconds while a call is ringing (not while deafened). */
+	private static void ringLoop() {
+		javax.sound.sampled.SourceDataLine line = null;
+		try {
+			javax.sound.sampled.AudioFormat fmt = new javax.sound.sampled.AudioFormat(48000, 16, 1, true, false);
+			line = VoiceDevices.open(javax.sound.sampled.SourceDataLine.class, fmt, outDevice);
+			line.open(fmt, 48000 / 5 * 2);
+			line.start();
+			byte[] chunk = new byte[960 * 2];
+			long pos = 0;
+			final int period = 48000 * 3;
+			while (incoming() != null) {
+				float gain = deafened ? 0f : Math.min(1f, outVolume) * 0.3f;
+				for (int i = 0; i < 960; i++) {
+					int at = (int) ((pos + i) % period);
+					double env = beepEnvelope(at);
+					double v = env == 0 ? 0 : (Math.sin(2 * Math.PI * 440 * at / 48000.0) + Math.sin(2 * Math.PI * 480 * at / 48000.0)) * 0.5 * env;
+					short sample = (short) (v * gain * 32767);
+					chunk[2 * i] = (byte) sample;
+					chunk[2 * i + 1] = (byte) (sample >> 8);
+				}
+				pos += 960;
+				line.write(chunk, 0, chunk.length); // blocks: paces the loop at real time
+			}
+			line.stop();
+			line.flush();
+		} catch (Throwable t) {
+			Log.debug("Ring tone unavailable: {}", t.toString());
+		} finally {
+			if (line != null) {
+				try {
+					line.close();
+				} catch (Throwable ignored) {
+					// already gone
+				}
+			}
+		}
+	}
+
+	/** Two beeps in a 3 s cycle (0 - 0.4 s and 0.6 - 1.0 s) with short fades so they do not click. */
+	static double beepEnvelope(int sample) {
+		int fade = 48 * 6;
+		for (int start : new int[] {0, 28800}) {
+			int rel = sample - start;
+			if (rel >= 0 && rel < 19200) {
+				return Math.min(1.0, Math.min(rel, 19200 - rel) / (double) fade);
+			}
+		}
+		return 0;
 	}
 
 	/** "dm:a:b" -> "dm:<other>", "g:id" -> "g:id"; null for proximity rooms. */

@@ -154,6 +154,34 @@ public interface McBridge {
 		return false;
 	}
 
+	/** Path of the dimension you are in: "overworld", "the_nether", "the_end" (or a custom one); null when unknown. */
+	default String dimension() {
+		return null;
+	}
+
+	/** The world's time of day in ticks (0 = 06:00, 12000 = dusk), -1 when this version cannot be read. */
+	default long dayTime() {
+		return -1;
+	}
+
+	/** Distance from your eyes to the entity under the crosshair, NaN when you are not pointing at one. */
+	default double reach() {
+		return Double.NaN;
+	}
+
+	/** Recolours the red flash of a hurt entity (ABGR, as the game's overlay texture stores it). False when this version cannot. */
+	default boolean setHurtTint(int abgr) {
+		return false;
+	}
+
+	/**
+	 * The contents of the shulker box in the main hand (27 slots into {@code out}). False when the hand holds no shulker
+	 * box or this version cannot read it.
+	 */
+	default boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
+		return false;
+	}
+
 	/** Reads the scoreboard sidebar; false when this version can't be read (the vanilla one then stays). */
 	default boolean sidebar(xyz.nativelaunch.ui.mod.Overlays.Sidebar out) {
 		return false;

@@ -187,7 +187,21 @@ public final class SkinSync {
 				premiumStrip,
 				premiumFrames,
 				premiumFps,
-				cosmetics(o));
+				cosmetics(o),
+				flag(o, "x"));
+	}
+
+	/** A 1 / true flag of the directory row (absent = false). */
+	private static boolean flag(JsonObject o, String key) {
+		try {
+			if (!o.has(key) || o.get(key).isJsonNull()) {
+				return false;
+			}
+			com.google.gson.JsonPrimitive p = o.get(key).getAsJsonPrimitive();
+			return p.isBoolean() ? p.getAsBoolean() : p.getAsInt() != 0;
+		} catch (RuntimeException e) {
+			return false;
+		}
 	}
 
 	private static final java.util.regex.Pattern HASH = java.util.regex.Pattern.compile("^[a-f0-9]{64}$");

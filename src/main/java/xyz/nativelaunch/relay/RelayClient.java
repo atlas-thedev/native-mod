@@ -1297,6 +1297,15 @@ public final class RelayClient {
 			case "voice:state":
 				xyz.nativelaunch.voice.Voice.onState(p);
 				break;
+			case "voice:ring":
+				xyz.nativelaunch.voice.Voice.onRing(p);
+				break;
+			case "voice:ring-end":
+				xyz.nativelaunch.voice.Voice.onRingEnd(p);
+				break;
+			case "voice:declined":
+				xyz.nativelaunch.voice.Voice.onDeclined(p);
+				break;
 			case "presence": {
 				String id = str(p, "userId");
 				List<Model.Friend> next = new ArrayList<Model.Friend>();

@@ -37,6 +37,7 @@ public final class HudModules {
 		Modules.register(new HitboxColours());
 		Modules.register(new CriticalColours());
 		Modules.register(new WatermarkModule());
+		ExtraModules.register();
 		VoiceModules.register();
 	}
 
@@ -537,6 +538,29 @@ public final class HudModules {
 		}
 
 		@Override
+		public boolean preview(xyz.nativelaunch.ui.Ui ui, Game g, float x, float y, float w, float h) {
+			xyz.nativelaunch.ui.gfx.Canvas c = ui.c;
+			float[] v = ModPreviews.viewport(x, y, w, h);
+			float t = (float) ((Math.sin(ui.now / 1100.0) + 1) / 2);
+			t = t * t * (3 - 2 * t);
+			float z = 1 + (level.value - 1) * t;
+			c.shadow(v[0], v[1] + 3, v[2], v[3], 8, 14, 0x66000000);
+			c.pushClip(v[0], v[1], v[2], v[3]);
+			ModPreviews.scene(c, v[0], v[1], v[2], v[3], z);
+			// scope edge darkens as you zoom
+			float edge = Math.min(0.55f, (z - 1) * 0.08f);
+			c.gradientV(v[0], v[1], v[2], v[3] * 0.18f, Theme.alpha(0xFF000000, edge), 0);
+			c.gradientV(v[0], v[1] + v[3] * 0.82f, v[2], v[3] * 0.18f, 0, Theme.alpha(0xFF000000, edge));
+			c.popClip();
+			c.outline(v[0], v[1], v[2], v[3], 8, 1, Theme.HAIRLINE_STRONG);
+			String zoomText = String.format(java.util.Locale.ROOT, "%.1fx", z);
+			ModPreviews.chip(c, zoomText, v[0] + 38, v[1] + 10, Theme.TEXT_STRONG);
+			String hint = key.value >= 0 ? "Hold " + Keys.name(key.value) + " to zoom" + (scroll.value ? ", scroll to adjust" : "") : "Set a zoom key";
+			ModPreviews.chip(c, hint, v[0] + v[2] / 2, v[1] + v[3] + 12, Theme.TEXT_SECONDARY);
+			return true;
+		}
+
+		@Override
 		public boolean onScroll(double dy, Game g) {
 			if (!held || !scroll.value || dy == 0) {
 				return false;
@@ -579,6 +603,30 @@ public final class HudModules {
 				}
 				mc.setGamma(level.value);
 			}
+		}
+
+		@Override
+		public boolean preview(xyz.nativelaunch.ui.Ui ui, Game g, float x, float y, float w, float h) {
+			xyz.nativelaunch.ui.gfx.Canvas c = ui.c;
+			float[] v = ModPreviews.viewport(x, y, w, h);
+			float split = 0.5f + 0.32f * (float) Math.sin(ui.now / 1600.0);
+			float sx = v[0] + v[2] * split;
+			c.shadow(v[0], v[1] + 3, v[2], v[3], 8, 14, 0x66000000);
+			c.pushClip(v[0], v[1], v[2], v[3]);
+			ModPreviews.scene(c, v[0], v[1], v[2], v[3], 1f);
+			// the dark half: what the game looks like at night without it
+			c.pushClip(v[0], v[1], sx - v[0], v[3]);
+			c.fill(v[0], v[1], v[2], v[3], 0xE8040612);
+			c.popClip();
+			c.popClip();
+			c.fill(sx - 1, v[1], 2, v[3], 0xFFFFFFFF);
+			c.circle(sx, v[1] + v[3] / 2, 9, 0xFFFFFFFF);
+			c.icon(Theme.I_SUN, 11, sx, v[1] + v[3] / 2, Theme.SOLID_FG);
+			c.outline(v[0], v[1], v[2], v[3], 8, 1, Theme.HAIRLINE_STRONG);
+			ModPreviews.chip(c, "OFF", v[0] + 32, v[1] + 10, Theme.TEXT_SECONDARY);
+			ModPreviews.chip(c, "FULLBRIGHT", v[0] + v[2] - 56, v[1] + 10, 0xFFFDE68A);
+			ModPreviews.chip(c, "See in the dark, caves and nights included", v[0] + v[2] / 2, v[1] + v[3] + 12, Theme.TEXT_SECONDARY);
+			return true;
 		}
 
 		@Override

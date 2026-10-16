@@ -708,7 +708,12 @@ public final class IntermediaryMc implements McBridge {
 		}
 		try {
 			Object type = f.get(null);
-			Method get = method(st.getClass(), "method_58694", Class.forName("net.minecraft.class_9331")); // get(ComponentType)
+			Class<?> typeClass = Class.forName("net.minecraft.class_9331");
+			// ComponentHolder.get(ComponentType): method_57824 on 1.20.5 - 1.21.8, method_58694 from 1.21.9
+			Method get = method(st.getClass(), "method_57824", typeClass);
+			if (get == null) {
+				get = method(st.getClass(), "method_58694", typeClass);
+			}
 			return type == null || get == null ? null : get.invoke(st, type);
 		} catch (Throwable t) {
 			return null;
@@ -814,6 +819,129 @@ public final class IntermediaryMc implements McBridge {
 			}
 		}
 		return 0;
+	}
+
+	@Override
+	public String dimension() {
+		Object key = call(get(client(), "field_1687"), "method_27983"); // ClientWorld.getRegistryKey()
+		Object id = call(key, "method_29177"); // RegistryKey.getValue()
+		if (id == null) {
+			return null;
+		}
+		String s = id.toString();
+		int colon = s.indexOf(':');
+		return colon >= 0 ? s.substring(colon + 1) : s;
+	}
+
+	@Override
+	public long dayTime() {
+		Object t = call(get(client(), "field_1687"), "method_8532"); // World.getTimeOfDay()
+		return t instanceof Number ? ((Number) t).longValue() : -1;
+	}
+
+	@Override
+	public double reach() {
+		try {
+			Object hit = get(client(), "field_1765"); // crosshairTarget
+			Object p = localPlayer();
+			if (hit == null || p == null || !"net.minecraft.class_3966".equals(hit.getClass().getName())) { // EntityHitResult
+				return Double.NaN;
+			}
+			Object pos = call(hit, "method_17784"); // HitResult.getPos()
+			Method eyeAt = method(p.getClass(), "method_5836", float.class); // Entity.getCameraPosVec(tickDelta)
+			Object eye = eyeAt == null ? null : eyeAt.invoke(p, 1.0f);
+			if (pos == null || eye == null) {
+				return Double.NaN;
+			}
+			Method dist = method(eye.getClass(), "method_1022", eye.getClass()); // Vec3d.distanceTo
+			Object d = dist == null ? null : dist.invoke(eye, pos);
+			return d instanceof Number ? ((Number) d).doubleValue() : Double.NaN;
+		} catch (Throwable t) {
+			return Double.NaN;
+		}
+	}
+
+	@Override
+	public boolean setHurtTint(int abgr) {
+		try {
+			Object renderer = get(client(), "field_1773"); // GameRenderer
+			Object overlay = get(renderer, "field_20949"); // OverlayTexture
+			Object texture = get(overlay, "field_21013"); // its NativeImageBackedTexture
+			Object image = call(texture, "method_4525"); // getImage()
+			Method set = image == null ? null : method(image.getClass(), "method_4305", int.class, int.class, int.class); // setColor(x, y, abgr)
+			if (set == null) {
+				return false;
+			}
+			for (int y = 0; y < 8; y++) { // rows 0 - 7 are the red hurt flash, the rest is the white flash
+				for (int x = 0; x < 16; x++) {
+					set.invoke(image, x, y, abgr);
+				}
+			}
+			call(texture, "method_4524"); // upload()
+			return true;
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	@Override
+	public boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
+		Object p = localPlayer();
+		Object st = p == null ? null : call(p, "method_6047"); // getMainHandStack
+		if (st == null) {
+			return false;
+		}
+		Object item = call(st, "method_7909"); // getItem
+		String id = item == null ? "" : xyz.nativelaunch.ui.mod.Game.bareId(item.toString());
+		if (id == null || !id.endsWith("shulker_box")) {
+			return false;
+		}
+		for (xyz.nativelaunch.ui.mod.Game.Slot s : out) {
+			s.clear();
+		}
+		try {
+			Object container = component(st, "field_49622"); // 1.20.5+: the minecraft:container component
+			if (container != null) {
+				Object stream = call(container, "method_57489"); // ContainerComponent.stream(): every slot, in order
+				if (stream instanceof java.util.stream.Stream) {
+					Object[] stacks = ((java.util.stream.Stream<?>) stream).toArray();
+					for (int i = 0; i < Math.min(out.length, stacks.length); i++) {
+						stack(stacks[i], out[i]);
+					}
+				}
+				return true;
+			}
+			if (componentTypes() == null) { // 1.16 - 1.20.4: BlockEntityTag.Items
+				Method sub = method(st.getClass(), "method_7941", String.class); // getSubNbt
+				Object tag = sub == null ? null : sub.invoke(st, "BlockEntityTag");
+				Method list = tag == null ? null : method(tag.getClass(), "method_10554", String.class, int.class); // getList(name, 10 = compound)
+				Object items = list == null ? null : list.invoke(tag, "Items", 10);
+				if (items instanceof java.util.List) {
+					for (Object entry : (java.util.List<?>) items) {
+						Object slot = call2(entry, "method_10571", "Slot"); // getByte
+						Object name = call2(entry, "method_10558", "id"); // getString
+						Object count = call2(entry, "method_10571", "Count");
+						int i = slot instanceof Number ? ((Number) slot).intValue() : -1;
+						if (i >= 0 && i < out.length && name instanceof String) {
+							out[i].set(xyz.nativelaunch.ui.mod.Game.bareId((String) name), count instanceof Number ? ((Number) count).intValue() : 1, 0, 0);
+						}
+					}
+				}
+			}
+			return true;
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	/** target.name(String) for a one-String-argument getter. */
+	private Object call2(Object target, String name, String arg) {
+		Method m = target == null ? null : method(target.getClass(), name, String.class);
+		try {
+			return m == null ? null : m.invoke(target, arg);
+		} catch (Throwable t) {
+			return null;
+		}
 	}
 
 	@Override

@@ -32,6 +32,8 @@ public final class SkinEntry {
 	/** Worn 3D cosmetics (hat, glasses, back, shoes): never null, at most {@link #MAX_COSMETICS}. */
 	public final java.util.List<xyz.nativelaunch.cosmetic.CosmeticRef> cosmetics;
 	public static final int MAX_COSMETICS = 8;
+	/** A Native+ member: their name tag and tab entry show the Native+ mark instead of the plain Native logo. */
+	public final boolean plus;
 
 	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision) {
 		this(name, slim, skinHash, capeHash, minecraftUuid, revision, null, 0, 0);
@@ -53,6 +55,15 @@ public final class SkinEntry {
 			String capeStripHash, int capeFrames, int capeFps,
 			boolean hasPremium, String premiumCapeHash, String premiumStripHash, int premiumFrames, int premiumFps,
 			java.util.List<xyz.nativelaunch.cosmetic.CosmeticRef> cosmetics) {
+		this(name, slim, skinHash, capeHash, minecraftUuid, revision, capeStripHash, capeFrames, capeFps, hasPremium, premiumCapeHash, premiumStripHash,
+				premiumFrames, premiumFps, cosmetics, false);
+	}
+
+	public SkinEntry(String name, boolean slim, String skinHash, String capeHash, String minecraftUuid, long revision,
+			String capeStripHash, int capeFrames, int capeFps,
+			boolean hasPremium, String premiumCapeHash, String premiumStripHash, int premiumFrames, int premiumFps,
+			java.util.List<xyz.nativelaunch.cosmetic.CosmeticRef> cosmetics, boolean plus) {
+		this.plus = plus;
 		this.name = name;
 		this.slim = slim;
 		this.skinHash = skinHash;
