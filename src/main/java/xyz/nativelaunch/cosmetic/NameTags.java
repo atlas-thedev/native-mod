@@ -1,6 +1,7 @@
 package xyz.nativelaunch.cosmetic;
 
 import xyz.nativelaunch.core.Log;
+import xyz.nativelaunch.core.MethodCache;
 import xyz.nativelaunch.core.NativeState;
 import xyz.nativelaunch.core.ProfileAccess;
 
@@ -25,8 +26,8 @@ public final class NameTags {
 	private static final String PREFIX = GLYPH + " ";
 
 	private static final String[] PLAYER_CLASSES = {"net.minecraft.class_742", "net.minecraft.client.player.AbstractClientPlayer"};
-	private static final String[] GAME_PROFILE_GETTERS = {"method_7334", "getGameProfile"};
-	private static final String[] ENTRY_PROFILE_GETTERS = {"method_2966", "getProfile"};
+	private static final MethodCache GAME_PROFILE_GETTERS = new MethodCache("method_7334", "getGameProfile");
+	private static final MethodCache ENTRY_PROFILE_GETTERS = new MethodCache("method_2966", "getProfile");
 
 	private static final ClassValue<Boolean> IS_PLAYER = new ClassValue<Boolean>() {
 		@Override
@@ -58,7 +59,7 @@ public final class NameTags {
 			return text;
 		}
 		try {
-			Object profile = call(entity, GAME_PROFILE_GETTERS);
+			Object profile = GAME_PROFILE_GETTERS.call(entity);
 			return decorate(text, ProfileAccess.name(profile), ProfileAccess.id(profile));
 		} catch (Throwable t) {
 			fail(t);
@@ -72,7 +73,7 @@ public final class NameTags {
 			return text;
 		}
 		try {
-			Object profile = call(entry, ENTRY_PROFILE_GETTERS);
+			Object profile = ENTRY_PROFILE_GETTERS.call(entry);
 			return decorate(text, ProfileAccess.name(profile), ProfileAccess.id(profile));
 		} catch (Throwable t) {
 			fail(t);
@@ -111,21 +112,44 @@ public final class NameTags {
 		return ready;
 	}
 
+	/** The Text class of the logo (always the same one in a running game); the append lookup below is made against it. */
+	private static volatile Class<?> logoClass;
+	private static final Method NO_APPEND;
+
+	static {
+		try {
+			NO_APPEND = Object.class.getMethod("hashCode");
+		} catch (NoSuchMethodException e) {
+			throw new ExceptionInInitializerError(e);
+		}
+	}
+
+	/** Text.append(Text) for a given kind of name text, found once per class instead of scanning every method per call. */
+	private static final ClassValue<Method> APPEND = new ClassValue<Method>() {
+		@Override
+		protected Method computeValue(Class<?> textType) {
+			Class<?> owner = logoClass;
+			if (owner != null) {
+				for (Method m : owner.getMethods()) {
+					if (m.getParameterTypes().length == 1 && (m.getName().equals("method_10852") || m.getName().equals("append"))
+							&& m.getParameterTypes()[0] != String.class && m.getParameterTypes()[0].isAssignableFrom(textType)) {
+						return m;
+					}
+				}
+			}
+			return NO_APPEND; // none (ClassValue results are kept, so a miss is remembered as a sentinel)
+		}
+	};
+
 	private static Object decorate(Object text, String name, UUID id) throws Exception {
 		if (name == null || !fontReady() || !NativeState.get().directory().has(name, id)) {
 			return text;
 		}
 		resolve();
 		Object logo = literalFactory != null ? literalFactory.invoke(null, PREFIX) : literalCtor.newInstance(PREFIX);
-		Method append = null;
-		for (Method m : logo.getClass().getMethods()) {
-			if (m.getParameterTypes().length == 1 && (m.getName().equals("method_10852") || m.getName().equals("append"))
-					&& m.getParameterTypes()[0] != String.class && m.getParameterTypes()[0].isAssignableFrom(text.getClass())) {
-				append = m;
-				break;
-			}
-		}
-		if (append == null) {
+		logoClass = logo.getClass();
+		Method append = APPEND.get(text.getClass());
+		if (append == null || append == NO_APPEND) {
 			return text;
 		}
 		Object out = append.invoke(logo, text);
@@ -151,17 +175,6 @@ public final class NameTags {
 		}
 		literalCtor = Class.forName("net.minecraft.class_2585").getConstructor(String.class);
 		resolved = true;
-	}
-
-	private static Object call(Object target, String[] names) throws Exception {
-		for (String name : names) {
-			try {
-				return target.getClass().getMethod(name).invoke(target);
-			} catch (NoSuchMethodException ignored) {
-				// next spelling
-			}
-		}
-		throw new NoSuchMethodException(names[0]);
 	}
 
 	private static void fail(Throwable t) {

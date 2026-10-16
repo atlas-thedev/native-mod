@@ -18,6 +18,11 @@ public final class Font {
 	public final float ascent, descent, lineHeight;
 	private final Map<Integer, Glyph> glyphs = new HashMap<Integer, Glyph>();
 	private final Map<Integer, Float> advances = new HashMap<Integer, Float>();
+	/** Latin text (nearly everything the HUD draws) is looked up in plain arrays: no boxing per character per frame. */
+	private static final int FAST = 256;
+	private final Glyph[] fastGlyphs = new Glyph[FAST];
+	private final float[] fastAdvances = new float[FAST];
+	private final boolean[] fastAdvanceKnown = new boolean[FAST];
 	private int generation = -1;
 	private static final Glyph EMPTY = new Glyph(0, 0, 0, 0, 0, 0, 0);
 	private static ByteBuffer scratch;
@@ -45,10 +50,23 @@ public final class Font {
 	}
 
 	public float advance(int cp) {
+		if (cp >= 0 && cp < FAST) {
+			if (!fastAdvanceKnown[cp]) {
+				fastAdvances[cp] = measureAdvance(cp);
+				fastAdvanceKnown[cp] = true;
+			}
+			return fastAdvances[cp];
+		}
 		Float cached = advances.get(cp);
 		if (cached != null) {
 			return cached;
 		}
+		float adv = measureAdvance(cp);
+		advances.put(cp, adv);
+		return adv;
+	}
+
+	private float measureAdvance(int cp) {
 		FontFace f = faceFor(cp);
 		float adv;
 		if (f == null) {
@@ -61,7 +79,6 @@ public final class Font {
 				adv = a.get(0) * s;
 			}
 		}
-		advances.put(cp, adv);
 		return adv;
 	}
 
@@ -75,15 +92,21 @@ public final class Font {
 	Glyph glyph(Atlas atlas, int cp) {
 		if (generation != atlas.generation) {
 			glyphs.clear();
+			java.util.Arrays.fill(fastGlyphs, null);
 			generation = atlas.generation;
 		}
-		Glyph g = glyphs.get(cp);
+		boolean fast = cp >= 0 && cp < FAST;
+		Glyph g = fast ? fastGlyphs[cp] : glyphs.get(cp);
 		if (g != null) {
 			return g;
 		}
 		g = rasterise(atlas, cp);
 		if (g != null) {
-			glyphs.put(cp, g);
+			if (fast) {
+				fastGlyphs[cp] = g;
+			} else {
+				glyphs.put(cp, g);
+			}
 		}
 		return g == null ? EMPTY : g;
 	}

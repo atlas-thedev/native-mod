@@ -43,11 +43,11 @@ public final class MojangMc implements McBridge {
 	// ── reflection helpers ────────────────────────────────────────────────
 
 	private static final Object MISSING = new Object();
-	private final Map<String, Object> members = new HashMap<String, Object>();
+	private final xyz.nativelaunch.ui.MemberCache members = new xyz.nativelaunch.ui.MemberCache();
 
 	private Field field(Class<?> owner, String name) {
-		String key = owner.getName() + "#" + name;
-		Object m = members.get(key);
+		Map<String, Object> table = members.fields(owner);
+		Object m = table.get(name);
 		if (m == null) {
 			m = MISSING;
 			for (Class<?> c = owner; c != null && m == MISSING; c = c.getSuperclass()) {
@@ -59,15 +59,15 @@ public final class MojangMc implements McBridge {
 					// keep looking up the hierarchy
 				}
 			}
-			members.put(key, m);
+			table.put(name, m);
 		}
 		return m == MISSING ? null : (Field) m;
 	}
 
 	/** First method with this name and parameter count, public or not, up the hierarchy. */
 	private Method named(Class<?> owner, String name, int params) {
-		String key = owner.getName() + "~" + name + params;
-		Object m = members.get(key);
+		Map<String, Object> table = members.named(owner, params);
+		Object m = table.get(name);
 		if (m == null) {
 			m = MISSING;
 			for (Method x : owner.getMethods()) {
@@ -86,7 +86,7 @@ public final class MojangMc implements McBridge {
 					}
 				}
 			}
-			members.put(key, m);
+			table.put(name, m);
 		}
 		return m == MISSING ? null : (Method) m;
 	}

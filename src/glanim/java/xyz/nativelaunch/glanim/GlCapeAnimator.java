@@ -95,6 +95,20 @@ public final class GlCapeAnimator {
 			this.frames = frames;
 			this.fps = fps;
 		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (!(other instanceof Wanted)) {
+				return false;
+			}
+			Wanted o = (Wanted) other;
+			return frames == o.frames && fps == o.fps && stripHash.equals(o.stripHash);
+		}
+
+		@Override
+		public int hashCode() {
+			return stripHash.hashCode() * 31 + frames * 7 + fps;
+		}
 	}
 
 	/** A decoded strip: RGBA pixels, frames stacked top to bottom. */
@@ -198,7 +212,9 @@ public final class GlCapeAnimator {
 				next.put(CapeTextureIds.sha1OfChars(textureHash(base + entry.capeHash)), new Wanted(entry.capeStripHash, entry.capeFrames, entry.capeFps));
 			}
 		}
-		wanted = next;
+		if (!next.equals(wanted)) {
+			wanted = next; // an unchanged set keeps the same map, so the render thread's cached matches stay valid
+		}
 		// strips of players who left (or changed cloaks) are dropped instead of piling up (each can be up to 16 MB)
 		java.util.Set<String> live = new java.util.HashSet<String>();
 		for (Wanted w : next.values()) {
@@ -283,7 +299,75 @@ public final class GlCapeAnimator {
 			return;
 		}
 		Map<?, ?> loaded = (Map<?, ?>) byPath.get(manager);
-		List<Object[]> targets = new ArrayList<Object[]>();
+		long now = System.nanoTime();
+		// Walking every texture the game holds (thousands, each key turned into a String) on every tick was the cost
+		// of this animator: the matches are kept and only looked for again when the set of textures changed.
+		if (current != targetsFor || loaded.size() != targetsMapSize || now - targetsAt > RESCAN_NANOS || !stillLoaded(loaded)) {
+			targets = scan(loaded, current);
+			targetsFor = current;
+			targetsMapSize = loaded.size();
+			targetsAt = now;
+		}
+		if (targets.isEmpty()) {
+			return;
+		}
+		long elapsed = now - START_NANOS;
+		for (int i = 0; i < targets.size(); i++) {
+			Target target = targets.get(i);
+			Object texture = target.texture;
+			Wanted want = target.want;
+			if (MISMATCHED.containsKey(texture)) {
+				continue;
+			}
+			Strip strip = strip(want);
+			if (strip == null) {
+				continue;
+			}
+			long frameNanos = Math.max(1L, 1_000_000_000L / Math.max(1, want.fps));
+			int frame = (int) ((elapsed / frameNanos) % strip.frames);
+			if (frame == target.lastFrame) {
+				continue; // this frame is already on the GPU
+			}
+			int glId = glId(texture);
+			if (glId <= 0) {
+				continue;
+			}
+			int result = upload(glId, strip, frame, !target.verified);
+			if (result == UPLOAD_MISMATCH) {
+				MISMATCHED.put(texture, Boolean.TRUE);
+			} else if (result == UPLOAD_OK) {
+				target.verified = true;
+				target.lastFrame = frame;
+			}
+		}
+	}
+
+	/** An animated cape's texture as the game holds it. */
+	private static final class Target {
+		final Object key;
+		final Object texture;
+		final Wanted want;
+		int lastFrame = -1;
+		/** The texture's size was checked against the strip once; later frames skip the GL queries. */
+		boolean verified;
+
+		Target(Object key, Object texture, Wanted want) {
+			this.key = key;
+			this.texture = texture;
+			this.want = want;
+		}
+	}
+
+	private static final long RESCAN_NANOS = 2_000_000_000L;
+	private static final int UPLOAD_RETRY = 0, UPLOAD_OK = 1, UPLOAD_MISMATCH = 2;
+	/** Render thread only. */
+	private static List<Target> targets = Collections.emptyList();
+	private static Map<String, Wanted> targetsFor;
+	private static int targetsMapSize = -1;
+	private static long targetsAt;
+
+	private static List<Target> scan(Map<?, ?> loaded, Map<String, Wanted> current) {
+		List<Target> found = new ArrayList<Target>();
 		for (Map.Entry<?, ?> entry : loaded.entrySet()) {
 			String id = String.valueOf(entry.getKey());
 			int slash = id.lastIndexOf('/');
@@ -292,33 +376,28 @@ public final class GlCapeAnimator {
 			}
 			Wanted want = current.get(id.substring(slash + 1));
 			if (want != null && CapeTextureIds.matches(id, id.substring(slash + 1)) && entry.getValue() != null) {
-				targets.add(new Object[] {entry.getValue(), want});
+				Target kept = null;
+				for (int i = 0; i < targets.size() && kept == null; i++) {
+					Target old = targets.get(i);
+					if (old.texture == entry.getValue() && old.want == want) {
+						kept = old; // same texture as before: keeps what is known about it
+					}
+				}
+				found.add(kept != null ? kept : new Target(entry.getKey(), entry.getValue(), want));
 			}
 		}
-		if (targets.isEmpty()) {
-			return;
-		}
-		long elapsed = System.nanoTime() - START_NANOS;
-		for (Object[] target : targets) {
-			Object texture = target[0];
-			Wanted want = (Wanted) target[1];
-			if (MISMATCHED.containsKey(texture)) {
-				continue;
-			}
-			Strip strip = strip(want);
-			if (strip == null) {
-				continue;
-			}
-			int glId = glId(texture);
-			if (glId <= 0) {
-				continue;
-			}
-			long frameNanos = Math.max(1L, 1_000_000_000L / Math.max(1, want.fps));
-			int frame = (int) ((elapsed / frameNanos) % strip.frames);
-			if (!upload(glId, strip, frame)) {
-				MISMATCHED.put(texture, Boolean.TRUE);
+		return found;
+	}
+
+	/** The remembered textures are all still registered under the same keys (a replaced cape forces a new scan). */
+	private static boolean stillLoaded(Map<?, ?> loaded) {
+		for (int i = 0; i < targets.size(); i++) {
+			Target target = targets.get(i);
+			if (loaded.get(target.key) != target.texture) {
+				return false;
 			}
 		}
+		return true;
 	}
 
 	private static int glId(Object texture) {
@@ -382,10 +461,11 @@ public final class GlCapeAnimator {
 
 	/**
 	 * Writes one frame into the texture. Every piece of GL state touched is restored, so the
-	 * game's own state cache stays correct. False when the texture's size does not match the
-	 * frame (a resized or replaced texture): that texture is then left alone.
+	 * game's own state cache stays correct. {@link #UPLOAD_MISMATCH} when the texture's size does not match the
+	 * frame (a resized or replaced texture): that texture is then left alone. {@code validate} is false once the size
+	 * was confirmed, which saves two GL queries (a pipeline stall each) per frame.
 	 */
-	private static boolean upload(int glId, Strip strip, int frame) {
+	private static int upload(int glId, Strip strip, int frame, boolean validate) {
 		int previous = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
 		int unpackBuffer = GL11.glGetInteger(0x88EF); // GL_PIXEL_UNPACK_BUFFER_BINDING
 		int rowLength = GL11.glGetInteger(GL11.GL_UNPACK_ROW_LENGTH);
@@ -394,14 +474,16 @@ public final class GlCapeAnimator {
 		int alignment = GL11.glGetInteger(GL11.GL_UNPACK_ALIGNMENT);
 		try {
 			GL11.glBindTexture(GL11.GL_TEXTURE_2D, glId);
-			int width = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
-			int height = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
-			if (width == 0 || height == 0) {
-				return true; // allocated but not uploaded yet: try again next frame
-			}
-			if (width != strip.width || height != strip.frameHeight) {
-				Log.warn("Animated cape frame is {}x{} but the cape texture is {}x{}: showing it still.", strip.width, strip.frameHeight, width, height);
-				return false;
+			if (validate) {
+				int width = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
+				int height = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
+				if (width == 0 || height == 0) {
+					return UPLOAD_RETRY; // allocated but not uploaded yet: try again next frame
+				}
+				if (width != strip.width || height != strip.frameHeight) {
+					Log.warn("Animated cape frame is {}x{} but the cape texture is {}x{}: showing it still.", strip.width, strip.frameHeight, width, height);
+					return UPLOAD_MISMATCH;
+				}
 			}
 			if (unpackBuffer != 0) {
 				GL15.glBindBuffer(0x88EC, 0); // GL_PIXEL_UNPACK_BUFFER
@@ -411,7 +493,7 @@ public final class GlCapeAnimator {
 			GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0);
 			GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 4);
 			GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, strip.width, strip.frameHeight, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, strip.frame(frame));
-			return true;
+			return UPLOAD_OK;
 		} finally {
 			GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, rowLength);
 			GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, skipRows);

@@ -199,7 +199,7 @@ public final class SkinDirectory {
 		}
 		if (id != null && id.version() != 3 && !self) {
 			String linked = entry.minecraftUuid;
-			if (linked == null || !linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT))) {
+			if (linked == null || !linked.equals(plain(id))) {
 				return null;
 			}
 		}
@@ -248,7 +248,7 @@ public final class SkinDirectory {
 		}
 		AccountInfo account = NativeState.get().account();
 		if (account != null && account.name != null && key(account.name).equals(key(name))
-				&& (id == null || id.version() == 3 || (account.uuid != null && account.uuid.replace("-", "").equalsIgnoreCase(id.toString().replace("-", ""))))) {
+				&& (id == null || id.version() == 3 || (account.uuid != null && account.uuid.replace("-", "").equalsIgnoreCase(plain(id))))) {
 			return true;
 		}
 		SkinEntry entry = entries.get(key(name));
@@ -257,7 +257,7 @@ public final class SkinDirectory {
 		}
 		if (id != null && id.version() != 3 && !isSelf(name)) {
 			String linked = entry.minecraftUuid;
-			return linked != null && linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT));
+			return linked != null && linked.equals(plain(id));
 		}
 		return true;
 	}
@@ -276,7 +276,7 @@ public final class SkinDirectory {
 		}
 		if (id != null && id.version() != 3 && !isSelf(name)) {
 			String linked = entry.minecraftUuid;
-			if (linked == null || !linked.equals(id.toString().replace("-", "").toLowerCase(Locale.ROOT))) {
+			if (linked == null || !linked.equals(plain(id))) {
 				return java.util.Collections.emptyList();
 			}
 		}
@@ -304,7 +304,36 @@ public final class SkinDirectory {
 		}
 	}
 
+	private static final int MAX_CACHED = 2048;
+	private static final Map<String, String> KEYS = new ConcurrentHashMap<String, String>();
+	private static final Map<UUID, String> PLAIN = new ConcurrentHashMap<UUID, String>();
+
+	/**
+	 * Lookups run for every player on every frame (name tags, cosmetics, hood): the lower-cased name and the dashless
+	 * UUID are remembered instead of being rebuilt each time.
+	 */
 	private static String key(String name) {
-		return name.toLowerCase(Locale.ROOT);
+		String key = KEYS.get(name);
+		if (key == null) {
+			if (KEYS.size() > MAX_CACHED) {
+				KEYS.clear();
+			}
+			key = name.toLowerCase(Locale.ROOT);
+			KEYS.put(name, key);
+		}
+		return key;
+	}
+
+	/** A UUID as 32 lowercase hex digits (the form the directory stores). */
+	private static String plain(UUID id) {
+		String plain = PLAIN.get(id);
+		if (plain == null) {
+			if (PLAIN.size() > MAX_CACHED) {
+				PLAIN.clear();
+			}
+			plain = id.toString().replace("-", "").toLowerCase(Locale.ROOT);
+			PLAIN.put(id, plain);
+		}
+		return plain;
 	}
 }

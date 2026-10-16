@@ -9,6 +9,7 @@ public final class CosmeticRef {
 	public final String slot;
 	/** The hand/side the player picked for hand items and balloons: 1 left, 2 right, 0 = the item's default. */
 	public final int side;
+	private final String key;
 
 	public CosmeticRef(String id, String modelHash, String textureHash) {
 		this(id, modelHash, textureHash, null);
@@ -24,6 +25,7 @@ public final class CosmeticRef {
 		this.modelHash = modelHash;
 		this.textureHash = textureHash;
 		this.slot = slot;
+		this.key = modelHash + "/" + textureHash; // looked up for every worn cosmetic on every frame: built once
 	}
 
 	/** Wings, jetpacks and backpacks take the cape's place on the player's back. */
@@ -33,7 +35,7 @@ public final class CosmeticRef {
 
 	/** Model + texture: what one baked render asset is keyed by. */
 	public String key() {
-		return modelHash + "/" + textureHash;
+		return key;
 	}
 
 	@Override
@@ -42,11 +44,11 @@ public final class CosmeticRef {
 			return false;
 		}
 		CosmeticRef o = (CosmeticRef) other;
-		return key().equals(o.key()) && side == o.side && (id == null ? o.id == null : id.equals(o.id));
+		return key.equals(o.key) && side == o.side && (id == null ? o.id == null : id.equals(o.id));
 	}
 
 	@Override
 	public int hashCode() {
-		return key().hashCode();
+		return key.hashCode();
 	}
 }
