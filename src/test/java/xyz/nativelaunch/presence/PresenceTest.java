@@ -81,6 +81,41 @@ class PresenceTest {
 		assertEquals("logo", lan.getAsJsonObject("assets").get("large_image").getAsString());
 	}
 
+	@SuppressWarnings("unchecked")
+	private static void host(PresenceService service, String url) throws Exception {
+		java.lang.reflect.Field f = PresenceService.class.getDeclaredField("iconUrls");
+		f.setAccessible(true);
+		((java.util.Map<String, String>) f.get(service)).put("default-minecraft", url);
+	}
+
+	@Test
+	void neverShowsTheNativeLogoTwiceAndHasNoButton(@TempDir Path game) throws Exception {
+		PresenceService service = new PresenceService(game, "https://api.playnative.net", null, true);
+		for (GameProbe.Kind kind : GameProbe.Kind.values()) {
+			GameProbe.Snapshot s = new GameProbe.Snapshot();
+			s.kind = kind;
+			s.address = "mc.hypixel.net";
+			// the Minecraft picture is not hosted yet: the Native logo is the one big picture and there is no badge
+			JsonObject a = service.activity(s);
+			assertFalse(a.has("buttons"), "no Get Native Client button: " + kind);
+			JsonObject assets = a.getAsJsonObject("assets");
+			assertEquals("logo", assets.get("large_image").getAsString());
+			assertFalse(assets.has("small_image"), "one logo only: " + kind);
+		}
+		host(service, "https://api.playnative.net/v1/mod/presence-icon/abc.png");
+		for (GameProbe.Kind kind : GameProbe.Kind.values()) {
+			GameProbe.Snapshot s = new GameProbe.Snapshot();
+			s.kind = kind;
+			s.address = "mc.hypixel.net";
+			JsonObject a = service.activity(s);
+			assertFalse(a.has("buttons"));
+			JsonObject assets = a.getAsJsonObject("assets");
+			// the Minecraft picture is big, the Native logo is the small badge
+			assertEquals("https://api.playnative.net/v1/mod/presence-icon/abc.png", assets.get("large_image").getAsString());
+			assertEquals("logo", assets.get("small_image").getAsString());
+		}
+	}
+
 	@Test
 	void buildsSingleplayerActivity(@TempDir Path game) {
 		PresenceService service = new PresenceService(game, "https://api.playnative.net", null, true);
