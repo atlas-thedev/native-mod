@@ -47,6 +47,9 @@ public final class RelayClient {
 	/** Friend requests (the Requests tab). */
 	public volatile List<Model.Request> received = Collections.emptyList(), sent = Collections.emptyList();
 	public volatile boolean requestsLoaded;
+	/** Players you blocked (the Blocked tab). */
+	public volatile List<Model.Person> blocked = Collections.emptyList();
+	public volatile boolean blockedLoaded;
 	/** "Add friend" search results, and the query they belong to. */
 	public volatile List<Model.Person> found = Collections.emptyList();
 	public volatile String foundFor = "";
@@ -193,6 +196,12 @@ public final class RelayClient {
 		pool.execute(this::loadFriends);
 		pool.execute(this::loadGroups);
 		pool.execute(this::loadRequests);
+		pool.execute(this::loadBlocked);
+	}
+
+	/** The conversation if it was ever opened (null otherwise): the list reads its last message. */
+	public Model.Conversation peek(String key) {
+		return conversations.get(key);
 	}
 
 	/** Opens a conversation: loads the latest page and marks it read. */
@@ -666,6 +675,68 @@ public final class RelayClient {
 		}
 	}
 
+	/** A toast for a friend request someone sent you, or one they accepted. */
+	private void requestNotice(String action, String actor, String actorName, String receiver) {
+		if (actor == null || actor.equals(meId) || actorName == null) {
+			return;
+		}
+		if ("sent".equals(action) && receiver != null && receiver.equals(meId)) {
+			String skin = null;
+			for (Model.Request r : received) {
+				if (actor.equals(r.userId)) {
+					skin = r.skin;
+				}
+			}
+			notices.add(new Model.Notice(REQUESTS_KEY, actorName, "Sent you a friend request", actorName, skin));
+		} else if ("accepted".equals(action)) {
+			Model.Friend f = friend(actor);
+			notices.add(new Model.Notice("dm:" + actor, f == null ? actorName : f.display(), "Accepted your friend request", actorName, f == null ? null : f.skin));
+		}
+	}
+
+	/** Toast key that opens Relay on the Pending friend requests. */
+	public static final String REQUESTS_KEY = "home:pending";
+
+	public void loadBlocked() {
+		if (ticket() == null) {
+			return;
+		}
+		try {
+			JsonArray arr = getJson("/v1/social/blocked").getAsJsonArray("blocked");
+			List<Model.Person> out = new ArrayList<Model.Person>();
+			if (arr != null) {
+				for (JsonElement e : arr) {
+					JsonObject u = e.getAsJsonObject();
+					String id = str(u, "id") != null ? str(u, "id") : str(u, "userId");
+					out.add(new Model.Person(id, str(u, "name") != null ? str(u, "name") : str(u, "username"), hashOf(str(u, "skinUrl"))));
+				}
+			}
+			blocked = Collections.unmodifiableList(out);
+			blockedLoaded = true;
+		} catch (Exception e) {
+			Log.debug("Relay blocked list failed: {}", e.toString());
+		}
+	}
+
+	public void unblock(final String userId) {
+		if (userId == null || ticket() == null) {
+			return;
+		}
+		List<Model.Person> next = new ArrayList<Model.Person>(blocked);
+		next.removeIf(b -> userId.equals(b.id));
+		blocked = Collections.unmodifiableList(next);
+		pool.execute(() -> {
+			try {
+				JsonObject body = new JsonObject();
+				body.addProperty("targetId", userId);
+				postJson("/v1/social/unblock", body);
+			} catch (Exception e) {
+				note(errorText(e, "Could not unblock that player."), true);
+			}
+			loadBlocked();
+		});
+	}
+
 	private static List<Model.Request> requestList(JsonArray arr) {
 		List<Model.Request> out = new ArrayList<Model.Request>();
 		if (arr != null) {
@@ -793,6 +864,7 @@ public final class RelayClient {
 			}
 			loadFriends();
 			loadRequests();
+			loadBlocked();
 		});
 	}
 
@@ -1147,6 +1219,7 @@ public final class RelayClient {
 				pool.execute(this::loadFriends);
 				pool.execute(this::loadGroups);
 				pool.execute(this::loadRequests);
+				pool.execute(this::loadBlocked);
 			}
 			long started = System.currentTimeMillis();
 			try {
@@ -1231,9 +1304,17 @@ public final class RelayClient {
 				break;
 			}
 			case "friends:changed":
-			case "request:changed":
-				pool.execute(this::loadFriends);
-				pool.execute(this::loadRequests);
+			case "request:changed": {
+				final String action = str(p, "action"), actor = str(p, "actorId"), actorName = str(p, "actorName"), receiver = str(p, "receiverId");
+				pool.execute(() -> {
+					loadRequests();
+					loadFriends();
+					requestNotice(action, actor, actorName, receiver);
+				});
+				break;
+			}
+			case "blocks:changed":
+				pool.execute(this::loadBlocked);
 				break;
 			case "group:created":
 			case "group:updated":

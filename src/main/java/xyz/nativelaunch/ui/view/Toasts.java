@@ -86,7 +86,7 @@ public final class Toasts {
 			String body = n.body == null ? "" : n.body.replace('\n', ' ');
 			c.text(Fonts.REGULAR, 12, c.ellipsize(Fonts.REGULAR, 12, body, tw), tx, y + 27, Theme.TEXT);
 			if (i == 0) {
-				c.text(Fonts.REGULAR, 10, hint, tx, y + 47, Theme.TEXT_MUTED);
+				c.text(Fonts.REGULAR, 10, RelayClient.REQUESTS_KEY.equals(n.convKey) ? hint.replace("open chat", "respond") : hint, tx, y + 47, Theme.TEXT_MUTED);
 			}
 			// remaining-time bar
 			float left = Math.max(0f, 1f - age / (float) LIFE);

@@ -32,9 +32,12 @@ import java.util.Map;
 public final class RelayView {
 	private static volatile String pendingSelect;
 	private String selected;
-	private int tab; // 0 friends, 1 groups, 2 requests
+	private int tab; // 0 chats, 1 groups
+	/** Friends home (no chat open): 0 online, 1 all, 2 pending, 3 blocked, 4 add friend. */
+	private int homeTab;
+	private final java.util.Set<String> collapsed = new java.util.HashSet<String>();
 	private final TextField addField = new TextField("relay:add");
-	private final Scroll requestScroll = new Scroll();
+	private final Scroll homeScroll = new Scroll();
 	private final Scroll profileScroll = new Scroll();
 	/** The friend profile panel on the right of a chat. */
 	private boolean profileOpen = true;
@@ -96,11 +99,14 @@ public final class RelayView {
 	private int gifSerial;
 	private final Map<String, Object[]> wrapCache = new HashMap<String, Object[]>();
 	private final SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.ROOT);
+	private final SimpleDateFormat shortDay = new SimpleDateFormat("d MMM", Locale.ENGLISH);
 	private final SimpleDateFormat dayFmt = new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH);
 
 	public RelayView() {
 		input.maxLength = 2000;
 		input.bare = true;
+		search.bare = true;
+		addField.bare = true;
 		chatScrollsInit();
 	}
 
@@ -204,7 +210,7 @@ public final class RelayView {
 		float sw = Math.min(300, pw * 0.34f);
 		if (SessionLock.locked()) {
 			// Not signed in / sign-in expired: lock the whole page instead of showing stale chats.
-			c.text(Fonts.BOLD, 19, "Relay", px + 16, py + 18, Theme.TEXT_STRONG);
+			wordmark(c, px + 18, py + 19);
 			SessionLock.draw(ui, "relay:lock", px, py + 48, pw, ph - 48);
 		} else {
 			sidebar(ui, client, px, py, sw, ph, screen);
@@ -237,6 +243,10 @@ public final class RelayView {
 		if (key == null) {
 			return;
 		}
+		if (key.startsWith("home:")) {
+			goHome(client, RelayClient.REQUESTS_KEY.equals(key) ? 2 : 0);
+			return;
+		}
 		if (selected != null) {
 			drafts.put(selected, input.value());
 		}
@@ -256,51 +266,91 @@ public final class RelayView {
 		tab = key.startsWith("g:") ? 1 : 0;
 	}
 
-	// ── left column ───────────────────────────────────────────────────────
+	// ── left column: the launcher's inbox ─────────────────────────────────
+
+	private void goHome(RelayClient client, int homeTab) {
+		if (selected != null) {
+			drafts.put(selected, input.value());
+		}
+		selected = null;
+		this.homeTab = homeTab;
+		replyTo = null;
+		editingId = null;
+		reactFor = null;
+		jumpTo = null;
+		staged = null;
+		gifOpen = false;
+		shotsOpen = false;
+		armed = null;
+		if (client != null) {
+			client.viewing = null;
+		}
+	}
+
+	/** "RELAY" in the launcher's tracked wordmark; returns the x after the last letter. */
+	private static float wordmark(Canvas c, float x, float y) {
+		String s = "RELAY";
+		for (int i = 0; i < s.length(); i++) {
+			String ch = s.substring(i, i + 1);
+			c.text(Fonts.BOLD, 17, ch, x, y, Theme.TEXT_STRONG);
+			x += c.textWidth(Fonts.BOLD, 17, ch) + (i < s.length() - 1 ? 2.4f : 0);
+		}
+		return x;
+	}
 
 	private void sidebar(Ui ui, RelayClient client, float x, float y, float w, float h, Object screen) {
 		Canvas c = ui.c;
 		float pad = 16;
-		c.text(Fonts.BOLD, 19, "Relay", x + pad, y + 18, Theme.TEXT_STRONG);
-		// connection pill: only while Relay is not connected
-		if (client != null && client.state != RelayClient.State.ONLINE) {
-			RelayClient.State st = client.state;
-			int dot = st == RelayClient.State.CONNECTING ? Theme.IDLE : 0xFF71717A;
-			String label = st == RelayClient.State.CONNECTING ? "Connecting" : "Offline";
-			float tx = x + pad + c.textWidth(Fonts.BOLD, 19, "Relay") + 10;
-			float lw = c.textWidth(Fonts.SEMIBOLD, 10, label) + 22;
-			float ly = y + 18 + c.lineHeight(Fonts.BOLD, 19) / 2 - 10;
-			c.round(tx, ly, lw, 20, 10, Theme.alpha(dot, 0.14f));
-			c.circle(tx + 9, ly + 10, 3, dot);
-			c.text(Fonts.SEMIBOLD, 10, label, tx + 16, ly + (20 - c.lineHeight(Fonts.SEMIBOLD, 10)) / 2, Theme.mix(dot, 0xFFFFFFFF, 0.35f));
+		float wx = wordmark(c, x + pad + 2, y + 19);
+		float dy = y + 19 + c.lineHeight(Fonts.BOLD, 17) / 2;
+		RelayClient.State st = client == null ? RelayClient.State.OFFLINE : client.state;
+		int live = st == RelayClient.State.ONLINE ? Theme.ONLINE : st == RelayClient.State.CONNECTING ? Theme.IDLE : 0xFF52525B;
+		c.circle(wx + 8, dy, 3, live);
+		if (ui.hover(wx + 2, dy - 8, 14, 16)) {
+			ui.tip(st == RelayClient.State.ONLINE ? "Realtime connected" : st == RelayClient.State.CONNECTING ? "Connecting" : "Offline");
 		}
-		if (ui.iconButton("relay:settings", x + w - pad - 30, y + 16, 30, Theme.I_SETTINGS, "Chat settings")) {
+		if (ui.iconButton("relay:settings", x + w - pad - 28, y + 15, 28, Theme.I_SETTINGS, "Chat settings")) {
 			settingsOpen = !settingsOpen;
 		}
-		float ty = y + 60;
-		// tabs
-		float tw = (w - pad * 2) / 3;
-		c.round(x + pad, ty, w - pad * 2, 34, 10, Theme.SUBTLE);
+		float hbx = x + w - pad - 28 - 32;
+		if (selected == null) {
+			c.round(hbx, y + 15, 28, 28, 7, Theme.SUBTLE_HOVER);
+		}
+		if (ui.iconButton("relay:home", hbx, y + 15, 28, Theme.I_USERS, "Friends")) {
+			goHome(client, 0);
+		}
+		float ty = y + 56;
+		// search: icon + bare field in one box
+		float sf = ui.anim("relay:search#f", search.focused(ui), 14f);
+		c.round(x + pad, ty, w - pad * 2, 34, 10, Theme.mix(0xFF0B0C10, 0xFF0E1014, sf));
+		c.outline(x + pad, ty, w - pad * 2, 34, 10, 1, Theme.mix(Theme.HAIRLINE, 0x47FFFFFF, sf));
+		c.icon(Theme.I_SEARCH, 13, x + pad + 15, ty + 17, Theme.TEXT_MUTED);
+		search.draw(ui, x + pad + 18, ty, w - pad * 2 - 18, 34, "Search conversations", 12.5f);
+		ty += 46;
+		// Chats / Groups
+		float tw = (w - pad * 2) / 2;
+		c.round(x + pad, ty, w - pad * 2, 34, 10, 0xFF0C0D11);
+		c.outline(x + pad, ty, w - pad * 2, 34, 10, 1, Theme.HAIRLINE);
 		float tabPos = ui.anim("relay:tab", tab, 16f);
 		c.shadow(x + pad + 3 + tabPos * tw, ty + 4, tw - 6, 28, 8, 6, 0x66000000);
 		c.round(x + pad + 3 + tabPos * tw, ty + 3, tw - 6, 28, 8, 0xFF1F2027);
 		int fu = 0, gu = 0;
 		if (client != null) {
 			for (Model.Friend f : client.friends) {
-				fu += f.unread;
+				fu += ("dm:" + f.id).equals(client.viewing) ? 0 : f.unread;
 			}
 			for (Model.Group g : client.groups) {
-				gu += g.unread;
+				gu += ("g:" + g.id).equals(client.viewing) ? 0 : g.unread;
 			}
 		}
-		for (int i = 0; i < 3; i++) {
-			String label = i == 0 ? "Friends" : i == 1 ? "Groups" : "Requests";
-			int n = i == 0 ? fu : i == 1 ? gu : (client == null ? 0 : client.requests);
+		for (int i = 0; i < 2; i++) {
+			String label = i == 0 ? "Chats" : "Groups";
+			int n = i == 0 ? fu : gu;
 			float bx = x + pad + i * tw;
 			if (ui.clicked("relay:tab" + i, bx, ty, tw, 34)) {
 				tab = i;
 			}
-			float lw = c.textWidth(Fonts.SEMIBOLD, 12f, label) + (n > 0 ? 22 : 0);
+			float lw = c.textWidth(Fonts.SEMIBOLD, 12f, label) + (n > 0 ? 24 : 0);
 			int col = tab == i ? Theme.TEXT_STRONG : Theme.TEXT_MUTED;
 			c.text(Fonts.SEMIBOLD, 12f, label, bx + (tw - lw) / 2, ty + 17 - c.lineHeight(Fonts.SEMIBOLD, 12f) / 2, col);
 			if (n > 0) {
@@ -308,16 +358,8 @@ public final class RelayView {
 			}
 		}
 		ty += 46;
-		if (tab == 2) {
-			if (client == null || SessionLock.locked()) {
-				SessionLock.draw(ui, "relay:req:lock", x, ty, w, y + h - ty - 8);
-				return;
-			}
-			requestsPane(ui, client, x, ty, w, y + h - ty - 8);
-			return;
-		}
-		search.draw(ui, x + pad, ty, w - pad * 2, 36, tab == 0 ? "Search friends" : "Search groups", 12.5f);
-		ty += 46;
+		c.fill(x, ty - 1, w, 1, Theme.HAIRLINE);
+		ty += 8;
 		float listH = y + h - ty - 8;
 		if (client == null || SessionLock.locked()) {
 			SessionLock.draw(ui, "relay:list:lock", x, ty, w, listH);
@@ -326,68 +368,209 @@ public final class RelayView {
 		String q = search.value().trim().toLowerCase(Locale.ROOT);
 		float off = listScroll.begin(ui, x, ty, w, listH);
 		float ry = ty - off;
-		float rh = 54;
-		int shown = 0;
+		float rh = 52;
 		if (tab == 0) {
-			if (!client.friendsLoaded) {
-				skeletonRows(ui, x + 8, ty, w - 16, 7);
-			}
+			List<Model.Friend> pinned = new ArrayList<Model.Friend>(), direct = new ArrayList<Model.Friend>();
 			for (Model.Friend f : client.friends) {
-				if (!q.isEmpty() && !f.display().toLowerCase(Locale.ROOT).contains(q) && !f.name.toLowerCase(Locale.ROOT).contains(q)) {
+				String sn = snippet(client, "dm:" + f.id);
+				if (!q.isEmpty() && !f.display().toLowerCase(Locale.ROOT).contains(q) && !f.name.toLowerCase(Locale.ROOT).contains(q)
+						&& (sn == null || !sn.toLowerCase(Locale.ROOT).contains(q))) {
 					continue;
 				}
-				String key = "dm:" + f.id;
-				if (ry + rh >= ty && ry <= ty + listH) {
-					String sub = f.line();
-					rowTyping = !client.typing(key).isEmpty();
-					rowPinned = f.pinned;
-					rowDot = f.dot();
-					int unread = key.equals(client.viewing) ? 0 : f.unread;
-					if (row(ui, client, key, x + 8, ry, w - 16, rh, f.display(), f.name, f.skin, sub, unread, f.online ? 1 : 0)) {
-						select(key, client);
-						input.focus(ui);
+				(f.pinned ? pinned : direct).add(f);
+			}
+			if (!client.friendsLoaded) {
+				ry = section(ui, "direct", "Direct messages", 0, x + 8, ry, w - 16);
+				skeletonRows(ui, x + 8, ry, w - 16, 6);
+			} else if (client.friends.isEmpty()) {
+				emptyInbox(ui, client, x, ry, w, Math.min(listH, 260));
+			} else {
+				if (!pinned.isEmpty()) {
+					ry = section(ui, "pinned", "Pinned", pinned.size(), x + 8, ry, w - 16);
+					if (!collapsed.contains("pinned")) {
+						for (Model.Friend f : pinned) {
+							ry = friendRow(ui, client, f, x + 8, ry, w - 16, rh, ty, listH);
+						}
+					}
+					ry += 6;
+				}
+				ry = section(ui, "direct", "Direct messages", direct.size(), x + 8, ry, w - 16);
+				if (!collapsed.contains("direct")) {
+					if (direct.isEmpty()) {
+						c.text(Fonts.REGULAR, 11.5f, q.isEmpty() ? "No direct messages" : "No matching chats", x + 18, ry + 6, Theme.TEXT_MUTED);
+						ry += 30;
+					}
+					for (Model.Friend f : direct) {
+						ry = friendRow(ui, client, f, x + 8, ry, w - 16, rh, ty, listH);
 					}
 				}
-				ry += rh + 2;
-				shown++;
-			}
-			if (shown == 0 && client.friendsLoaded) {
-				TitleView.empty(c, x, ty, w, Math.min(listH, 220), Theme.I_USER_PLUS, q.isEmpty() ? "No friends yet" : "No matches", q.isEmpty() ? "Find players in the Requests tab and add them." : "Try another name.");
 			}
 		} else {
+			List<Model.Group> pinned = new ArrayList<Model.Group>(), rest = new ArrayList<Model.Group>();
 			for (Model.Group g : client.groups) {
 				if (!q.isEmpty() && (g.name == null || !g.name.toLowerCase(Locale.ROOT).contains(q))) {
 					continue;
 				}
-				String key = "g:" + g.id;
-				if (ry + rh >= ty && ry <= ty + listH) {
-					String sub = g.lastText == null ? g.members + " members" : (g.lastSender == null ? "" : g.lastSender + ": ") + (g.lastText.isEmpty() ? "Sent a picture" : g.lastText);
-					rowDot = 0;
-					rowTyping = !client.typing(key).isEmpty();
-					rowPinned = g.pinned;
-					int unread = key.equals(client.viewing) ? 0 : g.unread;
-					if (row(ui, client, key, x + 8, ry, w - 16, rh, g.name, g.name, null, sub, unread, -1)) {
-						select(key, client);
-						input.focus(ui);
-					}
-				}
-				ry += rh + 2;
-				shown++;
+				(g.pinned ? pinned : rest).add(g);
 			}
-			if (shown == 0) {
-				if (!client.groupsLoaded) {
-					skeletonRows(ui, x + 8, ty, w - 16, 7);
-				} else {
-					TitleView.empty(c, x, ty, w, Math.min(listH, 220), Theme.I_USERS, q.isEmpty() ? "No groups" : "No matches", q.isEmpty() ? "Create a group in the launcher and it shows up here." : "Try another name.");
+			if (!client.groupsLoaded) {
+				ry = section(ui, "groups", "Groups", 0, x + 8, ry, w - 16);
+				skeletonRows(ui, x + 8, ry, w - 16, 3);
+			} else {
+				if (!pinned.isEmpty()) {
+					ry = section(ui, "gpinned", "Pinned", pinned.size(), x + 8, ry, w - 16);
+					if (!collapsed.contains("gpinned")) {
+						for (Model.Group g : pinned) {
+							ry = groupRow(ui, client, g, x + 8, ry, w - 16, rh, ty, listH);
+						}
+					}
+					ry += 6;
+				}
+				ry = section(ui, "groups", "Groups", rest.size(), x + 8, ry, w - 16);
+				if (!collapsed.contains("groups")) {
+					if (rest.isEmpty()) {
+						c.text(Fonts.REGULAR, 11.5f, q.isEmpty() ? "No groups yet. Create one in the launcher." : "No matching groups", x + 18, ry + 6, Theme.TEXT_MUTED);
+						ry += 30;
+					}
+					for (Model.Group g : rest) {
+						ry = groupRow(ui, client, g, x + 8, ry, w - 16, rh, ty, listH);
+					}
 				}
 			}
 		}
 		listScroll.end(ui, ry + off - ty + 8);
 	}
 
-	private int rowDot;
+	/** Collapsible "v Direct messages ........ 3" header. */
+	private float section(Ui ui, String id, String label, int count, float x, float y, float w) {
+		Canvas c = ui.c;
+		float sh = 26;
+		boolean over = ui.hover(x, y, w, sh);
+		if (ui.clicked("relay:sec:" + id, x, y, w, sh)) {
+			if (!collapsed.remove(id)) {
+				collapsed.add(id);
+			}
+		}
+		int col = over ? Theme.TEXT_SECONDARY : Theme.TEXT_MUTED;
+		caret(c, x + 12, y + sh / 2, !collapsed.contains(id), col);
+		c.text(Fonts.SEMIBOLD, 12, label, x + 22, y + (sh - c.lineHeight(Fonts.SEMIBOLD, 12)) / 2, col);
+		if (count > 0) {
+			String n = String.valueOf(count);
+			c.text(Fonts.REGULAR, 11, n, x + w - 8 - c.textWidth(Fonts.REGULAR, 11, n), y + (sh - c.lineHeight(Fonts.REGULAR, 11)) / 2, Theme.alpha(Theme.TEXT_MUTED, 0.75f));
+		}
+		return y + sh + 2;
+	}
 
-	/** presence: 1 online, 0 offline, -1 group (no dot) */
+	/** A small solid caret (down when open, right when collapsed). */
+	private static void caret(Canvas c, float cx, float cy, boolean open, int col) {
+		for (int i = 0; i < 4; i++) {
+			float len = 7 - i * 2;
+			if (open) {
+				c.fill(cx - len / 2, cy - 2 + i, len, 1, col);
+			} else {
+				c.fill(cx - 2 + i, cy - len / 2, 1, len, col);
+			}
+		}
+	}
+
+	private void emptyInbox(Ui ui, RelayClient client, float x, float y, float w, float h) {
+		Canvas c = ui.c;
+		TitleView.empty(c, x, y - 20, w, h, Theme.I_USERS, "Nothing here yet", "Add friends by their Native or Minecraft username.");
+		float bw = 128;
+		if (ui.button("relay:empty:add", x + (w - bw) / 2, y + h - 34, bw, 30, "Add friend", Theme.I_USER_PLUS, Ui.BTN_GLASS)) {
+			goHome(client, 4);
+			addField.focus(ui);
+			ui.focusClaimed = true;
+		}
+	}
+
+	/** The last message of a chat that was opened before ("You: hi", "Picture"), null when unknown. */
+	private String snippet(RelayClient client, String key) {
+		Model.Conversation cv = client.peek(key);
+		List<Model.Message> ms = cv == null ? null : cv.messages;
+		if (ms == null || ms.isEmpty()) {
+			return null;
+		}
+		Model.Message m = ms.get(ms.size() - 1);
+		if (m.createdAt <= client.clearedAt(key)) {
+			return null;
+		}
+		String body;
+		boolean media = m.mediaUrl != null || m.localKey != null;
+		if (m.deleted) {
+			body = "Message deleted";
+		} else if (media && (m.content == null || m.content.trim().isEmpty() || m.content.startsWith("["))) {
+			body = m.mediaName != null && !m.mediaName.isEmpty() ? m.mediaName : "Picture";
+		} else {
+			body = m.content == null ? "" : m.content.replace('\n', ' ');
+		}
+		return (eq(m.senderId, client.meId) ? "You: " : "") + body;
+	}
+
+	private Model.Message lastOf(RelayClient client, String key) {
+		Model.Conversation cv = client.peek(key);
+		List<Model.Message> ms = cv == null ? null : cv.messages;
+		return ms == null || ms.isEmpty() ? null : ms.get(ms.size() - 1);
+	}
+
+	/** "18:44" today, "Yesterday", else "3 Jun". */
+	private String shortTime(long t) {
+		if (t <= 0) {
+			return "";
+		}
+		long now = System.currentTimeMillis();
+		if (sameDay(t, now)) {
+			return timeFmt.format(new Date(t));
+		}
+		if (sameDay(t, now - 86_400_000L)) {
+			return "Yesterday";
+		}
+		return shortDay.format(new Date(t));
+	}
+
+	private float friendRow(Ui ui, RelayClient client, Model.Friend f, float x, float ry, float w, float rh, float top, float listH) {
+		String key = "dm:" + f.id;
+		if (ry + rh >= top && ry <= top + listH) {
+			String sn = snippet(client, key);
+			Model.Message last = lastOf(client, key);
+			rowTyping = !client.typing(key).isEmpty();
+			rowPinned = f.pinned;
+			rowDot = f.dot();
+			rowTime = shortTime(last != null ? Math.max(last.createdAt, f.lastMsg) : f.lastMsg);
+			rowCheck = sn != null && last != null && eq(last.senderId, client.meId) && !last.pending && !last.failed && !last.deleted ? (last.read ? 2 : 1) : 0;
+			int unread = key.equals(client.viewing) ? 0 : f.unread;
+			String sub = sn != null ? sn : f.lastMsg > 0 ? f.line() : "No messages";
+			if (row(ui, client, key, x, ry, w, rh, f.display(), f.name, f.skin, sub, unread, f.online ? 1 : 0)) {
+				select(key, client);
+				input.focus(ui);
+			}
+		}
+		return ry + rh + 2;
+	}
+
+	private float groupRow(Ui ui, RelayClient client, Model.Group g, float x, float ry, float w, float rh, float top, float listH) {
+		String key = "g:" + g.id;
+		if (ry + rh >= top && ry <= top + listH) {
+			String who = g.lastSender == null ? "" : (g.lastSender.equals(client.meName) ? "You" : g.lastSender) + ": ";
+			String sub = g.lastText == null ? g.members + " members" : who + (g.lastText.isEmpty() ? "Picture" : g.lastText);
+			rowDot = 0;
+			rowTyping = !client.typing(key).isEmpty();
+			rowPinned = g.pinned;
+			rowTime = shortTime(g.lastAt);
+			rowCheck = 0;
+			int unread = key.equals(client.viewing) ? 0 : g.unread;
+			if (row(ui, client, key, x, ry, w, rh, g.name, g.name, null, sub, unread, -1)) {
+				select(key, client);
+				input.focus(ui);
+			}
+		}
+		return ry + rh + 2;
+	}
+
+	private int rowDot, rowCheck;
+	private String rowTime;
+
+	/** One inbox row like the launcher's ThreadRow. presence: 1 online, 0 offline, -1 group (no dot) */
 	private boolean row(Ui ui, RelayClient client, String key, float x, float y, float w, float h, String title, String avatarName, String skin, String sub, int unread, int presence) {
 		Canvas c = ui.c;
 		boolean sel = key.equals(selected);
@@ -401,39 +584,49 @@ public final class RelayView {
 		}
 		float hv = ui.anim("row:" + key, over, 14f);
 		float sv = ui.anim("rowsel:" + key, sel, 14f);
-		c.round(x, y, w, h, 12, Theme.mix(Theme.alpha(Theme.SUBTLE_HOVER, hv * 0.8f), 0xFF17181E, sv));
+		c.round(x, y, w, h, 10, Theme.mix(Theme.alpha(0x0DFFFFFF, hv), 0x10FFFFFF, sv));
 		if (sv > 0.01f) {
-			c.outline(x, y, w, h, 12, 1, Theme.alpha(Theme.HAIRLINE_STRONG, sv));
-			c.round(x - 4, y + (h - 22 * sv) / 2, 3, 22 * sv, 1.5f, Theme.alpha(Theme.WHITE, sv));
+			c.outline(x, y, w, h, 10, 1, Theme.alpha(Theme.HAIRLINE_STRONG, sv));
+			c.round(x, y + 8 + (h - 16) * (1 - sv) / 2, 2, (h - 16) * sv, 1, Theme.alpha(Theme.WHITE, sv));
 		}
 		float av = 36;
-		float ax = x + 9, ay = y + (h - av) / 2;
+		float ax = x + 10, ay = y + (h - av) / 2;
+		int ring = sel ? 0xFF15161A : 0xFF07080B;
 		if (presence == -1) {
-			c.round(ax, ay, av, av, 10, Theme.mix(Theme.nameColor(title), 0xFF000000, 0.45f));
+			c.round(ax, ay, av, av, 8, Theme.mix(Theme.nameColor(title), 0xFF000000, 0.45f));
 			c.icon(Theme.I_HASH, 17, ax + av / 2, ay + av / 2, 0xFFFFFFFF);
 		} else {
-			c.pushAlpha(presence == 1 ? 1f : 0.55f);
-			Avatars.draw(c, client.api(), avatarName, skin, ax, ay, av, 10);
-			c.popAlpha();
-			c.circle(ax + av - 2, ay + av - 2, 6, sel ? 0xFF16171C : 0xFF08090C);
-			c.circle(ax + av - 2, ay + av - 2, 4, rowDot != 0 ? rowDot : (presence == 1 ? Theme.ONLINE : 0xFF52525B));
+			Avatars.draw(c, client.api(), avatarName, skin, ax, ay, av, 7);
+			c.circle(ax + av - 1, ay + av - 1, 5.5f, ring);
+			c.circle(ax + av - 1, ay + av - 1, 3.5f, rowDot != 0 ? rowDot : (presence == 1 ? Theme.ONLINE : 0xFF52525B));
 		}
-		float tx = ax + av + 11;
-		float maxW = x + w - tx - 10 - (unread > 0 ? 28 : 0);
-		float titleW = maxW - (rowPinned ? 18 : 0);
+		float tx = ax + av + 10;
+		float right = x + w - 10;
+		float timeW = rowTime == null || rowTime.isEmpty() ? 0 : c.textWidth(Fonts.REGULAR, 10, rowTime);
+		float topY = y + 9;
+		float titleW = right - tx - timeW - 8 - (rowPinned ? 16 : 0);
 		String shownTitle = c.ellipsize(Fonts.SEMIBOLD, 13, title, titleW);
-		c.text(Fonts.SEMIBOLD, 13, shownTitle, tx, y + 9, presence == 0 ? Theme.TEXT_SECONDARY : Theme.TEXT_STRONG);
+		c.text(Fonts.SEMIBOLD, 13, shownTitle, tx, topY, sel ? Theme.TEXT_STRONG : Theme.mix(Theme.TEXT, Theme.TEXT_STRONG, hv));
 		if (rowPinned) {
-			c.icon(Theme.I_MAP_PIN, 11, tx + c.textWidth(Fonts.SEMIBOLD, 13, shownTitle) + 11, y + 9 + c.lineHeight(Fonts.SEMIBOLD, 13) / 2, Theme.TEXT_MUTED);
+			c.icon(Theme.I_MAP_PIN, 10, tx + c.textWidth(Fonts.SEMIBOLD, 13, shownTitle) + 10, topY + c.lineHeight(Fonts.SEMIBOLD, 13) / 2, Theme.TEXT_MUTED);
 		}
+		if (timeW > 0) {
+			c.text(Fonts.REGULAR, 10, rowTime, right - timeW, topY + 2, unread > 0 ? Theme.TEXT_STRONG : Theme.TEXT_MUTED);
+		}
+		float by = y + 28;
+		float subW = right - tx - (unread > 0 ? 26 : 0) - (rowCheck > 0 ? 16 : 0);
 		if (rowTyping) {
-			float tw2 = c.text(Fonts.MEDIUM, 11, "typing", tx, y + 29, Theme.ONLINE);
-			ui.dots(tx + tw2 + 14, y + 29 + c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.ONLINE);
+			float tw2 = c.text(Fonts.MEDIUM, 11, "typing", tx, by, Theme.ONLINE);
+			ui.dots(tx + tw2 + 14, by + c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.ONLINE);
 		} else {
-			c.text(Fonts.REGULAR, 11, c.ellipsize(Fonts.REGULAR, 11, sub, maxW), tx, y + 29, unread > 0 ? Theme.TEXT : Theme.TEXT_MUTED);
+			String s = c.ellipsize(Fonts.REGULAR, 11, sub, subW);
+			float sw2 = c.text(Fonts.REGULAR, 11, s, tx, by, unread > 0 ? Theme.TEXT : Theme.TEXT_MUTED);
+			if (rowCheck > 0) {
+				c.icon(rowCheck == 2 ? Theme.I_CHECKS : Theme.I_CHECK, 11, tx + sw2 + 9, by + c.lineHeight(Fonts.REGULAR, 11) / 2, rowCheck == 2 ? 0xFF60A5FA : Theme.TEXT_MUTED);
+			}
 		}
 		if (unread > 0) {
-			TitleView.badge(c, x + w - 10, y + h / 2, unread);
+			TitleView.badge(c, right, by + c.lineHeight(Fonts.REGULAR, 11) / 2, unread);
 		}
 		return click;
 	}
@@ -450,8 +643,12 @@ public final class RelayView {
 				&& ui.iconButton("relay:profile", x + w - 46 - 38, y + 14, 32, Theme.I_USER, profileOpen ? "Hide profile" : "Show profile")) {
 			profileOpen = !profileOpen;
 		}
-		if (client == null || selected == null) {
+		if (client == null) {
 			TitleView.empty(c, x, y, w, h, Theme.I_MESSAGE, "Pick a chat", "Choose a friend or a group on the left. Press " + UiRuntime.keyName(UiRuntime.config().relayKey) + " in game to open Relay any time.");
+			return;
+		}
+		if (selected == null) {
+			friendsHome(ui, client, x, y, w, h, screen);
 			return;
 		}
 		Model.Conversation conv = client.conversation(selected);
@@ -1043,44 +1240,321 @@ public final class RelayView {
 		}
 	}
 
-	// ── requests tab ──────────────────────────────────────────────────────
+	// ── friends home: the launcher's FriendsHome (Online / All / Pending / Blocked / Add Friend) ──
 
-	private void requestsPane(Ui ui, RelayClient client, float x, float y, float w, float h) {
+	private static final String[] HOME_TABS = {"Online", "All", "Pending", "Blocked"};
+
+	private void friendsHome(Ui ui, RelayClient client, float x, float y, float w, float h, Object screen) {
 		Canvas c = ui.c;
-		float pad = 16;
-		addField.maxLength = 16;
-		boolean enter = addField.draw(ui, x + pad, y, w - pad * 2 - 42, 36, "Add by Native name", 12.5f);
-		String query = addField.value().trim();
-		boolean send = enter;
-		if (ui.iconButton("relay:add:send", x + w - pad - 34, y + 2, 32, Theme.I_USER_PLUS, "Send friend request")) {
-			send = true;
+		float barH = 58;
+		List<Model.Friend> online = new ArrayList<Model.Friend>();
+		for (Model.Friend f : client.friends) {
+			if (f.online) {
+				online.add(f);
+			}
 		}
-		if (send && !query.isEmpty()) {
+		int pending = client.received.size() + client.sent.size();
+		int[] counts = {online.size(), client.friends.size(), pending, client.blocked.size()};
+		// right side of the bar: tabs, divider, Add Friend (the close button sits after it)
+		float right = x + w - 58;
+		String al = "Add Friend";
+		float aw = c.textWidth(Fonts.SEMIBOLD, 12.5f, al) + 44;
+		float tabsW = 0;
+		float[] tws = new float[4];
+		for (int i = 0; i < 4; i++) {
+			tws[i] = c.textWidth(Fonts.SEMIBOLD, 13, HOME_TABS[i]) + 22 + countW(c, i, counts[i]);
+			tabsW += tws[i] + 4;
+		}
+		float ax = right - aw;
+		float tx0 = ax - 25 - tabsW;
+		boolean brand = tx0 > x + 130;
+		if (brand) {
+			c.icon(Theme.I_USERS, 17, x + 32, y + barH / 2, Theme.TEXT_MUTED);
+			c.text(Fonts.BOLD, 14, "Friends", x + 48, y + (barH - c.lineHeight(Fonts.BOLD, 14)) / 2, Theme.TEXT_STRONG);
+		}
+		float tx = Math.max(x + 12, tx0);
+		for (int i = 0; i < 4; i++) {
+			float bw = tws[i], bh = 28, by = y + (barH - bh) / 2;
+			boolean on = homeTab == i;
+			boolean over = ui.hover(tx, by, bw, bh);
+			float hv = ui.anim("relay:home:tab" + i, over || on, 16f);
+			c.round(tx, by, bw, bh, 14, Theme.alpha(0xFFFFFFFF, on ? 0.1f : 0.05f * hv));
+			int col = on ? Theme.TEXT_STRONG : Theme.mix(Theme.TEXT_SECONDARY, 0xFFDDDDDD, hv);
+			float lw = c.text(Fonts.SEMIBOLD, 13, HOME_TABS[i], tx + 11, by + (bh - c.lineHeight(Fonts.SEMIBOLD, 13)) / 2, col);
+			if (i == 2) {
+				if (counts[i] > 0) {
+					TitleView.badge(c, tx + 11 + lw + 6 + countW(c, i, counts[i]) - 6, by + bh / 2, counts[i]);
+				}
+			} else {
+				String n = String.valueOf(counts[i]);
+				c.text(Fonts.BOLD, 11, n, tx + 11 + lw + 6, by + (bh - c.lineHeight(Fonts.BOLD, 11)) / 2, col);
+			}
+			if (over) {
+				ui.cursorHand = true;
+			}
+			if (ui.clicked("relay:home:tab" + i, tx, by, bw, bh)) {
+				homeTab = i;
+				armed = null;
+			}
+			tx += bw + 4;
+		}
+		c.fill(ax - 13, y + barH / 2 - 9, 1, 18, Theme.HAIRLINE_STRONG);
+		{
+			float bh = 30, by = y + (barH - bh) / 2;
+			boolean on = homeTab == 4;
+			boolean over = ui.hover(ax, by, aw, bh);
+			float hv = ui.anim("relay:home:add", over, 16f);
+			c.round(ax, by, aw, bh, 9, on ? 0xFFFFFFFF : Theme.alpha(0xFFFFFFFF, 0.06f + 0.06f * hv));
+			c.outline(ax, by, aw, bh, 9, 1, on ? 0xFFFFFFFF : Theme.alpha(0xFFFFFFFF, 0.12f + 0.1f * hv));
+			int col = on ? 0xFF000000 : Theme.TEXT_STRONG;
+			c.icon(Theme.I_USER_PLUS, 13, ax + 22, by + bh / 2, col);
+			c.text(Fonts.SEMIBOLD, 12.5f, al, ax + 34, by + (bh - c.lineHeight(Fonts.SEMIBOLD, 12.5f)) / 2, col);
+			if (over) {
+				ui.cursorHand = true;
+			}
+			if (ui.clicked("relay:home:add", ax, by, aw, bh)) {
+				homeTab = 4;
+				addField.focus(ui);
+				ui.focusClaimed = true;
+			}
+		}
+		c.fill(x, y + barH, w, 1, Theme.HAIRLINE);
+
+		// body
+		float px = x + 28, pw = w - 56;
+		float top = y + barH + 1;
+		float by = top + 18;
+		String note = client.notice;
+		if (note != null && System.currentTimeMillis() - client.noticeAt < 6000) {
+			int col = client.noticeError ? 0xFFF87171 : 0xFF23A55A;
+			float nh = 36;
+			c.round(px, by, pw, nh, 9, Theme.alpha(col, 0.12f));
+			c.outline(px, by, pw, nh, 9, 1, Theme.alpha(col, 0.35f));
+			c.text(Fonts.MEDIUM, 12, c.ellipsize(Fonts.MEDIUM, 12, note, pw - 60), px + 14, by + (nh - c.lineHeight(Fonts.MEDIUM, 12)) / 2, Theme.mix(col, 0xFFFFFFFF, 0.4f));
+			if (ui.iconButton("relay:home:note:x", px + pw - 30, by + 6, 24, Theme.I_X, "Dismiss")) {
+				client.notice = null;
+			}
+			by += nh + 14;
+		}
+		if (armed != null && ui.now - armedAt > 3000) {
+			armed = null;
+		}
+		float viewH = y + h - by;
+		float off = homeScroll.begin(ui, x, by, w, viewH);
+		float cy = by - off;
+		float vTop = by;
+		switch (homeTab) {
+			case 4:
+				cy = addPanel(ui, client, px, cy, pw);
+				break;
+			case 2:
+				cy = homeTitle(c, "PENDING \u2014 " + pending, px, cy);
+				if (pending == 0) {
+					homeEmpty(c, x, cy, w, viewH, Theme.I_USERS, client.requestsLoaded ? "There are no pending friend requests." : "Loading\u2026");
+				}
+				for (Model.Request r : client.received) {
+					if (visible(cy, 68, vTop, viewH)) {
+						personCard(ui, client, "req:" + r.id, px, cy, pw, r.name, r.skin, 0, "Incoming Friend Request", Theme.TEXT_MUTED);
+						float bcy = cy + 34;
+						if (circleBtn(ui, "relay:req:ok:" + r.id, px + pw - 18 - 17 - 42, bcy, Theme.I_CHECK, 0xFF23A55A, "Accept")) {
+							client.respond(r.id, "accept");
+						}
+						if (circleBtn(ui, "relay:req:no:" + r.id, px + pw - 18 - 17, bcy, Theme.I_X, 0xFFF23F43, "Decline")) {
+							client.respond(r.id, "decline");
+						}
+					}
+					cy += 76;
+				}
+				for (Model.Request r : client.sent) {
+					if (visible(cy, 68, vTop, viewH)) {
+						personCard(ui, client, "req:" + r.id, px, cy, pw, r.name, r.skin, 0, "Outgoing Friend Request", Theme.TEXT_MUTED);
+						if (ui.button("relay:req:cancel:" + r.id, px + pw - 18 - 92, cy + 20, 92, 28, "Cancel", Theme.I_X, Ui.BTN_GLASS)) {
+							client.respond(r.id, "cancel");
+						}
+					}
+					cy += 76;
+				}
+				break;
+			case 3:
+				cy = homeTitle(c, "BLOCKED USERS \u2014 " + client.blocked.size(), px, cy);
+				if (client.blocked.isEmpty()) {
+					homeEmpty(c, x, cy, w, viewH, Theme.I_BAN, client.blockedLoaded ? "You haven't blocked anyone." : "Loading\u2026");
+				}
+				for (Model.Person b : client.blocked) {
+					if (visible(cy, 68, vTop, viewH)) {
+						personCard(ui, client, "blk:" + b.id, px, cy, pw, b.name, b.skin, 0, "Blocked", Theme.TEXT_MUTED);
+						if (ui.button("relay:unblock:" + b.id, px + pw - 18 - 92, cy + 20, 92, 28, "Unblock", Theme.I_CHECK, Ui.BTN_GLASS)) {
+							client.unblock(b.id);
+						}
+					}
+					cy += 76;
+				}
+				break;
+			default: {
+				List<Model.Friend> list = homeTab == 0 ? online : client.friends;
+				cy = homeTitle(c, (homeTab == 0 ? "ONLINE \u2014 " : "ALL FRIENDS \u2014 ") + list.size(), px, cy);
+				if (list.isEmpty()) {
+					homeEmpty(c, x, cy, w, viewH, Theme.I_USERS, !client.friendsLoaded ? "Loading\u2026" : homeTab == 0 ? "No one is online right now." : "You have no friends yet.");
+				}
+				for (Model.Friend f : list) {
+					if (visible(cy, 68, vTop, viewH)) {
+						friendCard(ui, client, f, px, cy, pw, screen);
+					}
+					cy += 76;
+				}
+			}
+		}
+		homeScroll.end(ui, cy + off - by + 12);
+	}
+
+	private static float countW(Canvas c, int tab, int n) {
+		if (tab == 2) {
+			return n > 0 ? Math.max(18, c.textWidth(Fonts.BOLD, 10.5f, n > 99 ? "99+" : String.valueOf(n)) + 10) + 6 : 0;
+		}
+		return c.textWidth(Fonts.BOLD, 11, String.valueOf(n)) + 6;
+	}
+
+	private static float homeTitle(Canvas c, String label, float x, float y) {
+		c.text(Fonts.SEMIBOLD, 11.5f, label, x, y, Theme.TEXT_MUTED);
+		return y + 26;
+	}
+
+	/** Big muted icon + one line, like the launcher's empty friends list. */
+	private static void homeEmpty(Canvas c, float x, float y, float w, float h, int icon, String text) {
+		float cy = y + Math.min(110, Math.max(50, h * 0.22f));
+		c.icon(icon, 44, x + w / 2, cy, Theme.alpha(Theme.TEXT_MUTED, 0.85f));
+		float tw = c.textWidth(Fonts.MEDIUM, 13, text);
+		c.text(Fonts.MEDIUM, 13, text, x + (w - tw) / 2, cy + 38, Theme.TEXT_SECONDARY);
+	}
+
+	/** Card shell: avatar 40 (with presence when dot != 0), name, line. Buttons are drawn by the caller. */
+	private void personCard(Ui ui, RelayClient client, String id, float x, float y, float w, String name, String skin, int dot, String line, int lineColor) {
+		Canvas c = ui.c;
+		float ch = 68;
+		float hv = ui.anim("relay:card:" + id, ui.hover(x, y, w, ch), 16f);
+		c.round(x, y, w, ch, 12, Theme.alpha(0xFFFFFFFF, 0.025f + 0.02f * hv));
+		c.outline(x, y, w, ch, 12, 1, Theme.alpha(0xFFFFFFFF, 0.07f + 0.05f * hv));
+		float av = 40, ax = x + 16, ay = y + (ch - av) / 2;
+		Avatars.draw(c, client.api(), name == null ? "Steve" : name, skin, ax, ay, av, 8);
+		if (dot != 0) {
+			c.circle(ax + av - 1, ay + av - 1, 6.5f, 0xFF0B0C10);
+			c.circle(ax + av - 1, ay + av - 1, 4.5f, dot);
+		}
+		float tx = ax + av + 14, maxW = w - (tx - x) - 170;
+		c.text(Fonts.SEMIBOLD, 14, c.ellipsize(Fonts.SEMIBOLD, 14, name == null ? "Player" : name, maxW), tx, y + 15, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 12, c.ellipsize(Fonts.REGULAR, 12, line, maxW), tx, y + 36, lineColor);
+	}
+
+	private void friendCard(Ui ui, RelayClient client, Model.Friend f, float x, float y, float w, Object screen) {
+		Canvas c = ui.c;
+		float ch = 68;
+		boolean playing = f.online && f.serverAddress != null && !f.serverAddress.isEmpty();
+		float actionsW = 3 * 38 + (playing ? 70 : 0) + 18;
+		boolean click = ui.clicked("relay:fcard:" + f.id, x, y, w - actionsW, ch);
+		if (ui.hover(x, y, w - actionsW, ch)) {
+			ui.cursorHand = true;
+		}
+		int lc = !f.online ? Theme.TEXT_MUTED : playing || f.activity != null && !f.activity.isEmpty() ? Theme.mix(Theme.ONLINE, 0xFFFFFFFF, 0.35f) : Theme.TEXT_SECONDARY;
+		personCard(ui, client, "f:" + f.id, x, y, w, f.display(), f.skin, f.dot(), f.online ? f.line() : "Offline", lc);
+		// "@handle" after the name, like the launcher
+		float tx = x + 16 + 40 + 14;
+		float nw = c.textWidth(Fonts.SEMIBOLD, 14, c.ellipsize(Fonts.SEMIBOLD, 14, f.display(), w - (tx - x) - 170));
+		if (tx + nw + 8 + 60 < x + w - actionsW) {
+			c.text(Fonts.REGULAR, 12, c.ellipsize(Fonts.REGULAR, 12, "@" + f.name, x + w - actionsW - tx - nw - 8), tx + nw + 8, y + 17, Theme.TEXT_MUTED);
+		}
+		float bx = x + w - 18 - 34, bcy = y + ch / 2;
+		String bk = "block:" + f.id, rk = "remove:" + f.id;
+		if (armed != null && armed.equals(bk)) {
+			c.round(bx, bcy - 17, 34, 34, 17, Theme.alpha(Theme.DANGER, 0.25f));
+		}
+		if (ui.iconButton("relay:fcard:block:" + f.id, bx, bcy - 17, 34, Theme.I_BAN, bk.equals(armed) ? "Click again to block" : "Block")) {
+			if (bk.equals(armed)) {
+				armed = null;
+				client.block(f.id);
+			} else {
+				armed = bk;
+				armedAt = ui.now;
+			}
+		}
+		bx -= 38;
+		if (armed != null && armed.equals(rk)) {
+			c.round(bx, bcy - 17, 34, 34, 17, Theme.alpha(Theme.DANGER, 0.25f));
+		}
+		if (ui.iconButton("relay:fcard:remove:" + f.id, bx, bcy - 17, 34, Theme.I_TRASH, rk.equals(armed) ? "Click again to remove" : "Remove Friend")) {
+			if (rk.equals(armed)) {
+				armed = null;
+				client.removeFriend(f.id);
+			} else {
+				armed = rk;
+				armedAt = ui.now;
+			}
+		}
+		bx -= 38;
+		if (ui.iconButton("relay:fcard:msg:" + f.id, bx, bcy - 17, 34, Theme.I_MESSAGE, "Message")) {
+			click = true;
+		}
+		if (playing && ui.button("relay:fcard:join:" + f.id, bx - 70, bcy - 14, 64, 28, "Join", Theme.I_PLAY, Ui.BTN_PRIMARY)) {
+			UiRuntime.closeHost(screen);
+			UiRuntime.mc().connect(f.serverAddress, null);
+			return;
+		}
+		if (click) {
+			select("dm:" + f.id, client);
+			input.focus(ui);
+		}
+	}
+
+	/** Round tinted action (accept / decline). */
+	private static boolean circleBtn(Ui ui, String id, float cx, float cy, int icon, int color, String tip) {
+		Canvas c = ui.c;
+		boolean over = ui.hover(cx - 17, cy - 17, 34, 34);
+		float hv = ui.anim(id + "#h", over, 16f);
+		c.circle(cx, cy, 17, Theme.mix(Theme.alpha(color, 0.2f), color, hv));
+		c.icon(icon, 17, cx, cy, Theme.mix(color, 0xFFFFFFFF, hv));
+		if (over) {
+			ui.cursorHand = true;
+			ui.tip(tip);
+		}
+		return ui.clicked(id, cx - 17, cy - 17, 34, 34);
+	}
+
+	/** ADD FRIEND: exact-name request box, plus live player search under it. */
+	private float addPanel(Ui ui, RelayClient client, float x, float y, float w) {
+		Canvas c = ui.c;
+		c.text(Fonts.BOLD, 15, "ADD FRIEND", x, y, Theme.TEXT_STRONG);
+		c.text(Fonts.REGULAR, 12.5f, "You can add friends with their exact Native or Minecraft username.", x, y + 24, Theme.TEXT_SECONDARY);
+		float fy = y + 54, fh = 50;
+		boolean focused = addField.focused(ui);
+		float fa = ui.anim("relay:addbox#f", focused, 14f);
+		c.round(x, fy, w, fh, 10, 0x73000000);
+		c.outline(x, fy, w, fh, 10, 1, Theme.mix(0x1AFFFFFF, 0x59FFFFFF, fa));
+		String bl = "Send Friend Request";
+		float bw = c.textWidth(Fonts.BOLD, 12.5f, bl) + 32, bh = 32;
+		float bxx = x + w - bw - 9, byy = fy + (fh - bh) / 2;
+		addField.maxLength = 32;
+		boolean enter = addField.draw(ui, x + 4, fy, w - bw - 22, fh, "You can add friends with their username", 13.5f);
+		String query = addField.value().trim();
+		boolean can = !query.isEmpty();
+		boolean over = can && ui.hover(bxx, byy, bw, bh);
+		float hv = ui.anim("relay:addbtn", over, 16f);
+		c.round(bxx, byy, bw, bh, 9, can ? Theme.mix(0xFFFFFFFF, 0xE0FFFFFF, hv) : 0x40FFFFFF);
+		c.text(Fonts.BOLD, 12.5f, bl, bxx + 16, byy + (bh - c.lineHeight(Fonts.BOLD, 12.5f)) / 2, can ? 0xFF000000 : 0x99000000);
+		if (over) {
+			ui.cursorHand = true;
+		}
+		boolean click = ui.clicked("relay:addbtn", bxx, byy, bw, bh);
+		if ((enter || click) && can) {
 			client.sendRequest(query);
 			addField.set("");
 			query = "";
 		}
 		client.search(query);
-		float ty = y + 44;
-		String note = client.notice;
-		if (note != null && System.currentTimeMillis() - client.noticeAt < 6000) {
-			int col = client.noticeError ? 0xFFFCA5A5 : 0xFF86EFAC;
-			for (String line : xyz.nativelaunch.ui.TextLayout.wrap(c, Fonts.MEDIUM, 11.5f, note, w - pad * 2)) {
-				c.text(Fonts.MEDIUM, 11.5f, line, x + pad, ty, col);
-				ty += 16;
-			}
-			ty += 6;
-		}
-		float listH = y + h - ty;
-		float off = requestScroll.begin(ui, x, ty, w, listH);
-		float ry = ty - off;
-		float rh = 50;
-		// search results
+		float ry = fy + fh + 26;
 		if (query.length() >= 2) {
-			ry = heading(c, "Players", x + pad, ry);
+			ry = homeTitle(c, "PLAYERS", x, ry);
 			if (client.found.isEmpty()) {
-				c.text(Fonts.REGULAR, 11.5f, client.searching ? "Searching…" : "No Native player with that name.", x + pad, ry, Theme.TEXT_MUTED);
-				ry += 26;
+				c.text(Fonts.REGULAR, 12, client.searching ? "Searching\u2026" : "No Native player with that name.", x, ry, Theme.TEXT_MUTED);
+				ry += 28;
 			}
 			for (Model.Person p : client.found) {
 				boolean friend = false, pending = false;
@@ -1090,43 +1564,14 @@ public final class RelayView {
 				for (Model.Request r : client.sent) {
 					pending |= r.userId != null && r.userId.equals(p.id);
 				}
-				person(ui, client, x + 8, ry, w - 16, rh, p.name, p.skin, friend ? "Already friends" : pending ? "Request sent" : "Native player");
-				if (!friend && !pending && ui.button("relay:find:" + p.id, x + w - 16 - 70, ry + (rh - 28) / 2, 66, 28, "Add", Theme.I_PLUS, Ui.BTN_PRIMARY)) {
+				personCard(ui, client, "find:" + p.id, x, ry, w, p.name, p.skin, 0, friend ? "Already friends" : pending ? "Request sent" : "Native player", Theme.TEXT_MUTED);
+				if (!friend && !pending && ui.button("relay:find:" + p.id, x + w - 18 - 76, ry + 20, 76, 28, "Add", Theme.I_USER_PLUS, Ui.BTN_PRIMARY)) {
 					client.sendRequest(p.name);
 				}
-				ry += rh + 2;
-			}
-			ry += 8;
-		}
-		// received
-		ry = heading(c, "Received" + (client.received.isEmpty() ? "" : " · " + client.received.size()), x + pad, ry);
-		if (client.received.isEmpty()) {
-			c.text(Fonts.REGULAR, 11.5f, client.requestsLoaded ? "No requests waiting." : "Loading…", x + pad, ry, Theme.TEXT_MUTED);
-			ry += 26;
-		}
-		for (Model.Request r : client.received) {
-			person(ui, client, x + 8, ry, w - 16, rh, r.name, r.skin, "Wants to be friends");
-			if (ui.iconButton("relay:req:ok:" + r.id, x + w - 16 - 72, ry + (rh - 30) / 2, 30, Theme.I_CHECK, "Accept")) {
-				client.respond(r.id, "accept");
-			}
-			if (ui.iconButton("relay:req:no:" + r.id, x + w - 16 - 36, ry + (rh - 30) / 2, 30, Theme.I_X, "Decline")) {
-				client.respond(r.id, "decline");
-			}
-			ry += rh + 2;
-		}
-		ry += 8;
-		// sent
-		if (!client.sent.isEmpty()) {
-			ry = heading(c, "Sent · " + client.sent.size(), x + pad, ry);
-			for (Model.Request r : client.sent) {
-				person(ui, client, x + 8, ry, w - 16, rh, r.name, r.skin, "Waiting for them");
-				if (ui.button("relay:req:cancel:" + r.id, x + w - 16 - 78, ry + (rh - 28) / 2, 74, 28, "Cancel", Theme.I_X, Ui.BTN_GLASS)) {
-					client.respond(r.id, "cancel");
-				}
-				ry += rh + 2;
+				ry += 76;
 			}
 		}
-		requestScroll.end(ui, ry + off - ty + 8);
+		return ry;
 	}
 
 	private float heading(Canvas c, String label, float x, float y) {
