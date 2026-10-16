@@ -604,6 +604,23 @@ public final class MojangMc implements McBridge {
 	}
 
 
+	@Override
+	public boolean playerPos(String name, double[] out) {
+		net.minecraft.client.multiplayer.ClientLevel level = client().level;
+		if (level == null) {
+			return false;
+		}
+		for (net.minecraft.client.player.AbstractClientPlayer p : level.players()) {
+			if (name.equalsIgnoreCase(p.getName().getString())) {
+				out[0] = p.getX();
+				out[1] = p.getY() + 1.6;
+				out[2] = p.getZ();
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// ── player state for the status modules ──
 
 	private static void stack(net.minecraft.world.item.ItemStack st, xyz.nativelaunch.ui.mod.Game.Slot out) {

@@ -422,6 +422,32 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
+	public boolean playerPos(String name, double[] out) {
+		Object players = call(get(client(), "field_1687"), "method_18456"); // world.getPlayers()
+		if (!(players instanceof java.util.List)) {
+			return false;
+		}
+		for (Object p : (java.util.List<?>) players) {
+			Object profile = call(p, "method_7334"); // getGameProfile
+			Object n = call(profile, "getName");
+			if (!(n instanceof String)) {
+				n = call(profile, "name"); // authlib 7: record
+			}
+			if (n instanceof String && name.equalsIgnoreCase((String) n)) {
+				Object x = call(p, "method_23317"), y = call(p, "method_23318"), z = call(p, "method_23321");
+				if (!(x instanceof Double) || !(y instanceof Double) || !(z instanceof Double)) {
+					return false;
+				}
+				out[0] = (Double) x;
+				out[1] = (Double) y + 1.6;
+				out[2] = (Double) z;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	@Override
 	public int ping() {
 		Object p = localPlayer();
 		Object handler = call(client(), "method_1562");

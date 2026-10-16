@@ -79,6 +79,11 @@ public interface McBridge {
 		return false;
 	}
 
+	/** Fills x, y, z of another player in the loaded world, found by in-game name; false when not loaded. */
+	default boolean playerPos(String name, double[] out) {
+		return false;
+	}
+
 	/** Latency to the server in ms, or -1. */
 	default int ping() {
 		return -1;

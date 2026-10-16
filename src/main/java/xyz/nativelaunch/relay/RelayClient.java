@@ -1287,11 +1287,15 @@ public final class RelayClient {
 			case "hello":
 				state = State.ONLINE;
 				refresh();
+				xyz.nativelaunch.voice.Voice.refreshCalls();
 				for (Model.Conversation c : conversations.values()) {
 					if (c.loaded && c.key.equals(viewing)) {
 						open(c.key);
 					}
 				}
+				break;
+			case "voice:state":
+				xyz.nativelaunch.voice.Voice.onState(p);
 				break;
 			case "presence": {
 				String id = str(p, "userId");
@@ -1516,6 +1520,15 @@ public final class RelayClient {
 		con.setRequestProperty("User-Agent", "NativeMod-Relay (Minecraft)");
 		con.setRequestProperty("Authorization", "Bearer " + ticket());
 		return con;
+	}
+
+	/** Authenticated call to another Native API (voice). Blocking. */
+	public JsonObject apiPost(String path, JsonObject body) throws IOException {
+		return postJson(path, body);
+	}
+
+	public JsonObject getApi(String path) throws IOException {
+		return getJson(path);
 	}
 
 	private JsonObject getJson(String path) throws IOException {

@@ -17,6 +17,7 @@ import xyz.nativelaunch.ui.UiConfig;
 import xyz.nativelaunch.ui.UiRuntime;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Fonts;
+import xyz.nativelaunch.voice.Voice;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -631,6 +632,54 @@ public final class RelayView {
 		return click;
 	}
 
+	// ── voice ─────────────────────────────────────────────────────────────
+
+	/** Call / mute / deafen / leave buttons in a chat header, right to left from {@code right}. Returns the left edge. */
+	private static float voiceControls(Ui ui, String key, float right, float y) {
+		if (Voice.inCall(key)) {
+			if (voiceButton(ui, "relay:call-leave", right, y, Theme.I_PHONE_OFF, "Leave call", Theme.DANGER)) {
+				Voice.leaveCall();
+			}
+			right -= 38;
+			boolean deaf = Voice.deafened, mute = Voice.muted;
+			if (voiceButton(ui, "relay:call-deafen", right, y, deaf ? Theme.I_HEADPHONES_OFF : Theme.I_HEADPHONES, deaf ? "Undeafen" : "Deafen", deaf ? Theme.DANGER : 0)) {
+				Voice.toggleDeafen();
+			}
+			right -= 38;
+			if (voiceButton(ui, "relay:call-mute", right, y, mute ? Theme.I_MIC_OFF : Theme.I_MIC, mute ? "Unmute" : "Mute", mute ? Theme.DANGER : 0)) {
+				Voice.toggleMute();
+			}
+			return right;
+		}
+		int n = Voice.callMembers(key).size();
+		boolean busy = Voice.joining(key);
+		if (voiceButton(ui, "relay:call", right, y, busy ? Theme.I_LOADER : Theme.I_PHONE, busy ? "Connecting..." : n > 0 ? "Join call (" + n + " in call)" : "Start voice call",
+				n > 0 ? Theme.ONLINE : 0) && !busy) {
+			xyz.nativelaunch.ui.mod.Module m = xyz.nativelaunch.ui.mod.Modules.get("voice");
+			if (m != null && !m.enabled) {
+				m.setEnabled(true); // calls need the Voice Chat module running (keep-alive, push-to-talk)
+				xyz.nativelaunch.ui.mod.Modules.changed();
+			}
+			Voice.joinCall(key);
+		}
+		return right;
+	}
+
+	/** Header icon button; with a tint it is a filled pill (green join, red leave / muted). */
+	private static boolean voiceButton(Ui ui, String id, float x, float y, int icon, String tip, int tint) {
+		if (tint == 0) {
+			return ui.iconButton(id, x, y, 32, icon, tip);
+		}
+		boolean over = ui.hover(x, y, 32, 32);
+		boolean click = ui.clicked(id, x, y, 32, 32);
+		ui.c.round(x, y, 32, 32, 8, over ? Theme.mix(tint, 0xFFFFFFFF, 0.15f) : tint);
+		ui.c.icon(icon, 16, x + 16, y + 16, 0xFFFFFFFF);
+		if (over) {
+			ui.tip(tip);
+		}
+		return click;
+	}
+
 	// ── right column ──────────────────────────────────────────────────────
 
 	private void chat(Ui ui, RelayClient client, float x, float y, float w, float h, Object screen) {
@@ -664,10 +713,22 @@ public final class RelayView {
 		} else {
 			Avatars.draw(c, client.api(), friend == null ? name : friend.name, friend == null ? null : friend.skin, hx, hy, 36, 10);
 		}
-		c.text(Fonts.SEMIBOLD, 15, c.ellipsize(Fonts.SEMIBOLD, 15, name, w - 140), hx + 48, hy, Theme.TEXT_STRONG);
+		float vLeft = voiceControls(ui, selected, x + w - 46 - 38 * (group ? 1 : 2), hy);
+		float nameW = Math.max(60, vLeft - 10 - (hx + 48));
+		c.text(Fonts.SEMIBOLD, 15, c.ellipsize(Fonts.SEMIBOLD, 15, name, nameW), hx + 48, hy, Theme.TEXT_STRONG);
 		String status;
 		int statusColor = Theme.TEXT_MUTED;
-		if (group) {
+		int inCall = Voice.callMembers(selected).size();
+		if (Voice.inCall(selected)) {
+			status = "In voice call" + (inCall > 1 ? " with " + (inCall - 1) + (inCall == 2 ? " other" : " others") : " - waiting for others");
+			statusColor = Theme.ONLINE;
+		} else if (inCall > 0) {
+			status = "Voice call - " + inCall + " in call";
+			statusColor = Theme.ONLINE;
+		} else if (Voice.error() != null) {
+			status = Voice.error();
+			statusColor = Theme.DANGER;
+		} else if (group) {
 			status = grp == null ? "" : grp.members + " members";
 		} else if (friend != null && friend.online) {
 			status = friend.line();
@@ -675,7 +736,7 @@ public final class RelayView {
 		} else {
 			status = "Offline";
 		}
-		c.text(Fonts.REGULAR, 11.5f, c.ellipsize(Fonts.REGULAR, 11.5f, status, w - 140), hx + 48, hy + 20, statusColor);
+		c.text(Fonts.REGULAR, 11.5f, c.ellipsize(Fonts.REGULAR, 11.5f, status, nameW), hx + 48, hy + 20, statusColor);
 		c.fill(x, y + 64, w, 1, Theme.HAIRLINE);
 
 		// messages

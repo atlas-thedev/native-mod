@@ -163,6 +163,20 @@
       "codepoint": "F416",
       "glyph": "native_watermark",
       "sha256": "5d921d149b4d707e4aa8efb4c449e8e318eebca9b87e7bfb93c64a4e9cc8282e"
+    },
+    {
+      "id": "voice",
+      "label": "Voice Chat",
+      "codepoint": "F417",
+      "glyph": "native_voice",
+      "sha256": "0386375181e48e88bf29ce19dc0f9906fb044e3230c10ce64357b556133b2b47"
+    },
+    {
+      "id": "voice-overlay",
+      "label": "Voice Overlay",
+      "codepoint": "F418",
+      "glyph": "native_voice_overlay",
+      "sha256": "1327351a7a43228bdf8c6fd9d75c75c5fe69a09861866d7c3ada0c1c88b0312c"
     }
   ]
 }

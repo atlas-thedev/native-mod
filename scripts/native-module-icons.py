@@ -53,6 +53,8 @@ icon('crosshair','Crosshair',poly((3,8),(3,3),(8,3)),poly((16,3),(21,3),(21,8)),
 icon('hitbox-colours','Hitbox Colours',poly((5,7),(15,3),(21,7),(21,18),(11,22),(5,18),(5,7),(11,11),(21,7)),poly((11,11),(11,22)),poly((5,12),(11,16),(21,12)),poly((2,5),(2,11)))
 icon('critical-colours','Critical Colours',poly((12,2),(15,9),(20,12),(15,15),(12,22),(9,15),(4,12),(9,9),(12,2)),poly((3,3),(5,5)),poly((19,3),(21,3)),poly((19,19),(21,21)))
 icon('watermark','Native Watermark',poly((4,20),(4,4),(7,4),(17,20),(20,20),(20,4)),poly((4,4),(8,4)),poly((16,20),(20,20)))
+icon('voice','Voice Chat',box(9,2,6,12,3),poly((5,10),(5,11),(6,14),(9,16.5),(12,17),(15,16.5),(18,14),(19,11),(19,10)),poly((12,17),(12,21)),poly((8,21),(16,21)))
+icon('voice-overlay','Voice Overlay',poly((4,14),(4,11),(6,6),(12,3),(18,6),(20,11),(20,14)),box(3,13,4,7,1),box(17,13,4,7,1),poly((10,12),(10,16)),poly((12,10),(12,18)),poly((14,12),(14,16)))
 
 def contours(lines):
     out=[];r=STROKE/2
@@ -105,7 +107,7 @@ def preview(path,enc,items):
     html='''<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Native — Original module icons</title><style>
 @font-face{font-family:NativeIcons;src:url(data:font/ttf;base64,'''+enc+''') format('truetype')}
 *{box-sizing:border-box}body{margin:0;background:#0d0e12;color:#eeeef3;font:15px Arial,sans-serif;padding:36px}header{display:flex;justify-content:space-between;align-items:end;margin-bottom:28px}h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.7px}header p{margin:8px 0 0;color:#999da9;font-size:14px}.tag{color:#7fb9fa;font-size:13px;letter-spacing:.8px}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}article{border:1px solid #272a33;border-radius:12px;background:#15171d;padding:16px;text-align:center;min-height:171px}.hero{font-family:NativeIcons;font-size:48px;line-height:1;margin:7px auto 16px;color:#f4f5f8}strong{display:block;font-size:14px;font-weight:500;height:22px}.sizes{font-family:NativeIcons;display:flex;gap:14px;justify-content:center;align-items:center;margin-top:12px;height:30px;color:#a0acbe}footer{font-size:13px;color:#8c93a3;margin-top:22px} @media(max-width:600px){body{padding:20px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}header{display:block}.tag{margin-top:15px}}
-</style><header><div><h1>Native module icons</h1><p>Original geometry. One distinct mark for every module.</p></div><div class="tag">23 CUSTOM MARKS · CC0</div></header><main class="grid">'''+''.join(cards)+'''</main><footer>Actual bundled font shown at 48 px; each card also tests 14, 18, 24 and 30 px. No stock icon outlines.</footer>'''
+</style><header><div><h1>Native module icons</h1><p>Original geometry. One distinct mark for every module.</p></div><div class="tag">25 CUSTOM MARKS · CC0</div></header><main class="grid">'''+''.join(cards)+'''</main><footer>Actual bundled font shown at 48 px; each card also tests 14, 18, 24 and 30 px. No stock icon outlines.</footer>'''
     path.write_text(html)
 
 def export(directory, assets, enc, items):
@@ -119,7 +121,7 @@ def export(directory, assets, enc, items):
     (directory/'LICENSE.txt').write_text((ROOT/'src/main/uiassets/native-modules-LICENSE.txt').read_text())
     (directory/'native-module-icons.py').write_text(Path(__file__).read_text())
     preview(directory/'preview.html',enc,items)
-    (directory/'README.txt').write_text('Native Module Icons — 23 original marks. CC0-1.0.\n\nSVG files are editable 24-unit vectors; use CSS color or replace currentColor.\nTTF codepoints F400–F416 and stable module IDs are listed in native-modules.json.\nThe bundled font is used in every module UI surface, not the navigation icons.\nTransparent white PNG exports are provided at 64 and 128 px.\nGenerator requires Python + fonttools; run from the Native repository scripts folder.\n')
+    (directory/'README.txt').write_text('Native Module Icons — 25 original marks. CC0-1.0.\n\nSVG files are editable 24-unit vectors; use CSS color or replace currentColor.\nTTF codepoints F400–F418 and stable module IDs are listed in native-modules.json.\nThe bundled font is used in every module UI surface, not the navigation icons.\nTransparent white PNG exports are provided at 64 and 128 px.\nGenerator requires Python + fonttools; run from the Native repository scripts folder.\n')
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--check',action='store_true');ap.add_argument('--preview',type=Path);ap.add_argument('--export-dir',type=Path);args=ap.parse_args()
