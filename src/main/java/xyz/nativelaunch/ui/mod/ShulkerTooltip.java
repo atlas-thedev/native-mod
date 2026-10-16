@@ -20,7 +20,6 @@ public final class ShulkerTooltip extends StatusModules.Box {
 
 	final Setting.Choice trigger = add(new Setting.Choice("trigger", "Show on hover", 0, "Always", "Hold Shift"));
 	final Setting.Bool hideVanilla = add(new Setting.Bool("hide-vanilla", "Hide the game's own tooltip", true));
-	final Setting.Key lock = add(new Setting.Key("lock", "Pin panel key", 342)); // left alt
 	final Setting.Bool compact = add(new Setting.Bool("compact", "Compact (merge same items)", false));
 	final Setting.Bool counts = add(new Setting.Bool("counts", "Item counts", true));
 	final Setting.Bool bars = add(new Setting.Bool("bars", "Durability bars", true));
@@ -34,9 +33,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 	private final float[] dims = new float[2];
 	private Object lastStack;
 	private long nextTip, nextHand, tipSince;
-	private boolean showTip, pinned, lockWas;
-	/** Where the panel was last drawn (canvas units): a pinned panel stays there. */
-	private float tipX, tipY;
+	private boolean showTip;
 
 	/** One shulker box's contents. */
 	private static final class View {
@@ -93,18 +90,8 @@ public final class ShulkerTooltip extends StatusModules.Box {
 	public void frame(Game g) {
 		long now = System.currentTimeMillis();
 		McBridge mc = HudModules.mc();
-		boolean lockDown = lock.value >= 0 && Keys.isDown(g.window, lock.value);
-		if (lockDown && !lockWas) {
-			pinned = !pinned && showTip;
-		}
-		lockWas = lockDown;
-		if (pinned && (!g.inWorld || mc.screen() == null)) {
-			pinned = false;
-		}
 		Object st = g.inWorld ? mc.hoveredStack() : null;
-		if (pinned) {
-			lastStack = null;
-		} else if (st != lastStack || now >= nextTip) {
+		if (st != lastStack || now >= nextTip) {
 			lastStack = st;
 			nextTip = now + 150;
 			tip.fill(st == null ? null : mc.shulkerContents(st, tip.raw));
@@ -112,7 +99,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 				tip.name = mc.stackName(st);
 			}
 		}
-		boolean want = pinned || tip.ok() && (trigger.value == 0 || Keys.isDown(g.window, 340) || Keys.isDown(g.window, 344));
+		boolean want = tip.ok() && (trigger.value == 0 || Keys.isDown(g.window, 340) || Keys.isDown(g.window, 344));
 		if (want && !showTip) {
 			tipSince = now;
 		}
@@ -125,7 +112,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 
 	@Override
 	protected void onDisable() {
-		showTip = pinned = false;
+		showTip = false;
 		lastStack = null;
 	}
 
@@ -136,7 +123,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 
 	/** True while the game's own tooltip for the hovered box should be skipped (see ShulkerTooltipMixin). */
 	public static boolean hidesVanilla() {
-		return active() && instance.hideVanilla.value && !instance.pinned;
+		return active() && instance.hideVanilla.value;
 	}
 
 	/**
@@ -149,11 +136,6 @@ public final class ShulkerTooltip extends StatusModules.Box {
 		float s = m.size.value / 100f;
 		m.box(c, m.tip, s, 0, 0, false);
 		float w = m.dims[0], h = m.dims[1], gap = 12;
-		if (m.pinned) {
-			m.box(c, m.tip, s, m.tipX, m.tipY, true);
-			m.pinChip(c, s, m.tipX, m.tipY + h);
-			return;
-		}
 		float mx = (float) (Input.mouseX / c.scale), my = (float) (Input.mouseY / c.scale);
 		float x = mx + gap, y = my - gap - 4 - h;
 		if (m.hideVanilla.value) {
@@ -167,23 +149,10 @@ public final class ShulkerTooltip extends StatusModules.Box {
 		}
 		x = Math.max(4, Math.min(x, c.width() - w - 4));
 		y = Math.max(4, Math.min(y, c.height() - h - 4));
-		m.tipX = x;
-		m.tipY = y;
 		float a = Math.min(1f, (System.currentTimeMillis() - m.tipSince) / 120f);
 		c.pushAlpha(a);
 		m.box(c, m.tip, s, x, y + (1 - a) * 6, true);
 		c.popAlpha();
-	}
-
-	/** "Pinned · LAlt to unpin" under a pinned panel. */
-	private void pinChip(Canvas c, float s, float x, float y) {
-		String t = "Pinned  \u00b7  " + Keys.name(lock.value) + " to unpin";
-		float fs = 9f * s, th = c.lineHeight(Fonts.MEDIUM, fs), cw = c.textWidth(Fonts.MEDIUM, fs, t) + 14 * s, ch = th + 6 * s;
-		int col = tinted.value ? boxColor(tip.id) : 0xFF8B8B95;
-		c.round(x, y + 4 * s, cw, ch, ch / 2, Theme.alpha(Theme.mix(0xFF0E0E12, col, 0.16f), 0.95f));
-		c.outline(x, y + 4 * s, cw, ch, ch / 2, 1, Theme.alpha(col, 0.6f));
-		c.circle(x + 7 * s, y + 4 * s + ch / 2, 2 * s, col);
-		c.text(Fonts.MEDIUM, fs, t, x + 12 * s, y + 4 * s + 3 * s, Theme.TEXT_SECONDARY);
 	}
 
 	@Override
