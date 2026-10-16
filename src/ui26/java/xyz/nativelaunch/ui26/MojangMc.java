@@ -626,6 +626,71 @@ public final class MojangMc implements McBridge {
 		} catch (Throwable ignored) {
 			// plain icon
 		}
+		try {
+			int tint = itemTint(st, id);
+			if (tint != 0) {
+				out.setTint(tint);
+			}
+		} catch (Throwable ignored) {
+			// no tint; the layered icon still renders with a sensible default
+		}
+	}
+
+	/**
+	 * The item's ARGB layer0 tint on 26.x: potion colour, leather dye, firework star, map base. Looked up through
+	 * reflection so a mapping shift (names on 26.x are not stable yet) silently drops back to 0.
+	 */
+	private static int itemTint(net.minecraft.world.item.ItemStack st, String id) {
+		boolean potion = id.equals("potion") || id.equals("splash_potion") || id.equals("lingering_potion") || id.equals("tipped_arrow");
+		boolean leather = id.startsWith("leather_");
+		boolean firework = id.equals("firework_star");
+		boolean map = id.equals("filled_map");
+		if (!potion && !leather && !firework && !map) {
+			return 0;
+		}
+		String[] types = potion ? new String[] {"POTION_CONTENTS"}
+				: leather ? new String[] {"DYED_COLOR"}
+						: firework ? new String[] {"FIREWORK_EXPLOSION"}
+								: new String[] {"MAP_COLOR"};
+		Class<?> dc = net.minecraft.core.component.DataComponents.class;
+		for (String name : types) {
+			try {
+				java.lang.reflect.Field f = dc.getField(name);
+				Object type = f.get(null);
+				Object comp = st.get((net.minecraft.core.component.DataComponentType<?>) type);
+				int c = colorOf(comp);
+				if (c != 0) {
+					return c | 0xFF000000;
+				}
+			} catch (Throwable ignored) {
+				// try the next type
+			}
+		}
+		return 0;
+	}
+
+	private static int colorOf(Object comp) {
+		if (comp == null) {
+			return 0;
+		}
+		for (java.lang.reflect.Method m : comp.getClass().getMethods()) {
+			if (m.getParameterCount() != 0 || m.getReturnType() != int.class) {
+				continue;
+			}
+			String n = m.getName().toLowerCase();
+			if (!n.contains("color") && !n.contains("rgb") && !n.equals("comp_2384") && !n.equals("comp_2387")) {
+				continue;
+			}
+			try {
+				Object r = m.invoke(comp);
+				if (r instanceof Integer && (Integer) r != 0) {
+					return (Integer) r;
+				}
+			} catch (Throwable ignored) {
+				// try the next getter
+			}
+		}
+		return 0;
 	}
 
 	@Override

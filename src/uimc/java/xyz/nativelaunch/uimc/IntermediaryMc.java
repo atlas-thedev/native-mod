@@ -618,6 +618,14 @@ public final class IntermediaryMc implements McBridge {
 		} catch (Throwable ignored) {
 			// plain icon
 		}
+		try {
+			int tint = itemTint(st, id);
+			if (tint != 0) {
+				out.setTint(tint);
+			}
+		} catch (Throwable ignored) {
+			// no tint; the layered item icon still renders with a sensible default
+		}
 	}
 
 	/** item_model (1.21.2+) and custom model data: components on 1.20.5+, the CustomModelData NBT tag before. */
@@ -672,6 +680,107 @@ public final class IntermediaryMc implements McBridge {
 		} catch (Throwable t) {
 			return null;
 		}
+	}
+
+	/**
+	 * The item's ARGB layer0 tint: the potion colour, the leather dye colour, the firework star colour, the map base
+	 * colour. 0 when it has none (or when the running game doesn't expose it). Tried through the modern components
+	 * (1.20.5+) first and then the legacy static helpers.
+	 */
+	private int itemTint(Object st, String id) {
+		boolean potion = id.equals("potion") || id.equals("splash_potion") || id.equals("lingering_potion") || id.equals("tipped_arrow");
+		boolean leather = id.startsWith("leather_");
+		boolean firework = id.equals("firework_star");
+		boolean map = id.equals("filled_map");
+		if (!potion && !leather && !firework && !map) {
+			return 0;
+		}
+		// 1.20.5+: ask the component directly.
+		if (potion) {
+			int c = componentColor(st, "field_49651", "method_57516"); // POTION_CONTENTS.getColor
+			if (c != 0) {
+				return c | 0xFF000000;
+			}
+		} else if (leather) {
+			int c = componentColor(st, "field_49644", "method_57528"); // DYED_COLOR.rgb
+			if (c != 0) {
+				return c | 0xFF000000;
+			}
+		} else if (firework) {
+			int c = componentColor(st, "field_49640", "method_57473"); // FIREWORK_EXPLOSION.colors[0]
+			if (c != 0) {
+				return c | 0xFF000000;
+			}
+		} else if (map) {
+			int c = componentColor(st, "field_49645", "method_57567"); // MAP_COLOR.rgb
+			if (c != 0) {
+				return c | 0xFF000000;
+			}
+		}
+		// 1.16 - 1.20.4: static helpers on PotionUtil / ItemStack. Each try is wrapped so the next can still run.
+		if (potion) {
+			try {
+				Class<?> pu = Class.forName("net.minecraft.class_1844"); // PotionUtil
+				Method m = method(pu, "method_8064", st.getClass()); // getColor(ItemStack)
+				if (m != null) {
+					Object r = m.invoke(null, st);
+					if (r instanceof Integer) {
+						return ((Integer) r) | 0xFF000000;
+					}
+				}
+			} catch (Throwable ignored) {
+				// try the next hook
+			}
+		}
+		if (leather) {
+			try {
+				Class<?> da = Class.forName("net.minecraft.class_4057"); // DyeableItem
+				Method m = method(da, "method_7800", st.getClass()); // getColor(ItemStack)
+				if (m != null) {
+					Object r = m.invoke(null, st);
+					if (r instanceof Integer) {
+						return ((Integer) r) | 0xFF000000;
+					}
+				}
+			} catch (Throwable ignored) {
+				// try the next hook
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * Reads the colour out of a 1.20.5+ data component: looks up {@code typeField} on {@code DataComponentTypes}, gets
+	 * the component off the stack, and calls {@code colorMethod} on it (which returns an {@code int} RGB).
+	 */
+	private int componentColor(Object st, String typeField, String colorMethod) {
+		Object comp = component(st, typeField);
+		if (comp == null) {
+			return 0;
+		}
+		// Direct getter first (fastest), then any zero-arg method that returns an int (the mapping is unstable).
+		Object v = call(comp, colorMethod);
+		if (v instanceof Integer) {
+			return (Integer) v;
+		}
+		for (Method m : comp.getClass().getMethods()) {
+			if (m.getParameterCount() != 0 || m.getReturnType() != int.class) {
+				continue;
+			}
+			String n = m.getName();
+			if (!n.contains("olor") && !n.contains("rgb") && !n.equals("comp_2384") && !n.equals("comp_2387")) {
+				continue;
+			}
+			try {
+				Object r = m.invoke(comp);
+				if (r instanceof Integer && (Integer) r != 0) {
+					return (Integer) r;
+				}
+			} catch (Throwable ignored) {
+				// try the next method
+			}
+		}
+		return 0;
 	}
 
 	@Override

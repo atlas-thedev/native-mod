@@ -68,6 +68,8 @@ public final class Game {
 		/** Custom look: the item_model component when it differs from the item ("ns:path"), and the first custom model data number. */
 		public String model;
 		public float cmd = Float.NaN;
+		/** ARGB tint applied to layer0 of the item's model (potion colour, leather dye, firework star, map base). 0 = none. */
+		public int tint;
 
 		public boolean empty() {
 			return id == null;
@@ -78,6 +80,7 @@ public final class Game {
 			count = damage = max = 0;
 			model = null;
 			cmd = Float.NaN;
+			tint = 0;
 		}
 
 		public void set(String id, int count, int damage, int max) {
@@ -87,6 +90,7 @@ public final class Game {
 			this.max = max;
 			this.model = null;
 			this.cmd = Float.NaN;
+			this.tint = 0;
 		}
 
 		/** Sets the custom look; a model equal to the item's own id counts as none. */
@@ -96,6 +100,11 @@ public final class Game {
 			}
 			this.model = model;
 			this.cmd = cmd;
+		}
+
+		/** Sets the ARGB layer0 tint (potion colour / leather dye / firework star). 0 = none. */
+		public void setTint(int argb) {
+			this.tint = argb;
 		}
 
 		/** Remaining durability fraction (1 = new); 1 for things that do not wear. */
@@ -300,11 +309,19 @@ public final class Game {
 		armor[2].set("iron_leggings", 1, 31, 225);
 		armor[3].set("netherite_boots", 1, 17, 481);
 		String[] items = {"diamond_sword", "bow", "golden_apple", "cooked_beef", "ender_pearl", "oak_planks", "cobblestone", "torch", "water_bucket",
-				"diamond_pickaxe", "arrow", "oak_log", "iron_ingot", "diamond", "bread", "grass_block", "tnt", "shield"};
-		int[] counts = {1, 1, 6, 24, 12, 64, 48, 32, 1, 1, 128, 22, 31, 9, 16, 7, 8, 1};
+				"diamond_pickaxe", "arrow", "oak_log", "iron_ingot", "diamond", "bread", "grass_block", "tnt", "shield",
+				"potion", "splash_potion", "lingering_potion", "stone", "leather_chestplate"};
+		int[] counts = {1, 1, 6, 24, 12, 64, 48, 32, 1, 1, 128, 22, 31, 9, 16, 7, 8, 1, 1, 1, 1, 64, 1};
+		int[] tints = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFFFF4040, 0xFF50C878, 0xFF9966FF, 0, 0xFFA06540};
 		for (int i = 0; i < items.length; i++) {
 			int slot = i < 9 ? i : 9 + (i - 9) * 1;
+			if (slot >= inv.length) {
+				break;
+			}
 			inv[slot].set(items[i], counts[i], i == 0 ? 120 : i == 9 ? 300 : 0, i == 0 ? 1561 : i == 9 ? 1561 : 0);
+			if (tints[i] != 0) {
+				inv[slot].setTint(tints[i]);
+			}
 		}
 		selected = 0;
 		hand.set("diamond_sword", 1, 120, 1561);

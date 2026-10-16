@@ -167,21 +167,27 @@ public final class Vanilla {
 		Image img = items.get(id);
 		if (img == null) {
 			try {
-				img = fromModel(id, Float.NaN);
+				img = fromModel(id, Float.NaN, 0);
 			} catch (Throwable ignored) {
 				img = null; // an odd pack model: the plain lookups below still work
 			}
+			int colon = id.indexOf(':');
+			String ns = colon > 0 ? id.substring(0, colon) : "minecraft";
+			String bare = colon > 0 ? id.substring(colon + 1) : id;
 			if (img == null) {
-				img = texture("item/" + id);
+				img = texture(ns + ":item/" + bare);
 			}
 			if (img == null) {
-				img = texture("items/" + id);
+				img = texture(ns + ":items/" + bare);
 			}
 			if (img == null) {
-				img = cube(id);
+				img = cube(ns, bare);
 			}
-			if (img == null && id.endsWith("_spawn_egg")) {
-				img = texture("item/template_spawn_egg") == null ? null : texture("item/template_spawn_egg");
+			if (img == null && bare.endsWith("_spawn_egg")) {
+				img = texture(ns + ":item/template_spawn_egg");
+				if (img == null) {
+					img = texture("item/spawn_egg");
+				}
 			}
 			items.put(id, img == null ? NONE : img);
 		}
@@ -190,21 +196,26 @@ public final class Vanilla {
 
 	/**
 	 * The icon of an item in a slot, honouring server / pack custom items: the item_model component and custom model
-	 * data (1.21.4+ item definitions and the older model "overrides"). Falls back to the plain item icon.
+	 * data (1.21.4+ item definitions and the older model "overrides"), plus the ARGB tint for potions / leather dye /
+	 * firework stars / maps. Falls back to the plain item icon.
 	 */
 	public static synchronized Image item(Game.Slot sl) {
 		if (sl == null || sl.id == null) {
 			return null;
 		}
-		if (sl.model == null && Float.isNaN(sl.cmd)) {
+		if (sl.model == null && Float.isNaN(sl.cmd) && sl.tint == 0 && !isPotionLike(sl.id)) {
 			return item(sl.id);
 		}
 		sync();
-		String key = sl.id + "|" + sl.model + "|" + sl.cmd;
+		String key = sl.id + "|" + sl.model + "|" + sl.cmd + "|" + Integer.toHexString(sl.tint);
 		Image img = items.get(key);
 		if (img == null) {
+			int tint = sl.tint;
+			if (tint == 0 && isPotionLike(sl.id)) {
+				tint = 0xFF385DC6; // water bottle colour, the game's own default when a potion carries no NBT
+			}
 			try {
-				img = fromModel(sl.model != null ? sl.model : sl.id, sl.cmd);
+				img = fromModel(sl.model != null ? sl.model : sl.id, sl.cmd, tint);
 			} catch (Throwable ignored) {
 				img = null;
 			}
@@ -214,6 +225,12 @@ public final class Vanilla {
 			items.put(key, img == null ? NONE : img);
 		}
 		return img == NONE ? null : img;
+	}
+
+	/** Items whose layer0 is a greyscale template meant to be tinted (potion bottle fill, tipped-arrow head). */
+	private static boolean isPotionLike(String id) {
+		String bare = id.startsWith("minecraft:") ? id.substring(10) : id;
+		return bare.equals("potion") || bare.equals("splash_potion") || bare.equals("lingering_potion") || bare.equals("tipped_arrow");
 	}
 
 	// ── item models: what a resource pack's model files say the icon is ──────────────────
@@ -369,7 +386,7 @@ public final class Vanilla {
 	}
 
 	/** The icon an item's (pack or vanilla) model describes: its flat layer, or a cube of its block textures. Null when unclear. */
-	private static Image fromModel(String fullId, float cmd) {
+	private static Image fromModel(String fullId, float cmd, int layer0Tint) {
 		int colon = fullId.indexOf(':');
 		String ns = colon > 0 ? fullId.substring(0, colon) : "minecraft", id = colon > 0 ? fullId.substring(colon + 1) : fullId;
 		String ref = null;
@@ -419,9 +436,41 @@ public final class Vanilla {
 		if (id.equals("shield")) {
 			return shield();
 		}
-		String layer = texOf(tex, "layer0", "layer1", "texture");
-		if (layer != null && !entity) {
-			return texture(layer);
+		// Flat item models: composite every layer (layer0, layer1, ...) so potions, tipped arrows, spawn eggs,
+		// firework stars and leather armour all look right. Layer 0 gets the item's tint; the others keep their own colours.
+		Image stacked = null;
+		boolean anyLayer = false;
+		for (int i = 0; i < 8; i++) {
+			String key = "layer" + i;
+			String name = texOf(tex, key);
+			if (name == null) {
+				if (i == 0) {
+					continue;
+				}
+				break;
+			}
+			anyLayer = true;
+			Image layer = texture(name);
+			if (layer == null) {
+				continue;
+			}
+			int t = i == 0 ? layer0Tint : 0;
+			if (t != 0) {
+				layer = tinted(layer, t);
+			}
+			stacked = stacked == null ? copy(layer) : over(stacked, layer);
+		}
+		if (stacked != null) {
+			return stacked;
+		}
+		if (!anyLayer) {
+			String single = texOf(tex, "texture");
+			if (single != null && !entity) {
+				Image layer = texture(single);
+				if (layer != null) {
+					return layer0Tint != 0 ? tinted(layer, layer0Tint) : layer;
+				}
+			}
 		}
 		if (flat) {
 			return null;
@@ -432,6 +481,61 @@ public final class Vanilla {
 			return null;
 		}
 		return cube(id, top, side);
+	}
+
+	/** A fresh copy of an image, so we can draw on top of it without touching the cache. */
+	private static Image copy(Image src) {
+		int[] px = new int[src.argb.length];
+		System.arraycopy(src.argb, 0, px, 0, px.length);
+		Image out = new Image(src.width, src.height, px);
+		out.linear = src.linear;
+		return out;
+	}
+
+	/** A copy of {@code src} with each pixel multiplied by {@code argb} (used for potion / leather / firework tints). */
+	private static Image tinted(Image src, int argb) {
+		int tr = (argb >> 16) & 0xFF, tg = (argb >> 8) & 0xFF, tb = argb & 0xFF;
+		int[] out = new int[src.argb.length];
+		for (int i = 0; i < src.argb.length; i++) {
+			int p = src.argb[i], a = p >>> 24;
+			if (a == 0) {
+				continue;
+			}
+			int r = ((p >> 16) & 0xFF) * tr / 255, g = ((p >> 8) & 0xFF) * tg / 255, b = (p & 0xFF) * tb / 255;
+			out[i] = (a << 24) | (r << 16) | (g << 8) | b;
+		}
+		Image img = new Image(src.width, src.height, out);
+		img.linear = src.linear;
+		return img;
+	}
+
+	/** Draws {@code top} over {@code base} (nearest-neighbour upscale when they differ) and returns {@code base}. */
+	private static Image over(Image base, Image top) {
+		int bw = base.width, bh = base.height;
+		for (int y = 0; y < bh; y++) {
+			int ty = Math.min(top.height - 1, y * top.height / bh);
+			for (int x = 0; x < bw; x++) {
+				int tx = Math.min(top.width - 1, x * top.width / bw);
+				int src = top.argb[ty * top.width + tx], sa = src >>> 24;
+				if (sa == 0) {
+					continue;
+				}
+				int dst = base.argb[y * bw + x], da = dst >>> 24;
+				if (sa == 255 || da == 0) {
+					base.argb[y * bw + x] = src;
+					continue;
+				}
+				int sr = (src >> 16) & 0xFF, sg = (src >> 8) & 0xFF, sb = src & 0xFF;
+				int dr = (dst >> 16) & 0xFF, dg = (dst >> 8) & 0xFF, db = dst & 0xFF;
+				int ia = 255 - sa;
+				int oa = sa + da * ia / 255;
+				int or = (sr * sa + dr * da * ia / 255) / oa;
+				int og = (sg * sa + dg * da * ia / 255) / oa;
+				int ob = (sb * sa + db * da * ia / 255) / oa;
+				base.argb[y * bw + x] = (oa << 24) | (or << 16) | (og << 8) | ob;
+			}
+		}
+		return base;
 	}
 
 	/** The shield's front, cut out of its entity texture (the game draws it as a model, so it has no flat item texture). */
@@ -459,9 +563,9 @@ public final class Vanilla {
 		return img;
 	}
 
-	private static Image firstOf(String... names) {
+	private static Image firstOf(String ns, String... names) {
 		for (String n : names) {
-			Image i = texture("block/" + n);
+			Image i = texture(ns + ":block/" + n);
 			if (i != null) {
 				return i;
 			}
@@ -480,14 +584,14 @@ public final class Vanilla {
 	}
 
 	/** An isometric cube of a block, 32 x 32, or null when the block has no textures. */
-	private static Image cube(String id) {
-		Image top = firstOf(id + "_top", id + "_top_open", id + "_end", id);
-		Image side = firstOf(id + "_side", id + "_front", id + "_side1", id);
+	private static Image cube(String ns, String id) {
+		Image top = firstOf(ns, id + "_top", id + "_top_open", id + "_end", id);
+		Image side = firstOf(ns, id + "_side", id + "_front", id + "_side1", id);
 		if (side == null) {
-			side = firstOf(id + "_side", id + "_top", id + "_end");
+			side = firstOf(ns, id + "_side", id + "_top", id + "_end");
 		}
 		if (top == null && side == null) {
-			Image flat = firstOf(id);
+			Image flat = firstOf(ns, id);
 			return flat;
 		}
 		return cube(id, top, side);
