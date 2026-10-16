@@ -14,3 +14,9 @@
 ## Backlog
 - Optionally hide vanilla shulker tooltip lines while panel shows
 - Ender chest contents preview, bundle preview
+
+## Hide vanilla tooltip – Jun 2026
+- Setting "Hide the game's own tooltip" (default on): ShulkerTooltipMixin (class_465.method_2380) / ShulkerTooltipMixin26
+  (AbstractContainerScreen.extractTooltip|renderTooltip) cancel at HEAD while ShulkerTooltip.hidesVanilla().
+- Panel then sits where vanilla tooltip would (cursor +12, -12), header shows the stack's real/custom name (McBridge.stackName).
+- NOT built / NOT tested.
