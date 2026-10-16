@@ -54,13 +54,57 @@ public final class Model {
 			if (!online) {
 				return lastSeen > 0 ? "Last seen " + ago(lastSeen) : "Offline";
 			}
-			if (activity != null && !activity.isEmpty()) {
-				return activity;
+			String act = niceActivity(activity, status);
+			if (act != null) {
+				return act;
 			}
 			if ("idle".equals(status) || "away".equals(status)) {
 				return "Idle";
 			}
 			return "dnd".equals(status) || "busy".equals(status) ? "Do not disturb" : "Online";
+		}
+
+		/**
+		 * The launcher writes activities like "In-game: Hypixel", "In-game: Singleplayer" or "In-game: Menus": shown here as
+		 * "Playing on Hypixel", "Playing Singleplayer", "In the menus". null when there is nothing to say.
+		 */
+		public static String niceActivity(String activity, String status) {
+			String a = activity == null ? "" : activity.trim();
+			String lower = a.toLowerCase(java.util.Locale.ROOT);
+			String rest = null;
+			for (String prefix : new String[] {"in-game:", "ingame:", "in game:", "in-game -", "in-game", "ingame", "in game"}) {
+				if (lower.startsWith(prefix)) {
+					rest = a.substring(prefix.length()).replaceFirst("^[\\s:\\-]+", "").trim();
+					break;
+				}
+			}
+			boolean inGame = rest != null || "in-game".equals(status);
+			if (rest == null) {
+				if (!a.isEmpty() && !"in-menus".equals(status)) {
+					return "In Launcher".equalsIgnoreCase(a) ? "In the launcher" : a;
+				}
+				rest = "";
+			}
+			String r = rest.toLowerCase(java.util.Locale.ROOT);
+			if ("in-menus".equals(status) || r.equals("menus") || r.equals("menu") || r.equals("in the menus")) {
+				return "In the menus";
+			}
+			if (!inGame) {
+				return null;
+			}
+			if (r.isEmpty() || r.equals("minecraft")) {
+				return "Playing Minecraft";
+			}
+			if (r.equals("singleplayer")) {
+				return "Playing Singleplayer";
+			}
+			if (r.equals("multiplayer")) {
+				return "Playing multiplayer";
+			}
+			if (r.equals("realms")) {
+				return "Playing on Realms";
+			}
+			return "Playing on " + rest;
 		}
 
 		/** "just now", "5 min ago", "3 h ago", "2 d ago", else the date. */
