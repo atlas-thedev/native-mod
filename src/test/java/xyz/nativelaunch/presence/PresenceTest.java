@@ -69,7 +69,10 @@ class PresenceTest {
 		JsonObject a = service.activity(s);
 		assertEquals("Playing on Hypixel", a.get("details").getAsString());
 		assertEquals("mc.hypixel.net", a.get("state").getAsString());
-		assertEquals("https://api.mcsrvstat.us/icon/mc.hypixel.net", a.getAsJsonObject("assets").get("large_image").getAsString());
+		// never the server's own icon: the default picture (the Native asset when the game has none to host, as in tests)
+		String big = a.getAsJsonObject("assets").get("large_image").getAsString();
+		assertEquals("logo", big);
+		assertFalse(big.contains("mcsrvstat"), "no server icon service");
 		assertFalse(a.has("party"), "no max players known yet: no party size");
 
 		s.address = "192.168.1.4";
