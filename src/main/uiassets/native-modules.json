@@ -268,6 +268,34 @@
       "codepoint": "F425",
       "glyph": "native_block_overlay",
       "sha256": "d3c5a36e3a1001572b3dd8a106b4d4531770bd3498bb33f84e75a480c1eac576"
+    },
+    {
+      "id": "freelook",
+      "label": "Freelook",
+      "codepoint": "F426",
+      "glyph": "native_freelook",
+      "sha256": "092328e3fc612d8cb6e012577f1b71533a656dcb238576f6ec396352f6a795a0"
+    },
+    {
+      "id": "no-hurt-cam",
+      "label": "No Hurt Cam",
+      "codepoint": "F427",
+      "glyph": "native_no_hurt_cam",
+      "sha256": "117fc4f17dd666550504342923ac2ae7468f74cae36f681c35fe9039c617fd72"
+    },
+    {
+      "id": "time-changer",
+      "label": "Time Changer",
+      "codepoint": "F428",
+      "glyph": "native_time_changer",
+      "sha256": "b9267fa3358095f137e5b664ea8c7dc43296c1fd5beb0f14a3976655afacbc60"
+    },
+    {
+      "id": "weather-changer",
+      "label": "Weather Changer",
+      "codepoint": "F429",
+      "glyph": "native_weather_changer",
+      "sha256": "ab1b8c55a6d8edd2d785d012c1e2e71f52c386f7071bcbde1ba22c62a82fa179"
     }
   ]
 }

@@ -140,4 +140,84 @@ class ExtraModulesTest {
 		m.setEnabled(false);
 		assertEquals(vanilla, BlockOverlay.outline(vanilla), "switched off: the game's outline again");
 	}
+
+	@Test
+	void freelookTurnsTheCameraNotThePlayer() {
+		Object player = new Object();
+		assertFalse(Freelook.turn(player, 10, 10), "not looking around: the mouse turns the player");
+		assertEquals(30f, Freelook.yaw(30f), "no offset while it is off");
+		Freelook.begin(player, 90f, 10f);
+		assertTrue(Freelook.turn(player, 100, 40), "the mouse moves the camera now");
+		assertFalse(Freelook.turn(new Object(), 100, 40), "only the local player's mouse input is taken");
+		assertEquals(90f + 15f, 90f + (Freelook.yaw(90f) - 90f), 1e-3, "100 mouse units = 15 degrees, like the game");
+		assertEquals(105f, Freelook.yaw(90f), 1e-3);
+		assertEquals(16f, Freelook.pitch(10f), 1e-3);
+		Freelook.turn(player, 0, 100000);
+		assertEquals(90f, Freelook.pitch(10f), 1e-3, "looking straight down is the limit");
+		Freelook.turn(player, 0, -1000000);
+		assertEquals(-90f, Freelook.pitch(10f), 1e-3, "and straight up");
+		Freelook.end(false);
+		assertEquals(90f, Freelook.yaw(90f), "back on the player's own view");
+		assertFalse(Freelook.applying());
+		Freelook.begin(player, 0f, 0f);
+		Freelook.turn(player, 200, 0);
+		Freelook.end(true);
+		assertTrue(Freelook.applying(), "gliding back still applies the shrinking offset");
+		Freelook.end(false);
+	}
+
+	@Test
+	void theTimeOfDayIsReplacedButTheDayStays() {
+		assertEquals(123456L, TimeChanger.map(123456L), "module never ran: the server's time");
+		TimeChanger m = new TimeChanger();
+		m.preset.value = 4; // midnight
+		m.frame(new Game());
+		long realTimeAtDay5 = 5 * 24000L + 3333;
+		assertEquals(5 * 24000L + 18000, TimeChanger.map(realTimeAtDay5), "fixed at midnight of the same day (the moon phase stays)");
+		assertEquals(5 * 24000L + 18000, TimeChanger.map(5 * 24000L + 9000), "and it does not move");
+		TimeChanger.bypass = true;
+		assertEquals(realTimeAtDay5, TimeChanger.map(realTimeAtDay5), "the HUD's own clock still sees the real time");
+		TimeChanger.bypass = false;
+		m.preset.value = 5; // custom
+		m.custom.value = 24500; // wraps into the day
+		m.frame(new Game());
+		assertEquals(500, TimeChanger.map(0) % 24000);
+		m.pass.value = true;
+		m.preset.value = 1; // noon, but let it pass
+		m.frame(new Game());
+		long a = TimeChanger.map(1000), b = TimeChanger.map(1600);
+		assertEquals(6000, Math.floorMod(a, 24000L), "starts at noon");
+		assertEquals(600, b - a, "and keeps passing");
+		m.setEnabled(true);
+		m.setEnabled(false);
+		assertEquals(777L, TimeChanger.map(777L), "off: the real time again");
+		assertEquals(6000L, TimeChanger.chosen(1, 0));
+		assertEquals(0L, TimeChanger.chosen(0, 0));
+	}
+
+	@Test
+	void weatherIsReplacedOnlyOnTheClientsWorld() {
+		class ClientWorldStandIn {
+		}
+		assertEquals(null, WeatherChanger.rain(new Object()), "module never ran: nothing replaced");
+		WeatherChanger m = new WeatherChanger();
+		m.weather.value = 2;
+		m.frame(new Game());
+		assertEquals(null, WeatherChanger.rain(new Object()), "a world that is not the client's (the integrated server's) keeps its weather");
+		assertEquals(null, WeatherChanger.rain(null));
+		m.setEnabled(true);
+		m.setEnabled(false);
+		assertEquals(null, WeatherChanger.thunder(new ClientWorldStandIn()));
+	}
+
+	@Test
+	void noHurtCamFollowsTheModule() {
+		assertFalse(NoHurtCam.active());
+		NoHurtCam m = new NoHurtCam();
+		m.frame(new Game());
+		assertTrue(NoHurtCam.active());
+		m.setEnabled(true);
+		m.setEnabled(false);
+		assertFalse(NoHurtCam.active());
+	}
 }
