@@ -189,4 +189,64 @@ public abstract class Setting {
 			return value == def;
 		}
 	}
+
+	/** A device picked from a live list (microphones, speakers). "" = the system default. */
+	public static final class Device extends Setting {
+		public String value = "";
+		public final java.util.function.Supplier<java.util.List<String>> options;
+
+		public Device(String id, String label, java.util.function.Supplier<java.util.List<String>> options) {
+			super(id, label);
+			this.options = options;
+		}
+
+		JsonElement save() {
+			return new JsonPrimitive(value);
+		}
+
+		void load(JsonElement e) {
+			value = e.getAsString();
+		}
+
+		public void reset() {
+			value = "";
+		}
+
+		public boolean isDefault() {
+			return value.isEmpty();
+		}
+	}
+
+	/** A live read-out (mic test): level in dB, an optional marker (NaN = none) and an error line. Not saved. */
+	public static final class Level extends Setting {
+		public final java.util.function.DoubleSupplier db, marker;
+		public final java.util.function.BooleanSupplier hot;
+		public final java.util.function.Supplier<String> error;
+		/** Called every frame the row is on screen (keeps the microphone open for the test). */
+		public final Runnable shown;
+
+		public Level(String id, String label, java.util.function.DoubleSupplier db, java.util.function.DoubleSupplier marker,
+				java.util.function.BooleanSupplier hot, java.util.function.Supplier<String> error, Runnable shown) {
+			super(id, label);
+			this.db = db;
+			this.marker = marker;
+			this.hot = hot;
+			this.error = error;
+			this.shown = shown;
+		}
+
+		JsonElement save() {
+			return com.google.gson.JsonNull.INSTANCE;
+		}
+
+		void load(JsonElement e) {
+		}
+
+		public void reset() {
+		}
+
+		public boolean isDefault() {
+			return true;
+		}
+	}
 }

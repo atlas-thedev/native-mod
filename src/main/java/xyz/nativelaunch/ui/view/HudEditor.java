@@ -7,6 +7,7 @@ import xyz.nativelaunch.ui.UiRuntime;
 import xyz.nativelaunch.ui.Widgets;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Fonts;
+import xyz.nativelaunch.voice.Voice;
 import xyz.nativelaunch.ui.gfx.Image;
 import xyz.nativelaunch.ui.mod.Game;
 import xyz.nativelaunch.ui.mod.HudModule;
@@ -31,6 +32,10 @@ public final class HudEditor {
 	private float sizeStart, anchorX, anchorY, startW, startH;
 	private float grabX, grabY;
 	private float popX, popY, popW, popH;
+	/** Voice overlay: the player whose volume bubble is open (click a face), its anchor and box. */
+	private String volPick;
+	private float volX, volY, pressX, pressY;
+	private final float[] volRect = new float[4];
 	private final List<HudModule> shown = new ArrayList<HudModule>();
 	private final List<float[]> rects = new ArrayList<float[]>();
 	/** Per shown module: {tag x, tag y, tag w, gear x, minus x}. */
@@ -166,7 +171,8 @@ public final class HudEditor {
 			tags.add(new float[] {lx, ly, lw, lx + lw + 4, lx + lw + 26});
 		}
 		boolean overPop = popover != null && ui.hover(popX, popY, popW, popH);
-		boolean blocked = overHub || overDrawer || overNotice || overPop;
+		boolean overVol = volPick != null && in(volRect, ui);
+		boolean blocked = overHub || overDrawer || overNotice || overPop || overVol;
 
 		// the gear / minus badges first: they sit over the tag row, outside the box
 		HudModule tagHover = null;
@@ -275,6 +281,8 @@ public final class HudEditor {
 			if (ui.pressed) {
 				drag = hover;
 				float[] r = rects.get(hoverIndex);
+				pressX = ui.mx;
+				pressY = ui.my;
 				grabX = ui.mx - r[0];
 				grabY = ui.my - r[1];
 				popover = null;
@@ -292,6 +300,14 @@ public final class HudEditor {
 		if (drag != null) {
 			int di = shown.indexOf(drag);
 			if (!ui.down || di < 0) {
+				if (di >= 0 && Math.hypot(ui.mx - pressX, ui.my - pressY) < 4) {
+					// a click, not a drag: the voice overlay opens a volume bubble for the face under it
+					float[] r = rects.get(di);
+					String pick = drag.pickAt(c, inWorld && live != null ? live : sample, pressX - r[0], pressY - r[1]);
+					volPick = pick;
+					volX = r[0] + r[2] + 10;
+					volY = pressY - 20;
+				}
 				drag = null;
 				Modules.changed();
 			} else {
@@ -384,6 +400,37 @@ public final class HudEditor {
 				drawPopover(ui, popover, rects.get(pi), W, H);
 			}
 		}
+		volumeBubble(ui, W, H);
+	}
+
+	private void volumeBubble(Ui ui, float W, float H) {
+		Voice.Member m = volPick == null ? null : Voice.member(volPick);
+		if (m == null) {
+			volPick = null;
+			volRect[2] = 0;
+			return;
+		}
+		Canvas c = ui.c;
+		float w = 300, h = 66, x = volX + w > W - 8 ? volX - w - 20 : volX, y = Math.max(8, Math.min(H - h - 8, volY));
+		x = Math.max(8, x);
+		volRect[0] = x;
+		volRect[1] = y;
+		volRect[2] = w;
+		volRect[3] = h;
+		if (ui.pressed && !ui.hover(x, y, w, h)) {
+			volPick = null;
+			return;
+		}
+		c.shadow(x, y + 3, w, h, 12, 18, 0x88000000);
+		c.round(x, y, w, h, 12, 0xF808090C);
+		c.outline(x, y, w, h, 12, 1, Theme.HAIRLINE_STRONG);
+		c.text(Fonts.SEMIBOLD, 11, "PLAYER VOLUME", x + 14, y + 10, Theme.TEXT_MUTED);
+		if (ui.iconButton("hud:vol:close", x + w - 32, y + 6, 22, Theme.I_X, null)) {
+			volPick = null;
+			return;
+		}
+		String name = m.ign != null ? m.ign : m.name;
+		xyz.nativelaunch.ui.mod.VoiceModules.volumeRow(ui, "hud:vol:" + m.userId, m.userId, name, m.skin, Voice.speaking(m), x + 14, y + 28, w - 28);
 	}
 
 	// ── hub ──────────────────────────────────────────────────────────────

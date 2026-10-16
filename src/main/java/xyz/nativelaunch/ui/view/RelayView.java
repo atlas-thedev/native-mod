@@ -665,6 +665,41 @@ public final class RelayView {
 		return right;
 	}
 
+	/** In a call: everyone else with their own volume slider (up to four rows). Returns the height used. */
+	private static float callPanel(Ui ui, String key, float x, float y, float w) {
+		if (!Voice.inCall(key)) {
+			return 0;
+		}
+		String me = Voice.me();
+		List<Voice.Member> others = new ArrayList<Voice.Member>();
+		for (Voice.Member m : Voice.callMembers(key)) {
+			if (me == null || !me.equals(m.userId)) {
+				others.add(m);
+			}
+		}
+		if (others.isEmpty()) {
+			return 0;
+		}
+		Canvas c = ui.c;
+		int rows = Math.min(4, others.size());
+		float h = 10 + rows * 32 + (others.size() > rows ? 18 : 0);
+		c.fill(x, y, w, h, 0x0A22C55E);
+		float rw = Math.min(460, w - 40);
+		for (int i = 0; i < rows; i++) {
+			Voice.Member m = others.get(i);
+			xyz.nativelaunch.ui.mod.VoiceModules.volumeRow(ui, "relay:vol:" + m.userId, m.userId, m.ign != null ? m.ign : m.name, m.skin, Voice.speaking(m),
+					x + 20, y + 5 + i * 32, rw);
+			if (m.muted || m.deafened) {
+				c.icon(m.deafened ? Theme.I_HEADPHONES_OFF : Theme.I_MIC_OFF, 13, x + 20 + rw + 16, y + 5 + i * 32 + 15, Theme.DANGER);
+			}
+		}
+		if (others.size() > rows) {
+			c.text(Fonts.MEDIUM, 11, "+" + (others.size() - rows) + " more in the call", x + 20, y + 5 + rows * 32, Theme.TEXT_MUTED);
+		}
+		c.fill(x, y + h - 1, w, 1, Theme.HAIRLINE);
+		return h;
+	}
+
 	/** Header icon button; with a tint it is a filled pill (green join, red leave / muted). */
 	private static boolean voiceButton(Ui ui, String id, float x, float y, int icon, String tip, int tint) {
 		if (tint == 0) {
@@ -738,11 +773,12 @@ public final class RelayView {
 		}
 		c.text(Fonts.REGULAR, 11.5f, c.ellipsize(Fonts.REGULAR, 11.5f, status, nameW), hx + 48, hy + 20, statusColor);
 		c.fill(x, y + 64, w, 1, Theme.HAIRLINE);
+		float callH = callPanel(ui, selected, x, y + 65, w);
 
 		// messages
 		float inputH = 46;
 		float barH = replyTo != null || editingId != null ? 36 : 0;
-		float my0 = y + 65, mh = h - 65 - inputH - 34 - barH;
+		float my0 = y + 65 + callH, mh = h - 65 - callH - inputH - 34 - barH;
 		Scroll sc = chatScrolls.get(selected);
 		if (sc == null) {
 			sc = new Scroll();

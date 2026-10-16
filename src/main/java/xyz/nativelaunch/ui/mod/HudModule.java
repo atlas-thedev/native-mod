@@ -115,6 +115,11 @@ public abstract class HudModule extends Module {
 		fy = defY;
 	}
 
+	/** In the HUD editor: what a click at (lx, ly) inside the module points at (a player's id for the voice overlay), or null. */
+	public String pickAt(Canvas c, Game g, float lx, float ly) {
+		return null;
+	}
+
 	/** Shown on the HUD right now (a module may hide itself, e.g. server IP in singleplayer). */
 	public boolean visible(Game g) {
 		return true;

@@ -3,6 +3,7 @@ package xyz.nativelaunch.voice;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.fabricmc.loader.api.FabricLoader;
 import xyz.nativelaunch.core.Log;
 import xyz.nativelaunch.relay.Model;
 import xyz.nativelaunch.relay.RelayClient;
@@ -74,6 +75,9 @@ public final class Voice {
 	public static volatile boolean pushToTalk = true, pttHeld, proximityOn = true;
 	public static volatile float thresholdDb = -42, micGain = 1, outVolume = 1, range = 48;
 	public static volatile boolean muted, deafened;
+	/** Chosen devices by name; "" = system default. */
+	public static volatile String micDevice = "", outDevice = "";
+	private static volatile long micTestUntil;
 	static volatile boolean selfSpeaking;
 	static volatile float selfLevel;
 
@@ -88,7 +92,8 @@ public final class Voice {
 		return t;
 	});
 	private static VoiceNet net;
-	private static AudioEngine audio;
+	private static volatile AudioEngine audio;
+	private static final boolean SVC = svcInstalled();
 	private static volatile long proxRetryAt;
 	private static volatile String proxFor;
 	private static volatile boolean proxBusy;
@@ -96,6 +101,96 @@ public final class Voice {
 	private static volatile boolean earValid;
 
 	private Voice() {
+	}
+
+	// ── per-player volume (config/native-voice.json, by Native user id) ──
+
+	private static final Map<String, Float> volumes = new ConcurrentHashMap<String, Float>();
+	private static volatile boolean volumesLoaded, volumesDirty;
+
+	private static java.nio.file.Path volumesFile() {
+		return FabricLoader.getInstance().getConfigDir().resolve("native-voice.json");
+	}
+
+	private static void loadVolumes() {
+		if (volumesLoaded) {
+			return;
+		}
+		volumesLoaded = true;
+		try {
+			java.nio.file.Path f = volumesFile();
+			if (java.nio.file.Files.isRegularFile(f)) {
+				JsonObject o = new com.google.gson.JsonParser().parse(new String(java.nio.file.Files.readAllBytes(f), java.nio.charset.StandardCharsets.UTF_8))
+						.getAsJsonObject().getAsJsonObject("volumes");
+				for (Map.Entry<String, JsonElement> e : o.entrySet()) {
+					volumes.put(e.getKey(), Math.max(0f, Math.min(2f, e.getValue().getAsFloat())));
+				}
+			}
+		} catch (Throwable t) {
+			Log.debug("Voice volumes: {}", t.toString());
+		}
+	}
+
+	/** Volume for one player, 0 - 2 (1 = as sent). */
+	public static float volume(String userId) {
+		loadVolumes();
+		Float v = userId == null ? null : volumes.get(userId);
+		return v == null ? 1f : v;
+	}
+
+	public static void setVolume(String userId, float v) {
+		if (userId == null) {
+			return;
+		}
+		loadVolumes();
+		v = Math.max(0f, Math.min(2f, v));
+		if (Math.abs(v - 1f) < 0.001f) {
+			volumes.remove(userId);
+		} else {
+			volumes.put(userId, v);
+		}
+		if (!volumesDirty) {
+			volumesDirty = true;
+			pool.execute(() -> {
+				try {
+					Thread.sleep(800);
+					volumesDirty = false;
+					JsonObject root = new JsonObject(), o = new JsonObject();
+					for (Map.Entry<String, Float> e : volumes.entrySet()) {
+						o.addProperty(e.getKey(), e.getValue());
+					}
+					root.add("volumes", o);
+					java.nio.file.Path f = volumesFile();
+					java.nio.file.Files.createDirectories(f.getParent());
+					java.nio.file.Files.write(f, root.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+				} catch (Throwable t) {
+					Log.debug("Voice volumes not saved: {}", t.toString());
+				}
+			});
+		}
+	}
+
+	/** A member of your call or proximity room by user id, or null. */
+	public static Member member(String userId) {
+		for (Room r : new Room[] {call, prox}) {
+			if (r != null && userId != null) {
+				for (Member m : r.members) {
+					if (userId.equals(m.userId)) {
+						return m;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	/** Simple Voice Chat is installed: it owns proximity voice then (Native keeps calls), so nobody is heard twice. */
+	public static boolean svcInstalled() {
+		try {
+			return FabricLoader.getInstance().isModLoaded("voicechat");
+		} catch (Throwable t) {
+			return false;
+		}
 	}
 
 	// ── state for the UI ──────────────────────────────────────────────────
@@ -160,7 +255,26 @@ public final class Voice {
 	}
 
 	static boolean wantsMic() {
-		return active() && !muted && !deafened;
+		return active() && !muted && !deafened || System.currentTimeMillis() < micTestUntil;
+	}
+
+	/** The mic test is on screen: keep the microphone open (and the engine running) for a moment. */
+	public static void micTest() {
+		micTestUntil = System.currentTimeMillis() + 600;
+		if (audio == null) {
+			pool.execute(() -> {
+				if (audio == null) {
+					audio = new AudioEngine();
+					audio.start();
+				}
+			});
+		}
+	}
+
+	/** Microphone level in dBFS (after the mic volume), -100 when silent / closed. */
+	public static double micDb() {
+		float l = selfLevel;
+		return l <= 1e-5f ? -100 : 20 * Math.log10(l);
 	}
 
 	static Collection<RemoteStream> streams() {
@@ -324,7 +438,7 @@ public final class Voice {
 			return;
 		}
 		String server = mc.inWorld() ? mc.server() : null;
-		String want = enabled && proximityOn && server != null && !"Singleplayer".equals(server) ? "srv:" + server : null;
+		String want = enabled && proximityOn && !SVC && server != null && !"Singleplayer".equals(server) ? "srv:" + server : null;
 		Room p = prox;
 		if (want == null ? proxFor != null : !want.equals(proxFor)) {
 			switchProximity(want);

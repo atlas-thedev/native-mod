@@ -161,7 +161,79 @@ public final class Widgets {
 
 	/** Height a setting row takes. */
 	public static float rowHeight(Setting s) {
+		if (s == openDevice) {
+			return ROW + 30 * (1 + ((Setting.Device) s).options.get().size()) + 8;
+		}
 		return ROW;
+	}
+
+	/** The device list that is unfolded under its row, or null. */
+	private static Setting openDevice;
+	private static final float LEVEL_MIN = -70;
+
+	private static float deviceRow(Ui ui, String id, float x, float y, float w, Setting.Device d, float labelW) {
+		Canvas c = ui.c;
+		float bw = Math.max(120, Math.min(240, w - labelW - 40)), bh = 28, bx = x + w - bw, by = y + (ROW - bh) / 2;
+		boolean open = openDevice == d;
+		java.util.List<String> list = d.options.get();
+		String current = d.value.isEmpty() ? "System default" : d.value;
+		boolean missing = !d.value.isEmpty() && !list.contains(d.value);
+		boolean over = ui.hover(bx, by, bw, bh);
+		c.round(bx, by, bw, bh, 8, over || open ? 0x24FFFFFF : 0x14FFFFFF);
+		c.outline(bx, by, bw, bh, 8, 1, open ? 0x40FFFFFF : Theme.HAIRLINE);
+		c.text(Fonts.SEMIBOLD, 11.5f, c.ellipsize(Fonts.SEMIBOLD, 11.5f, missing ? current + " (unplugged)" : current, bw - 34), bx + 10,
+				by + (bh - c.lineHeight(Fonts.SEMIBOLD, 11.5f)) / 2, missing ? Theme.DANGER : Theme.TEXT_STRONG);
+		c.icon(open ? Theme.I_CHEVRON_UP : Theme.I_CHEVRON_DOWN, 12, bx + bw - 14, by + bh / 2, Theme.TEXT_MUTED);
+		if (ui.clicked(id, bx, by, bw, bh)) {
+			openDevice = open ? null : d;
+		}
+		if (open) {
+			float ly = y + ROW, lw = w;
+			for (int i = -1; i < list.size(); i++) {
+				String name = i < 0 ? "" : list.get(i);
+				String shown = i < 0 ? "System default" : name;
+				boolean sel = d.value.equals(name);
+				boolean ho = ui.hover(x, ly, lw, 28);
+				if (ho || sel) {
+					c.round(x, ly, lw, 28, 7, sel ? 0x1F22C55E : 0x14FFFFFF);
+				}
+				if (sel) {
+					c.icon(Theme.I_CHECK, 12, x + 14, ly + 14, Theme.ONLINE);
+				}
+				c.text(Fonts.MEDIUM, 12, c.ellipsize(Fonts.MEDIUM, 12, shown, lw - 40), x + 28, ly + (28 - c.lineHeight(Fonts.MEDIUM, 12)) / 2,
+						sel ? Theme.TEXT_STRONG : Theme.TEXT);
+				if (ui.clicked(id + "#" + i, x, ly, lw, 28)) {
+					d.value = name;
+					openDevice = null;
+					return -1; // changed
+				}
+				ly += 30;
+			}
+		}
+		return bx;
+	}
+
+	private static void levelRow(Ui ui, float x, float y, float w, Setting.Level l, float labelW) {
+		Canvas c = ui.c;
+		l.shown.run();
+		float bw = Math.max(100, Math.min(240, w - labelW - 40)), bh = 10, bx = x + w - bw, by = y + (ROW - bh) / 2;
+		String err = l.error.get();
+		if (err != null) {
+			c.text(Fonts.MEDIUM, 11, c.ellipsize(Fonts.MEDIUM, 11, err, bw), x + w - Math.min(bw, c.textWidth(Fonts.MEDIUM, 11, err)),
+					y + (ROW - c.lineHeight(Fonts.MEDIUM, 11)) / 2, Theme.DANGER);
+			return;
+		}
+		float f = (float) Math.max(0, Math.min(1, (l.db.getAsDouble() - LEVEL_MIN) / -LEVEL_MIN));
+		float shown = ui.anim("level#" + l.id, f, 22f);
+		c.round(bx, by, bw, bh, bh / 2, 0x1AFFFFFF);
+		if (shown > 0.01f) {
+			c.round(bx, by, Math.max(bh, bw * shown), bh, bh / 2, l.hot.getAsBoolean() ? Theme.ONLINE : 0xFF71717A);
+		}
+		double mark = l.marker.getAsDouble();
+		if (!Double.isNaN(mark)) {
+			float mx = bx + bw * (float) Math.max(0, Math.min(1, (mark - LEVEL_MIN) / -LEVEL_MIN));
+			c.fill(mx - 1, by - 5, 2, bh + 10, 0xFFF4F4F5);
+		}
 	}
 
 	/**
@@ -186,11 +258,19 @@ public final class Widgets {
 			labelMax = w - swatchesWidth() - 40;
 		} else if (s instanceof Setting.Key) {
 			labelMax = w - 110 - 40;
+		} else if (s instanceof Setting.Device || s instanceof Setting.Level) {
+			labelMax = w * 0.38f;
 		}
 		String label = labelW > labelMax ? c.ellipsize(Fonts.MEDIUM, fs, s.label, Math.max(40, labelMax)) : s.label;
 		labelW = c.textWidth(Fonts.MEDIUM, fs, label);
 		c.text(Fonts.MEDIUM, fs, label, x, y + (h - c.lineHeight(Fonts.MEDIUM, fs)) / 2, Theme.TEXT);
-		if (s instanceof Setting.Bool) {
+		if (s instanceof Setting.Device) {
+			float left = deviceRow(ui, id, x, y, w, (Setting.Device) s, labelW);
+			changed = left < 0;
+			controlX = left < 0 ? x + w : left;
+		} else if (s instanceof Setting.Level) {
+			levelRow(ui, x, y, w, (Setting.Level) s, labelW);
+		} else if (s instanceof Setting.Bool) {
 			controlX = x + w - 34;
 			Setting.Bool b = (Setting.Bool) s;
 			if (ui.toggle(id, x + w - 34, y + (h - 20) / 2, b.value)) {

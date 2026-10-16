@@ -46,7 +46,7 @@ public final class Theme {
 			I_FLASK = 0xF129, I_SHIELD = 0xF12A, I_HEART_PULSE = 0xF12B, I_MINUS = 0xF12C, I_HELP = 0xF12D, I_DRUMSTICK = 0xF12E,
 			I_SWORD = 0xF12F, I_PENCIL = 0xF130, I_TRASH = 0xF131, I_CHECKS = 0xF132, I_REPLY_ARROW = 0xF133,
 			I_MIC = 0xF134, I_MIC_OFF = 0xF135, I_PHONE = 0xF136, I_PHONE_OFF = 0xF137, I_HEADPHONES = 0xF138,
-			I_HEADPHONES_OFF = 0xF139, I_VOLUME = 0xF13A;
+			I_HEADPHONES_OFF = 0xF139, I_VOLUME = 0xF13A, I_CHEVRON_DOWN = 0xF13B, I_CHEVRON_UP = 0xF13C;
 	// drawn in code (gfx.NavIcons)
 	public static final int I_NAV_MODS = xyz.nativelaunch.ui.gfx.NavIcons.MODS, I_NAV_LOCKER = xyz.nativelaunch.ui.gfx.NavIcons.LOCKER,
 			I_NAV_SETTINGS = xyz.nativelaunch.ui.gfx.NavIcons.SETTINGS;

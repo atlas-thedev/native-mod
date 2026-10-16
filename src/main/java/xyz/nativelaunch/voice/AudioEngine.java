@@ -6,8 +6,6 @@ import xyz.nativelaunch.voice.opus.OpusEncoder;
 import xyz.nativelaunch.voice.opus.OpusSignal;
 
 import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
 import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.TargetDataLine;
 
@@ -60,6 +58,7 @@ final class AudioEngine {
 			return;
 		}
 		TargetDataLine line = null;
+		String device = null;
 		int hang = 0;
 		boolean open = false;
 		while (running) {
@@ -76,9 +75,14 @@ final class AudioEngine {
 					Thread.sleep(100);
 					continue;
 				}
+				if (line != null && !Voice.micDevice.equals(device)) {
+					line.stop();
+					line.close();
+					line = null;
+				}
 				if (line == null) {
-					DataLine.Info info = new DataLine.Info(TargetDataLine.class, fmt);
-					line = (TargetDataLine) AudioSystem.getLine(info);
+					device = Voice.micDevice;
+					line = VoiceDevices.open(TargetDataLine.class, fmt, device);
 					line.open(fmt, FRAME * 2 * 4);
 					line.start();
 					micError = null;
@@ -147,6 +151,7 @@ final class AudioEngine {
 		byte[] out = new byte[FRAME * 4];
 		double[] ear = new double[5];
 		SourceDataLine line = null;
+		String device = null;
 		while (running) {
 			try {
 				if (!Voice.active()) {
@@ -158,8 +163,13 @@ final class AudioEngine {
 					Thread.sleep(100);
 					continue;
 				}
+				if (line != null && !Voice.outDevice.equals(device)) {
+					line.close();
+					line = null;
+				}
 				if (line == null) {
-					line = (SourceDataLine) AudioSystem.getLine(new DataLine.Info(SourceDataLine.class, fmt));
+					device = Voice.outDevice;
+					line = VoiceDevices.open(SourceDataLine.class, fmt, device);
 					line.open(fmt, FRAME * 4 * 4);
 					line.start();
 					speakerError = null;
@@ -173,7 +183,8 @@ final class AudioEngine {
 					if (pcm == null || Voice.deafened || Voice.duplicate(s)) {
 						continue;
 					}
-					float l = volume, r = volume;
+					float uv = volume * Voice.volume(s.userId);
+					float l = uv, r = uv;
 					if (s.proximity) {
 						if (!haveEar || !s.placed) {
 							continue; // not near enough to be loaded in the world: out of earshot
@@ -189,8 +200,8 @@ final class AudioEngine {
 						double pan = d < 0.5 ? 0 : (dx * -Math.cos(yaw) + dz * -Math.sin(yaw)) / Math.max(1e-6, Math.sqrt(dx * dx + dz * dz));
 						pan *= Math.min(1, d / 4); // close by sounds centred
 						double a = (pan + 1) * Math.PI / 4;
-						l = (float) (volume * fall * Math.cos(a) * 1.4142);
-						r = (float) (volume * fall * Math.sin(a) * 1.4142);
+						l = (float) (uv * fall * Math.cos(a) * 1.4142);
+						r = (float) (uv * fall * Math.sin(a) * 1.4142);
 					}
 					for (int i = 0; i < FRAME; i++) {
 						acc[2 * i] += (int) (pcm[i] * l);

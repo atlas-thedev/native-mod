@@ -4,6 +4,7 @@ import xyz.nativelaunch.relay.RelayClient;
 import xyz.nativelaunch.ui.Avatars;
 import xyz.nativelaunch.ui.Theme;
 import xyz.nativelaunch.ui.Ui;
+import xyz.nativelaunch.ui.Widgets;
 import xyz.nativelaunch.ui.gfx.Canvas;
 import xyz.nativelaunch.ui.gfx.Fonts;
 import xyz.nativelaunch.voice.Voice;
@@ -12,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Voice chat: the settings module plus the movable "who is talking" overlay. */
-final class VoiceModules {
+public final class VoiceModules {
 	private VoiceModules() {
 	}
 
@@ -23,15 +24,28 @@ final class VoiceModules {
 
 	static final class VoiceChat extends Module {
 		static final int PTT = 0, ACTIVATION = 1;
-		final Setting.Choice mode = add(new Setting.Choice("mode", "Talk mode", PTT, "Push to talk", "Voice activation").shorts("PTT", "Voice"));
-		final Setting.Key ptt = add(new Setting.Key("ptt", "Push-to-talk key", 86));
-		final Setting.Num threshold = add(new Setting.Num("threshold", "Activation level", -42, -70, -10, 1, " dB"));
+		final Setting.Device micDevice = add(new Setting.Device("micdevice", "Microphone", xyz.nativelaunch.voice.VoiceDevices::inputs));
+		final Setting.Level test = add(new Setting.Level("mictest", "Mic test", Voice::micDb, this::marker, this::hot, Voice::micError, Voice::micTest));
 		final Setting.Num mic = add(new Setting.Num("mic", "Microphone volume", 100, 0, 300, 5, "%"));
+		final Setting.Device outDevice = add(new Setting.Device("outdevice", "Output device", xyz.nativelaunch.voice.VoiceDevices::outputs));
 		final Setting.Num volume = add(new Setting.Num("volume", "Voice volume", 100, 0, 200, 5, "%"));
+		final Setting.Choice mode = add(new Setting.Choice("mode", "Talk mode", PTT, "Push to talk", "Voice activation").shorts("PTT", "Voice"));
+		final Setting.Key ptt = add(new Setting.Key("ptt", "Push-to-talk key", 66));
+		final Setting.Num threshold = add(new Setting.Num("threshold", "Activation level", -42, -70, -10, 1, " dB"));
 		final Setting.Bool proximity = add(new Setting.Bool("proximity", "Proximity voice on servers", true));
 		final Setting.Num range = add(new Setting.Num("range", "Hearing distance", 48, 8, 96, 4, " blocks"));
 		final Setting.Key mute = add(new Setting.Key("mute", "Mute key", -1));
 		final Setting.Key deafen = add(new Setting.Key("deafen", "Deafen key", -1));
+
+		/** Where voice activation opens, drawn on the mic test bar (none with push to talk). */
+		private double marker() {
+			return mode.value == ACTIVATION ? threshold.value : Double.NaN;
+		}
+
+		/** Green while the mic would send: above the activation level, or (push to talk) clearly picking up a voice. */
+		private boolean hot() {
+			return Voice.micDb() >= (mode.value == ACTIVATION ? threshold.value : -50);
+		}
 
 		VoiceChat() {
 			super("voice", "Voice Chat", "Talk to friends and groups in a call, and to Native players near you on any server.", MECHANIC,
@@ -40,7 +54,8 @@ final class VoiceModules {
 
 		@Override
 		protected boolean hidden(Setting s) {
-			return s == ptt && mode.value != PTT || s == threshold && mode.value != ACTIVATION || s == range && !proximity.value;
+			boolean svc = Voice.svcInstalled(); // Simple Voice Chat does proximity then; Native keeps calls
+			return s == ptt && mode.value != PTT || s == threshold && mode.value != ACTIVATION || s == range && (!proximity.value || svc) || s == proximity && svc;
 		}
 
 		@Override
@@ -48,6 +63,8 @@ final class VoiceModules {
 			Voice.pushToTalk = mode.value == PTT;
 			Voice.pttHeld = g.playing && ptt.value >= 0 && Keys.isDown(g.window, ptt.value);
 			Voice.thresholdDb = threshold.value;
+			Voice.micDevice = micDevice.value;
+			Voice.outDevice = outDevice.value;
 			Voice.micGain = mic.value / 100f;
 			Voice.outVolume = volume.value / 100f;
 			Voice.proximityOn = proximity.value;
@@ -85,7 +102,7 @@ final class VoiceModules {
 		private final float[] size = new float[2];
 
 		static final class Row {
-			String name, skin;
+			String name, skin, userId;
 			boolean speaking, muted, deafened, self;
 		}
 
@@ -117,6 +134,7 @@ final class VoiceModules {
 					Row r = row(n++);
 					r.self = me != null && me.equals(m.userId);
 					r.name = r.self ? "You" : m.ign != null ? m.ign : m.name;
+					r.userId = r.self ? null : m.userId;
 					r.skin = m.skin;
 					r.speaking = Voice.speaking(m);
 					r.muted = r.self ? Voice.muted : m.muted;
@@ -132,6 +150,7 @@ final class VoiceModules {
 					Row r = row(n++);
 					r.self = false;
 					r.name = m.ign != null ? m.ign : m.name;
+					r.userId = m.userId;
 					r.skin = m.skin;
 					r.speaking = true;
 					r.muted = r.deafened = false;
@@ -142,6 +161,7 @@ final class VoiceModules {
 				Row a = row(n++);
 				a.self = true;
 				a.name = "You";
+				a.userId = null;
 				a.skin = Avatars.self(HudModules.mc() == null ? null : HudModules.mc().username());
 				a.speaking = true;
 				a.muted = a.deafened = false;
@@ -149,6 +169,7 @@ final class VoiceModules {
 				b.self = false;
 				b.name = client != null && !client.friends.isEmpty() ? client.friends.get(0).display() : "Friend";
 				b.skin = client != null && !client.friends.isEmpty() ? client.friends.get(0).skin : null;
+				b.userId = null;
 				b.speaking = false;
 				b.muted = true;
 				b.deafened = false;
@@ -166,6 +187,22 @@ final class VoiceModules {
 				}
 			}
 			return false;
+		}
+
+		@Override
+		public String pickAt(Canvas c, Game g, float lx, float ly) {
+			float[] sz = measure(c, g);
+			int n = collect(true);
+			float s = scale.value, face = 22 * s, gap = 6 * s, pad = 6 * s;
+			for (int i = 0; i < n; i++) {
+				float fx = layout.value == 1 ? pad + i * (face + gap) : pad;
+				float fy = layout.value == 1 ? pad : pad + i * (face + gap);
+				float rw = layout.value == 1 ? face : sz[0] - pad * 2;
+				if (lx >= fx - gap / 2 && lx <= fx + rw + gap / 2 && ly >= fy - gap / 2 && ly <= fy + face + gap / 2) {
+					return rows.get(i).userId;
+				}
+			}
+			return null;
 		}
 
 		@Override
@@ -217,4 +254,32 @@ final class VoiceModules {
 			}
 		}
 	}
+
+	/** One "face  name  ----o----  120%" row for a player's own volume (Relay call panel, HUD editor bubble). */
+	public static void volumeRow(Ui ui, String id, String userId, String name, String skin, boolean speaking, float x, float y, float w) {
+		Canvas c = ui.c;
+		float face = 20, cy = y + 15;
+		c.circle(x + face / 2, cy, face / 2 + 2, speaking ? 0xFF22C55E : 0x26FFFFFF);
+		c.circle(x + face / 2, cy, face / 2 + 0.5f, 0xFF08090C);
+		Avatars.drawRound(c, Avatars.api(), name, skin, x, cy - face / 2, face);
+		float nameW = Math.min(110, w * 0.32f);
+		c.text(Fonts.MEDIUM, 12, c.ellipsize(Fonts.MEDIUM, 12, name, nameW), x + face + 8, cy - c.lineHeight(Fonts.MEDIUM, 12) / 2, Theme.TEXT_STRONG);
+		Setting.Num n = VOL.get(userId);
+		if (n == null) {
+			n = new Setting.Num("vol", "Volume", 100, 0, 200, 5, "%");
+			VOL.put(userId, n);
+		}
+		if (!ui.isPressing(id)) {
+			n.value = Math.round(Voice.volume(userId) * 100);
+		}
+		String pct = n.text();
+		float vw = 40, sx = x + face + 8 + nameW + 12, sw = Math.max(40, x + w - vw - 10 - sx);
+		if (Widgets.slider(ui, id, sx, cy - 9, sw, n)) {
+			Voice.setVolume(userId, n.value / 100f);
+		}
+		c.text(Fonts.SEMIBOLD, 11.5f, pct, x + w - c.textWidth(Fonts.SEMIBOLD, 11.5f, pct), cy - c.lineHeight(Fonts.SEMIBOLD, 11.5f) / 2,
+				n.value == 0 ? Theme.DANGER : Theme.TEXT_SECONDARY);
+	}
+
+	private static final java.util.Map<String, Setting.Num> VOL = new java.util.HashMap<String, Setting.Num>();
 }
