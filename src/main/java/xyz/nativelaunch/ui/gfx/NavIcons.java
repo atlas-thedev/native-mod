@@ -5,14 +5,14 @@ import java.util.Map;
 
 /** Native navigation icons drawn in code (24 x 24 line art, rasterised with anti-aliasing at the exact pixel size). */
 public final class NavIcons {
-    public static final int MODS = 0xF500, LOCKER = 0xF501, SETTINGS = 0xF502;
+    public static final int MODS = 0xF500, LOCKER = 0xF501, SETTINGS = 0xF502, MOON = 0xF503, CAMERA = 0xF504, FLAME = 0xF505;
     private static final float STROKE = 1.9f;
     private static final Map<Long, Image> cache = new HashMap<Long, Image>();
 
     private NavIcons() {}
 
     public static boolean has(int codepoint) {
-        return codepoint >= MODS && codepoint <= SETTINGS;
+        return codepoint >= MODS && codepoint <= FLAME;
     }
 
     /** White icon of px x px pixels (tinted when drawn). */
@@ -60,6 +60,32 @@ public final class NavIcons {
                 d = Math.min(d, seg(x, y, 2.8f, 16.4f, 4.2f, 18.6f));
                 d = Math.min(d, seg(x, y, 21.2f, 16.4f, 19.8f, 18.6f));
                 return Math.min(d, seg(x, y, 4.2f, 18.6f, 19.8f, 18.6f));
+            }
+            case MOON: {
+                // a crescent: the big circle's outer arc and the bite taken out of it
+                float cx = 12, cy = 12, r = 8.6f, bx = 16.2f, by = 8.2f, br = 7f;
+                float d1 = Math.abs(len(x - cx, y - cy) - r), d2 = Math.abs(len(x - bx, y - by) - br);
+                boolean outsideBite = len(x - bx, y - by) >= br, insideDisc = len(x - cx, y - cy) <= r;
+                float d = Float.MAX_VALUE;
+                if (outsideBite) d = Math.min(d, d1);
+                if (insideDisc) d = Math.min(d, d2);
+                return d;
+            }
+            case CAMERA: {
+                float d = roundRect(x, y, 2.5f, 7, 19, 12.5f, 3f);
+                d = Math.min(d, seg(x, y, 8.2f, 7, 9.6f, 4.4f));
+                d = Math.min(d, seg(x, y, 9.6f, 4.4f, 14.4f, 4.4f));
+                d = Math.min(d, seg(x, y, 14.4f, 4.4f, 15.8f, 7));
+                return Math.min(d, Math.abs(len(x - 12, y - 13.2f) - 3.6f));
+            }
+            case FLAME: {
+                float[][] pts = {{12, 2.8f}, {15.8f, 7.6f}, {18.4f, 12.4f}, {17.4f, 17.2f}, {14.4f, 20.4f}, {12, 21f}, {9.6f, 20.4f}, {6.6f, 17.2f},
+                        {5.8f, 13.2f}, {7.4f, 9.4f}, {9.6f, 12.4f}, {10.4f, 7.2f}};
+                float d = Float.MAX_VALUE;
+                for (int i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+                    d = Math.min(d, seg(x, y, pts[j][0], pts[j][1], pts[i][0], pts[i][1]));
+                }
+                return Math.min(d, Math.abs(len(x - 12, y - 16.4f) - 2.2f));
             }
             default: {
                 float[] ys = {6, 12, 18}, kx = {15.5f, 8.5f, 13.5f};

@@ -689,6 +689,68 @@ public final class Voice {
 		client.notices.add(new Model.Notice(key, title, (key.startsWith("g:") && who != null ? who + " started" : "Started") + " a voice call", who, skin));
 	}
 
+	// ── speaker test (Settings) ───────────────────────────────────────────
+
+	private static volatile String speakerStatus;
+
+	/** "Playing...", "Played ...", or "Could not play: ..."; null before the first test. */
+	public static String speakerTestStatus() {
+		return speakerStatus;
+	}
+
+	/** Plays a short three-note chime through the chosen output device so the player can check it. */
+	public static void testSpeakers() {
+		if ("Playing...".equals(speakerStatus)) {
+			return;
+		}
+		speakerStatus = "Playing...";
+		final String device = outDevice;
+		final float gain = Math.max(0.25f, Math.min(1f, outVolume)) * 0.4f;
+		Thread t = new Thread(() -> {
+			javax.sound.sampled.SourceDataLine line = null;
+			try {
+				javax.sound.sampled.AudioFormat fmt = new javax.sound.sampled.AudioFormat(48000, 16, 1, true, false);
+				line = VoiceDevices.open(javax.sound.sampled.SourceDataLine.class, fmt, device);
+				line.open(fmt, 48000 / 5 * 2);
+				line.start();
+				byte[] pcm = chime(48000, gain);
+				line.write(pcm, 0, pcm.length);
+				line.drain();
+				speakerStatus = "Played: did you hear it?";
+			} catch (Throwable e) {
+				String m = e.getMessage();
+				speakerStatus = "Could not play: " + (m == null || m.isEmpty() ? e.getClass().getSimpleName() : m);
+			} finally {
+				if (line != null) {
+					try {
+						line.close();
+					} catch (Throwable ignored) {
+						// already gone
+					}
+				}
+			}
+		}, "Native-Voice-SpeakerTest");
+		t.setDaemon(true);
+		t.start();
+	}
+
+	/** Three rising notes (C5, E5, G5) as 16-bit mono PCM, each with a quick fade in and a slow fade out. */
+	static byte[] chime(int rate, float gain) {
+		double[] freq = {523.25, 659.25, 783.99};
+		int note = rate * 28 / 100;
+		byte[] out = new byte[note * freq.length * 2];
+		for (int n = 0; n < freq.length; n++) {
+			for (int i = 0; i < note; i++) {
+				double env = Math.min(1.0, i / (rate * 0.01)) * Math.pow(1.0 - i / (double) note, 1.6);
+				short v = (short) (Math.sin(2 * Math.PI * freq[n] * i / rate) * env * gain * 32767);
+				int at = (n * note + i) * 2;
+				out[at] = (byte) v;
+				out[at + 1] = (byte) (v >> 8);
+			}
+		}
+		return out;
+	}
+
 	// ── private calls: ringing, accept, decline ───────────────────────────
 
 	/** Someone is calling you: shown as a card with accept / decline until it is answered, cancelled or times out. */

@@ -605,6 +605,94 @@ public final class MojangMc implements McBridge {
 
 
 	@Override
+	public String dimension() {
+		Object key = call(client().level, "dimension");
+		if (key == null) {
+			return null;
+		}
+		String s = key.toString(); // ResourceKey[minecraft:dimension / minecraft:the_nether]
+		int slash = s.lastIndexOf('/');
+		if (slash >= 0) {
+			s = s.substring(slash + 1).replace("]", "").trim();
+		}
+		int colon = s.indexOf(':');
+		return colon >= 0 ? s.substring(colon + 1) : s;
+	}
+
+	@Override
+	public long dayTime() {
+		Object level = client().level;
+		Object t = call(level, "getOverworldClockTime"); // 26.3: world clocks
+		if (!(t instanceof Number)) {
+			t = call(level, "getDayTime");
+		}
+		return t instanceof Number ? ((Number) t).longValue() : -1;
+	}
+
+	@Override
+	public double reach() {
+		try {
+			net.minecraft.world.phys.HitResult hit = client().hitResult;
+			LocalPlayer p = client().player;
+			if (hit == null || p == null || hit.getType() != net.minecraft.world.phys.HitResult.Type.ENTITY) {
+				return Double.NaN;
+			}
+			return p.getEyePosition().distanceTo(hit.getLocation());
+		} catch (Throwable t) {
+			return Double.NaN;
+		}
+	}
+
+	@Override
+	public boolean setHurtTint(int abgr) {
+		try {
+			Object overlay = call(client().gameRenderer, "overlayTexture");
+			Object texture = get(overlay, "texture");
+			Object image = call(texture, "getPixels");
+			if (image == null) {
+				return false;
+			}
+			for (int y = 0; y < 8; y++) {
+				for (int x = 0; x < 16; x++) {
+					call(image, "setPixelABGR", x, y, abgr);
+				}
+			}
+			call(texture, "upload");
+			return true;
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	@Override
+	public boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
+		try {
+			LocalPlayer p = client().player;
+			net.minecraft.world.item.ItemStack st = p == null ? null : p.getMainHandItem();
+			if (st == null || st.isEmpty() || !st.getItem().toString().endsWith("shulker_box")) {
+				return false;
+			}
+			for (xyz.nativelaunch.ui.mod.Game.Slot s : out) {
+				s.clear();
+			}
+			Object contents = st.get(net.minecraft.core.component.DataComponents.CONTAINER);
+			Object stream = contents == null ? null : call(contents, "itemCopies");
+			if (!(stream instanceof java.util.stream.Stream)) {
+				stream = contents == null ? null : call(contents, "stream");
+			}
+			if (stream instanceof java.util.stream.Stream) {
+				Object[] stacks = ((java.util.stream.Stream<?>) stream).toArray();
+				for (int i = 0; i < Math.min(out.length, stacks.length); i++) {
+					stack((net.minecraft.world.item.ItemStack) stacks[i], out[i]);
+				}
+			}
+			return true;
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	@Override
 	public boolean playerPos(String name, double[] out) {
 		net.minecraft.client.multiplayer.ClientLevel level = client().level;
 		if (level == null) {

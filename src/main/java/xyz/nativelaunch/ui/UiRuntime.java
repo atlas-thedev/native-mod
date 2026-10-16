@@ -254,6 +254,7 @@ public final class UiRuntime {
 		}
 		game.hudAllowed = kind == 0 && inWorld && (screen == null || mc.isChat(screen)) && !hudBlocked;
 		modulesFrame();
+		xyz.nativelaunch.ui.mod.ExtraModules.tick(game);
 		Modules.tick();
 		if (System.currentTimeMillis() - lastWarm > 3000) {
 			lastWarm = System.currentTimeMillis();

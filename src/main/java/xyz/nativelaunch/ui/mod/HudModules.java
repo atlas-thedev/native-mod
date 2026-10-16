@@ -37,6 +37,7 @@ public final class HudModules {
 		Modules.register(new HitboxColours());
 		Modules.register(new CriticalColours());
 		Modules.register(new WatermarkModule());
+		ExtraModules.register();
 		VoiceModules.register();
 	}
 

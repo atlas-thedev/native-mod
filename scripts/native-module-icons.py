@@ -56,6 +56,35 @@ icon('watermark','Native Watermark',poly((4,20),(4,4),(7,4),(17,20),(20,20),(20,
 icon('voice','Voice Chat',box(9,2,6,12,3),poly((5,10),(5,11),(6,14),(9,16.5),(12,17),(15,16.5),(18,14),(19,11),(19,10)),poly((12,17),(12,21)),poly((8,21),(16,21)))
 icon('voice-overlay','Voice Overlay',poly((4,14),(4,11),(6,6),(12,3),(18,6),(20,11),(20,14)),box(3,13,4,7,1),box(17,13,4,7,1),poly((10,12),(10,16)),poly((12,10),(12,18)),poly((14,12),(14,16)))
 
+def arc(cx,cy,r,a0,a1,n=14):
+    return [(cx+math.cos(math.radians(a0+(a1-a0)*i/n))*r,cy+math.sin(math.radians(a0+(a1-a0)*i/n))*r) for i in range(n+1)]
+def crescent():
+    # a disc with a bite out of its upper right: the outer arc, then the bite's arc back inside the disc
+    ax,ay,ar,bx,by,br=12,12.5,8.8,17.4,7.4,7.2
+    gap=math.degrees(math.atan2(by-ay,bx-ax))
+    outer=[a for a in range(8,353,8) if math.hypot(ax+math.cos(math.radians(gap+a))*ar-bx,ay+math.sin(math.radians(gap+a))*ar-by)>br]
+    first,last=outer[0],outer[-1]
+    big=[(ax+math.cos(math.radians(gap+a))*ar,ay+math.sin(math.radians(gap+a))*ar) for a in range(first,last+1,8)]
+    inner=[]
+    for k in range(0,361,8):
+        x,y=bx+math.cos(math.radians(k))*br,by+math.sin(math.radians(k))*br
+        if math.hypot(x-ax,y-ay)<ar-0.2:inner.append((k,x,y))
+    # order the bite's points so the path runs from the outer arc's end back to its start
+    ends=(big[-1],big[0])
+    inner.sort(key=lambda t:math.hypot(t[1]-ends[0][0],t[2]-ends[0][1]))
+    pts=[(x,y) for _,x,y in sorted(inner,key=lambda t:(t[0]-math.degrees(math.atan2(ends[0][1]-by,ends[0][0]-bx)))%360)]
+    return big+pts+[big[0]]
+icon('nether-coords','Nether Coordinates',box(4,2,16,20,2),poly((12,7),(16,12),(12,17),(8,12),(12,7)),dot(12,12))
+icon('moon-phase','Moon Phase',crescent(),dot(19,15),poly((20,4),(20,7)),poly((18.5,5.5),(21.5,5.5)))
+icon('day-night','Day / Night Cycle',arc(12,12,8.5,90,270,10)+[(12,3.5)],poly((12,3.5),(12,20.5)),poly((16,6),(17.5,4.5)),poly((18.5,12),(21,12)),poly((16,18),(17.5,19.5)))
+icon('totem-counter','Totem Counter',poly((12,2.5),(17.5,6.5),(17.5,14.5),(12,21.5),(6.5,14.5),(6.5,6.5),(12,2.5)),poly((12,7),(12,15)),poly((9,10.5),(15,10.5)))
+icon('item-counter','Item Counter',poly((6,6),(8,3),(16,3),(18,6)),box(3,6,18,15,2),poly((8,11),(12,15)),poly((12,11),(8,15)),poly((15.5,11),(15.5,17)))
+icon('playtime','Playtime',poly((6,3),(18,3),(18,7),(12,12),(18,17),(18,21),(6,21),(6,17),(12,12),(6,7),(6,3)),poly((9,18.5),(15,18.5)),dot(12,9))
+icon('reach','Reach Display',poly((3,12),(21,12)),poly((6,9),(3,12),(6,15)),poly((18,9),(21,12),(18,15)),poly((12,5),(12,9)),poly((12,15),(12,19)))
+icon('shulker-preview','Shulker Preview',poly((3,9),(5,4),(19,4),(21,9)),box(4,9,16,12,1.5),poly((4,14),(20,14)),poly((12,14),(12,21)),poly((8,6.5),(16,6.5)))
+icon('low-fire','Low Fire',poly((12,2.8),(16,8),(18.5,13),(17.4,17.6),(14.4,20.6),(12,21),(9.6,20.6),(6.6,17.6),(5.8,13.4),(7.4,9.6),(9.6,12.6),(10.6,7.2),(12,2.8)),poly((10,17),(12,19.5),(14,17)),poly((3,22),(21,22)))
+icon('damage-tint','Damage Tint',poly((12,3),(17.5,10.5),(18,15),(15,19.5),(9,19.5),(6,15),(6.5,10.5),(12,3)),poly((9.5,14),(10.5,16.5)),poly((14.5,13),(14.5,15)))
+
 def contours(lines):
     out=[];r=STROKE/2
     for points in lines:
@@ -107,7 +136,7 @@ def preview(path,enc,items):
     html='''<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Native — Original module icons</title><style>
 @font-face{font-family:NativeIcons;src:url(data:font/ttf;base64,'''+enc+''') format('truetype')}
 *{box-sizing:border-box}body{margin:0;background:#0d0e12;color:#eeeef3;font:15px Arial,sans-serif;padding:36px}header{display:flex;justify-content:space-between;align-items:end;margin-bottom:28px}h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.7px}header p{margin:8px 0 0;color:#999da9;font-size:14px}.tag{color:#7fb9fa;font-size:13px;letter-spacing:.8px}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}article{border:1px solid #272a33;border-radius:12px;background:#15171d;padding:16px;text-align:center;min-height:171px}.hero{font-family:NativeIcons;font-size:48px;line-height:1;margin:7px auto 16px;color:#f4f5f8}strong{display:block;font-size:14px;font-weight:500;height:22px}.sizes{font-family:NativeIcons;display:flex;gap:14px;justify-content:center;align-items:center;margin-top:12px;height:30px;color:#a0acbe}footer{font-size:13px;color:#8c93a3;margin-top:22px} @media(max-width:600px){body{padding:20px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}header{display:block}.tag{margin-top:15px}}
-</style><header><div><h1>Native module icons</h1><p>Original geometry. One distinct mark for every module.</p></div><div class="tag">25 CUSTOM MARKS · CC0</div></header><main class="grid">'''+''.join(cards)+'''</main><footer>Actual bundled font shown at 48 px; each card also tests 14, 18, 24 and 30 px. No stock icon outlines.</footer>'''
+</style><header><div><h1>Native module icons</h1><p>Original geometry. One distinct mark for every module.</p></div><div class="tag">'+str(len(items))+' CUSTOM MARKS · CC0</div></header><main class="grid">'''+''.join(cards)+'''</main><footer>Actual bundled font shown at 48 px; each card also tests 14, 18, 24 and 30 px. No stock icon outlines.</footer>'''
     path.write_text(html)
 
 def export(directory, assets, enc, items):
@@ -121,7 +150,7 @@ def export(directory, assets, enc, items):
     (directory/'LICENSE.txt').write_text((ROOT/'src/main/uiassets/native-modules-LICENSE.txt').read_text())
     (directory/'native-module-icons.py').write_text(Path(__file__).read_text())
     preview(directory/'preview.html',enc,items)
-    (directory/'README.txt').write_text('Native Module Icons — 25 original marks. CC0-1.0.\n\nSVG files are editable 24-unit vectors; use CSS color or replace currentColor.\nTTF codepoints F400–F418 and stable module IDs are listed in native-modules.json.\nThe bundled font is used in every module UI surface, not the navigation icons.\nTransparent white PNG exports are provided at 64 and 128 px.\nGenerator requires Python + fonttools; run from the Native repository scripts folder.\n')
+    (directory/'README.txt').write_text(f'Native Module Icons — {len(ICONS)} original marks. CC0-1.0.\n\nSVG files are editable 24-unit vectors; use CSS color or replace currentColor.\nTTF codepoints from F400 and stable module IDs are listed in native-modules.json.\nThe bundled font is used in every module UI surface, not the navigation icons.\nTransparent white PNG exports are provided at 64 and 128 px.\nGenerator requires Python + fonttools; run from the Native repository scripts folder.\n')
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--check',action='store_true');ap.add_argument('--preview',type=Path);ap.add_argument('--export-dir',type=Path);args=ap.parse_args()

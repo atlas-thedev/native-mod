@@ -28,11 +28,11 @@ import java.util.Locale;
  * client mods, the cosmetics locker and the UI settings. Same glass look as the launcher.
  */
 public final class MenuView {
-	private static final String[] TABS = {"Mods", "Cosmetics", "Settings"};
+	private static final String[] TABS = {"Mods", "Cosmetics", "Settings", "Screenshots"};
 	private static final float RAIL = 54;
 	/** Corner radius of the floating top bars — squared off a little so square avatars sit well. */
 	private static final float PILL_R = 13;
-	private static final int[] TAB_ICONS = {Theme.I_NAV_MODS, Theme.I_NAV_LOCKER, Theme.I_NAV_SETTINGS};
+	private static final int[] TAB_ICONS = {Theme.I_NAV_MODS, Theme.I_NAV_LOCKER, Theme.I_NAV_SETTINGS, xyz.nativelaunch.ui.gfx.NavIcons.CAMERA};
 	private static final String[] CHIPS = {"All", "Favorites", Module.HUD, Module.MECHANIC, Module.VISUAL, Module.PERFORMANCE};
 	private static final int[] SLOT_ICONS = {Theme.I_LAYERS, Theme.I_HAT, Theme.I_GLASSES, Theme.I_BACKPACK, Theme.I_FOOTPRINTS, Theme.I_HAND};
 	private static final int PANEL_BG = 0xF205060A;
@@ -61,6 +61,7 @@ public final class MenuView {
 	private final Setting.Key sMenu = new Setting.Key("menukey", "Menu key", 344);
 	private final Setting.Key sChat = new Setting.Key("chatkey", "Chat key", 89);
 	private boolean confirmReset;
+	private final ScreenshotsView shots = new ScreenshotsView();
 
 	public MenuView() {
 		search.maxLength = 40;
@@ -82,6 +83,9 @@ public final class MenuView {
 			confirmReset = false;
 			return true;
 		}
+		if (tab == 3 && shots.escape()) {
+			return true;
+		}
 		if (selected != null) {
 			selected = null;
 			pageAt = System.currentTimeMillis();
@@ -94,6 +98,9 @@ public final class MenuView {
 		setTab(t);
 		if (t == 1) {
 			Wardrobe.refresh(false); // also when the tab was already open
+		}
+		if (t == 3) {
+			shots.refresh();
 		}
 	}
 
@@ -117,6 +124,9 @@ public final class MenuView {
 		pageAt = System.currentTimeMillis();
 		if (t == 1) {
 			Wardrobe.refresh(false);
+		}
+		if (t == 3) {
+			shots.refresh();
 		}
 	}
 
@@ -219,6 +229,11 @@ public final class MenuView {
 			c.text(Fonts.MEDIUM, 11.5f, store, mx + mw - 20 - sw, py + (hh - c.lineHeight(Fonts.MEDIUM, 11.5f)) / 2, Theme.TEXT_MUTED);
 			c.pushAlpha(pe);
 			cosmetics(ui, bx, by + (1 - pe) * 10, bw, bh);
+			c.popAlpha();
+		} else if (tab == 3) {
+			header(c, "Screenshots", mx, py, hh);
+			c.pushAlpha(pe);
+			shots.draw(ui, bx, by + (1 - pe) * 10, bw, bh);
 			c.popAlpha();
 		} else {
 			header(c, "Settings", mx, py, hh);
@@ -1099,6 +1114,7 @@ public final class MenuView {
 		float cw = lw - 6;
 		ry = group(ui, "general", x, ry, cw, Theme.I_SLIDERS, "General", "How Native looks and talks to you",
 				new Setting[] {sTitle, sNotify, sScale});
+		ry = audioCard(ui, x, ry, cw);
 		ry = group(ui, "keys", x, ry, cw, Theme.I_KEYBOARD, "Controls", "Click a key, then press the one you want",
 				new Setting[] {sMenu, sChat});
 		ry = hudCard(ui, x, ry, cw, screen);
@@ -1149,6 +1165,60 @@ public final class MenuView {
 		if (save) {
 			cfg.save();
 		}
+	}
+
+	/** One of the Voice Chat module's own settings (its devices and mic test), so this card and the module page stay one setting. */
+	private static Setting voiceSetting(String id) {
+		Module v = Modules.get("voice");
+		if (v != null) {
+			for (Setting s : v.settings) {
+				if (s.id.equals(id)) {
+					return s;
+				}
+			}
+		}
+		return null;
+	}
+
+	/** Microphone and speakers: pick them, see the microphone move, and play a sound to check the speakers. */
+	private float audioCard(Ui ui, float x, float y, float w) {
+		Setting mic = voiceSetting("micdevice"), out = voiceSetting("outdevice"), test = voiceSetting("mictest");
+		if (mic == null || out == null || test == null) {
+			return y;
+		}
+		Canvas c = ui.c;
+		// the devices apply right here, even while the Voice Chat module itself is switched off
+		xyz.nativelaunch.voice.Voice.micDevice = ((Setting.Device) mic).value;
+		xyz.nativelaunch.voice.Voice.outDevice = ((Setting.Device) out).value;
+		Setting[] rows = {mic, test, out};
+		float head = 62, rh = 0;
+		for (Setting s : rows) {
+			rh += Widgets.rowHeight(s);
+		}
+		float testRow = 52;
+		float h = head + rh + testRow + 8;
+		cardFrame(ui, "menu:pref:card:audio", x, y, w, h);
+		cardHead(c, x, y, w, Theme.I_MIC, "Microphone and speakers", "What Native Voice uses by default. Speak to see the bar move, then play a sound.");
+		float cy = y + head;
+		for (Setting s : rows) {
+			c.fill(x + 18, cy, w - 36, 1, Theme.HAIRLINE);
+			Widgets.row(ui, "menu:pref:" + s.id, x + 18, cy, w - 36, s);
+			cy += Widgets.rowHeight(s);
+		}
+		c.fill(x + 18, cy, w - 36, 1, Theme.HAIRLINE);
+		c.text(Fonts.MEDIUM, 12.5f, "Test the speakers", x + 18, cy + (testRow - c.lineHeight(Fonts.MEDIUM, 12.5f)) / 2, Theme.TEXT);
+		float bw = 140, bx = x + w - 18 - bw;
+		String status = xyz.nativelaunch.voice.Voice.speakerTestStatus();
+		if (ui.button("menu:pref:speakertest", bx, cy + (testRow - 32) / 2, bw, 32, "Play a sound", Theme.I_VOLUME, Ui.BTN_GLASS)) {
+			xyz.nativelaunch.voice.Voice.testSpeakers();
+		}
+		if (status != null) {
+			boolean bad = status.startsWith("Could not");
+			float sw = bx - 14 - (x + 18 + c.textWidth(Fonts.MEDIUM, 12.5f, "Test the speakers") + 16);
+			c.text(Fonts.MEDIUM, 11.5f, c.ellipsize(Fonts.MEDIUM, 11.5f, status, Math.max(60, sw)), bx - 14 - Math.min(Math.max(60, sw), c.textWidth(Fonts.MEDIUM, 11.5f, status)),
+					cy + (testRow - c.lineHeight(Fonts.MEDIUM, 11.5f)) / 2, bad ? Theme.DANGER : Theme.TEXT_SECONDARY);
+		}
+		return y + h + 16;
 	}
 
 	/** A settings card: icon tile, title and a hint on top, then the rows. Returns the y below it. */

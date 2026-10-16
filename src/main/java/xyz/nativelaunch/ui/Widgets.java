@@ -176,7 +176,7 @@ public final class Widgets {
 		float bw = Math.max(120, Math.min(240, w - labelW - 40)), bh = 28, bx = x + w - bw, by = y + (ROW - bh) / 2;
 		boolean open = openDevice == d;
 		java.util.List<String> list = d.options.get();
-		String current = d.value.isEmpty() ? "System default" : d.value;
+		String current = d.value.isEmpty() ? d.emptyLabel : d.value;
 		boolean missing = !d.value.isEmpty() && !list.contains(d.value);
 		boolean over = ui.hover(bx, by, bw, bh);
 		c.round(bx, by, bw, bh, 8, over || open ? 0x24FFFFFF : 0x14FFFFFF);
@@ -191,7 +191,7 @@ public final class Widgets {
 			float ly = y + ROW, lw = w;
 			for (int i = -1; i < list.size(); i++) {
 				String name = i < 0 ? "" : list.get(i);
-				String shown = i < 0 ? "System default" : name;
+				String shown = i < 0 ? d.emptyLabel : name;
 				boolean sel = d.value.equals(name);
 				boolean ho = ui.hover(x, ly, lw, 28);
 				if (ho || sel) {

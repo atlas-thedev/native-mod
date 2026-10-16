@@ -193,11 +193,18 @@ public abstract class Setting {
 	/** A device picked from a live list (microphones, speakers). "" = the system default. */
 	public static final class Device extends Setting {
 		public String value = "";
+		/** What the empty value is called in the list ("System default" for audio devices). */
+		public String emptyLabel = "System default";
 		public final java.util.function.Supplier<java.util.List<String>> options;
 
 		public Device(String id, String label, java.util.function.Supplier<java.util.List<String>> options) {
 			super(id, label);
 			this.options = options;
+		}
+
+		public Device emptyLabel(String label) {
+			this.emptyLabel = label;
+			return this;
 		}
 
 		JsonElement save() {
