@@ -29,7 +29,7 @@ public final class VoiceModules {
 		final Setting.Num mic = add(new Setting.Num("mic", "Microphone volume", 100, 0, 300, 5, "%"));
 		final Setting.Device outDevice = add(new Setting.Device("outdevice", "Output device", xyz.nativelaunch.voice.VoiceDevices::outputs));
 		final Setting.Num volume = add(new Setting.Num("volume", "Voice volume", 100, 0, 200, 5, "%"));
-		final Setting.Choice mode = add(new Setting.Choice("mode", "Talk mode", PTT, "Push to talk", "Voice activation").shorts("PTT", "Voice"));
+		final Setting.Choice mode = add(new Setting.Choice("mode", "Talk mode", ACTIVATION, "Push to talk", "Voice activation").shorts("PTT", "Voice"));
 		final Setting.Key ptt = add(new Setting.Key("ptt", "Push-to-talk key", 66));
 		final Setting.Num threshold = add(new Setting.Num("threshold", "Activation level", -42, -70, -10, 1, " dB"));
 		final Setting.Bool proximity = add(new Setting.Bool("proximity", "Proximity voice on servers", true));
@@ -61,7 +61,9 @@ public final class VoiceModules {
 		@Override
 		public void frame(Game g) {
 			Voice.pushToTalk = mode.value == PTT;
-			Voice.pttHeld = g.playing && ptt.value >= 0 && Keys.isDown(g.window, ptt.value);
+			// in a call the key also works while a screen (Relay chat, menus) is open: you are not in the world then
+			Voice.pttHeld = (g.playing || Voice.call() != null) && ptt.value >= 0 && Keys.isDown(g.window, ptt.value);
+			Voice.pttKey = ptt.value >= 0 ? Keys.name(ptt.value) : "";
 			Voice.thresholdDb = threshold.value;
 			Voice.micDevice = micDevice.value;
 			Voice.outDevice = outDevice.value;
@@ -70,6 +72,54 @@ public final class VoiceModules {
 			Voice.proximityOn = proximity.value;
 			Voice.range = range.value;
 			Voice.tick(HudModules.mc(), true);
+		}
+
+		@Override
+		public boolean preview(Ui ui, Game g, float x, float y, float w, float h) {
+			Canvas c = ui.c;
+			float rw = Math.min(w - 36, 420), rh = 150;
+			float rx = x + (w - rw) / 2, ry = y + (h - rh) / 2;
+			c.shadow(rx, ry + 3, rw, rh, 14, 16, 0x66000000);
+			c.round(rx, ry, rw, rh, 14, 0xD00A0B0E);
+			c.outline(rx, ry, rw, rh, 14, 1, Theme.HAIRLINE_STRONG);
+			boolean ptt = mode.value == PTT;
+			// the microphone and its level (a live reading when the mic is open, a moving sample otherwise)
+			double live = Voice.micDb();
+			double wave = Math.max(0, Math.sin(ui.now / 260.0) * Math.sin(ui.now / 710.0 + 1.3));
+			double db = live > -90 ? live : -62 + 40 * wave;
+			boolean open = ptt ? wave > 0.35 || live > -50 : db >= threshold.value;
+			c.circle(rx + 36, ry + 38, 17, open ? 0x3322C55E : Theme.SUBTLE_HOVER);
+			c.icon(Theme.I_MIC, 16, rx + 36, ry + 38, open ? Theme.ONLINE : Theme.TEXT_SECONDARY);
+			float mx = rx + 64, mw = rw - 64 - 22;
+			c.text(Fonts.SEMIBOLD, 11.5f, "You", mx, ry + 17, Theme.TEXT_STRONG);
+			String state = open ? "Talking" : (ptt ? "Hold " + (this.ptt.value >= 0 ? Keys.name(this.ptt.value) : "your key") + " to talk" : "Listening");
+			c.text(Fonts.REGULAR, 10.5f, state, rx + rw - 22 - c.textWidth(Fonts.REGULAR, 10.5f, state), ry + 18, open ? Theme.ONLINE : Theme.TEXT_MUTED);
+			int bars = 24;
+			float bw = (mw - (bars - 1) * 3) / bars;
+			float lvl = (float) Math.max(0, Math.min(1, (db + 70) / 60.0));
+			for (int i = 0; i < bars; i++) {
+				boolean on = i / (float) bars < lvl;
+				c.round(mx + i * (bw + 3), ry + 42, bw, 14, 2, on ? (open ? Theme.ONLINE : Theme.TEXT_SECONDARY) : Theme.SUBTLE_HOVER);
+			}
+			if (!ptt) {
+				float tx = mx + mw * (float) Math.max(0, Math.min(1, (threshold.value + 70) / 60.0));
+				c.fill(tx - 1, ry + 38, 2, 22, 0xFFFDE68A);
+			}
+			c.fill(rx + 18, ry + 76, rw - 36, 1, Theme.HAIRLINE);
+			// who is in the call
+			String[] names = {"Alex", "Sam", "Riley"};
+			for (int i = 0; i < names.length; i++) {
+				float cx = rx + 38 + i * 70, cy = ry + 108;
+				boolean talk = ((ui.now / 900) % 3) == i;
+				if (talk) {
+					c.circle(cx, cy, 19, Theme.ONLINE);
+				}
+				c.circle(cx, cy, talk ? 17 : 18, 0xFF1F2026);
+				String ini = names[i].substring(0, 1);
+				c.text(Fonts.SEMIBOLD, 13, ini, cx - c.textWidth(Fonts.SEMIBOLD, 13, ini) / 2, cy - c.lineHeight(Fonts.SEMIBOLD, 13) / 2, Theme.TEXT_STRONG);
+				c.text(Fonts.REGULAR, 9.5f, names[i], cx - c.textWidth(Fonts.REGULAR, 9.5f, names[i]) / 2, cy + 22, Theme.TEXT_MUTED);
+			}
+			return true;
 		}
 
 		@Override

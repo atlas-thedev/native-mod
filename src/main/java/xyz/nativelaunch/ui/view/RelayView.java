@@ -636,6 +636,17 @@ public final class RelayView {
 
 	/** Call / mute / deafen / leave buttons in a chat header, right to left from {@code right}. Returns the left edge. */
 	private static float voiceControls(Ui ui, String key, float right, float y) {
+		Voice.Ring ring = Voice.ringing(key);
+		if (ring != null && !Voice.inCall(key)) {
+			if (voiceButton(ui, "relay:call-decline", right, y, Theme.I_PHONE_OFF, "Decline", Theme.DANGER)) {
+				Voice.decline(key);
+			}
+			right -= 38;
+			if (voiceButton(ui, "relay:call-accept", right, y, Theme.I_PHONE, "Accept", Theme.ONLINE)) {
+				Voice.accept(key);
+			}
+			return right;
+		}
 		if (Voice.inCall(key)) {
 			if (voiceButton(ui, "relay:call-leave", right, y, Theme.I_PHONE_OFF, "Leave call", Theme.DANGER)) {
 				Voice.leaveCall();
@@ -755,7 +766,22 @@ public final class RelayView {
 		int statusColor = Theme.TEXT_MUTED;
 		int inCall = Voice.callMembers(selected).size();
 		if (Voice.inCall(selected)) {
-			status = "In voice call" + (inCall > 1 ? " with " + (inCall - 1) + (inCall == 2 ? " other" : " others") : " - waiting for others");
+			String link = Voice.linkProblem(selected);
+			if (link != null) {
+				status = link;
+				statusColor = Theme.DANGER;
+			} else if (!group && inCall <= 1) {
+				status = "Calling " + name + "...";
+				statusColor = Theme.ONLINE;
+			} else {
+				status = "In voice call" + (inCall > 1 ? " with " + (inCall - 1) + (inCall == 2 ? " other" : " others") : " - waiting for others");
+				if (Voice.pushToTalkOn() && !Voice.pttKey.isEmpty()) {
+					status += "  -  hold " + Voice.pttKey + " to talk";
+				}
+				statusColor = Theme.ONLINE;
+			}
+		} else if (Voice.ringing(selected) != null) {
+			status = name + " is calling you";
 			statusColor = Theme.ONLINE;
 		} else if (inCall > 0) {
 			status = "Voice call - " + inCall + " in call";

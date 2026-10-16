@@ -3,6 +3,7 @@ package xyz.nativelaunch.ui.mod;
 import xyz.nativelaunch.ui.McBridge;
 import xyz.nativelaunch.ui.Theme;
 import xyz.nativelaunch.ui.UiRuntime;
+import xyz.nativelaunch.ui.gfx.Fonts;
 
 import java.util.concurrent.locks.LockSupport;
 
@@ -134,6 +135,34 @@ final class PerformanceModules {
 				mc.setVideoOption("entityDistance", savedEntities);
 			}
 			savedEntities = Double.NaN;
+		}
+
+		@Override
+		public boolean preview(xyz.nativelaunch.ui.Ui ui, Game g, float x, float y, float w, float h) {
+			xyz.nativelaunch.ui.gfx.Canvas c = ui.c;
+			String[] names = {"Playing", "In the background", "Minimised", "AFK"};
+			int playing = Math.max(60, g.fps > 0 && !g.sample ? g.fps : 240);
+			int[] fps = {playing, Math.round(unfocused.value), Math.round(minimized.value), afk.value ? Math.round(afkFps.value) : playing};
+			int rows = afk.value ? 4 : 3;
+			float rw = Math.min(w - 36, 420), rh = 30 + rows * 34 + 12;
+			float rx = x + (w - rw) / 2, ry = y + (h - rh) / 2;
+			c.shadow(rx, ry + 3, rw, rh, 14, 16, 0x66000000);
+			c.round(rx, ry, rw, rh, 14, 0xD00A0B0E);
+			c.outline(rx, ry, rw, rh, 14, 1, Theme.HAIRLINE_STRONG);
+			c.icon(Theme.I_ZAP, 12, rx + 22, ry + 20, Theme.ACCENT);
+			c.text(Fonts.SEMIBOLD, 11.5f, "Frame rate cap", rx + 36, ry + 20 - c.lineHeight(Fonts.SEMIBOLD, 11.5f) / 2, Theme.TEXT_STRONG);
+			float top = ry + 40;
+			for (int i = 0; i < rows; i++) {
+				float yy = top + i * 34;
+				c.text(Fonts.MEDIUM, 11, names[i], rx + 18, yy + 2, Theme.TEXT);
+				String v = i == 0 ? "no limit" : fps[i] + " FPS";
+				c.text(Fonts.SEMIBOLD, 11, v, rx + rw - 18 - c.textWidth(Fonts.SEMIBOLD, 11, v), yy + 2, Theme.TEXT_SECONDARY);
+				float tw = rw - 36;
+				c.round(rx + 18, yy + 19, tw, 6, 3, Theme.SUBTLE_HOVER);
+				float frac = i == 0 ? 1f : Math.min(1f, fps[i] / (float) playing);
+				c.round(rx + 18, yy + 19, Math.max(6, tw * frac), 6, 3, i == 0 ? Theme.ONLINE : Theme.ACCENT);
+			}
+			return true;
 		}
 
 		@Override

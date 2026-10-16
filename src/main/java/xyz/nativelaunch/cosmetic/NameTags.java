@@ -23,7 +23,10 @@ public final class NameTags {
 	 * at U+E000 and up (and newer Minecraft fills that range too), which turned the logo into their icon or a box.
 	 */
 	public static final String GLYPH = new String(Character.toChars(0x10FFFD));
+	/** U+10FFFC: the Native+ mark (the N with a gold plus), drawn the same way for Native+ members. */
+	public static final String GLYPH_PLUS = new String(Character.toChars(0x10FFFC));
 	private static final String PREFIX = GLYPH + " ";
+	private static final String PREFIX_PLUS = GLYPH_PLUS + " ";
 
 	private static final String[] PLAYER_CLASSES = {"net.minecraft.class_742", "net.minecraft.client.player.AbstractClientPlayer"};
 	private static final MethodCache GAME_PROFILE_GETTERS = new MethodCache("method_7334", "getGameProfile");
@@ -146,7 +149,8 @@ public final class NameTags {
 			return text;
 		}
 		resolve();
-		Object logo = literalFactory != null ? literalFactory.invoke(null, PREFIX) : literalCtor.newInstance(PREFIX);
+		String prefix = NativeState.get().directory().plus(name, id) ? PREFIX_PLUS : PREFIX;
+		Object logo = literalFactory != null ? literalFactory.invoke(null, prefix) : literalCtor.newInstance(prefix);
 		logoClass = logo.getClass();
 		Method append = APPEND.get(text.getClass());
 		if (append == null || append == NO_APPEND) {
