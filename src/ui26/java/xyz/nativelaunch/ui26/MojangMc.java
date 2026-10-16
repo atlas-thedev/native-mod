@@ -744,12 +744,6 @@ public final class MojangMc implements McBridge {
 	private boolean shulkerWarned;
 
 	@Override
-	public String stackName(Object stack) {
-		Object name = call(call(stack, "getHoverName"), "getString");
-		return name instanceof String ? (String) name : null;
-	}
-
-	@Override
 	public String shulkerContents(Object stack, xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		try {
 			if (!(stack instanceof net.minecraft.world.item.ItemStack)) {

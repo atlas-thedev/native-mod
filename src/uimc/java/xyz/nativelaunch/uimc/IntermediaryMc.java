@@ -975,12 +975,6 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
-	public String stackName(Object stack) {
-		Object name = call(call(stack, "method_7964"), "getString"); // ItemStack.getName().getString()
-		return name instanceof String ? (String) name : null;
-	}
-
-	@Override
 	public String shulkerContents(Object st, xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		if (st == null) {
 			return null;

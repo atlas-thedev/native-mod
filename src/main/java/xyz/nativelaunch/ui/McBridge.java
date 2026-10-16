@@ -187,11 +187,6 @@ public interface McBridge {
 		return null;
 	}
 
-	/** The name an item stack shows (its custom name when renamed, in the game's language), null when unknown. */
-	default String stackName(Object stack) {
-		return null;
-	}
-
 	/** Like {@link #shulkerInHand} for any item stack: its id when it is a shulker box (contents into {@code out}), else null. */
 	default String shulkerContents(Object stack, xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		return null;

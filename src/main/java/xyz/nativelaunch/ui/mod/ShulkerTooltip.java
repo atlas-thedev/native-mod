@@ -19,7 +19,6 @@ public final class ShulkerTooltip extends StatusModules.Box {
 	private static ShulkerTooltip instance;
 
 	final Setting.Choice trigger = add(new Setting.Choice("trigger", "Show on hover", 0, "Always", "Hold Shift"));
-	final Setting.Bool hideVanilla = add(new Setting.Bool("hide-vanilla", "Hide the game's own tooltip", true));
 	final Setting.Bool compact = add(new Setting.Bool("compact", "Compact (merge same items)", false));
 	final Setting.Bool counts = add(new Setting.Bool("counts", "Item counts", true));
 	final Setting.Bool bars = add(new Setting.Bool("bars", "Durability bars", true));
@@ -38,7 +37,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 	/** One shulker box's contents. */
 	private static final class View {
 		final Game.Slot[] raw = slots();
-		String id, name;
+		String id;
 		int stacks, total;
 
 		boolean ok() {
@@ -47,7 +46,6 @@ public final class ShulkerTooltip extends StatusModules.Box {
 
 		void fill(String id) {
 			this.id = id;
-			name = null;
 			stacks = total = 0;
 			for (Game.Slot s : raw) {
 				if (id != null && !s.empty()) {
@@ -95,9 +93,6 @@ public final class ShulkerTooltip extends StatusModules.Box {
 			lastStack = st;
 			nextTip = now + 150;
 			tip.fill(st == null ? null : mc.shulkerContents(st, tip.raw));
-			if (tip.ok()) {
-				tip.name = mc.stackName(st);
-			}
 		}
 		boolean want = tip.ok() && (trigger.value == 0 || Keys.isDown(g.window, 340) || Keys.isDown(g.window, 344));
 		if (want && !showTip) {
@@ -121,15 +116,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 		return instance != null && instance.enabled && instance.showTip;
 	}
 
-	/** True while the game's own tooltip for the hovered box should be skipped (see ShulkerTooltipMixin). */
-	public static boolean hidesVanilla() {
-		return active() && instance.hideVanilla.value;
-	}
-
-	/**
-	 * Draws the hovered box's contents next to the cursor: where the game's tooltip would be when that one is hidden,
-	 * else above it (or left of the cursor when there is no room).
-	 */
+	/** Draws the hovered box's contents next to the cursor, above the game's own tooltip (or left of it when there is no room). */
 	public static void drawTip(Ui ui) {
 		ShulkerTooltip m = instance;
 		Canvas c = ui.c;
@@ -138,12 +125,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 		float w = m.dims[0], h = m.dims[1], gap = 12;
 		float mx = (float) (Input.mouseX / c.scale), my = (float) (Input.mouseY / c.scale);
 		float x = mx + gap, y = my - gap - 4 - h;
-		if (m.hideVanilla.value) {
-			y = my - gap;
-			if (x + w > c.width() - 4) {
-				x = mx - gap - w;
-			}
-		} else if (y < 4) {
+		if (y < 4) {
 			x = mx - gap - w;
 			y = my - h / 2;
 		}
@@ -190,8 +172,7 @@ public final class ShulkerTooltip extends StatusModules.Box {
 		int rows = compact.value ? Math.max(1, (n + COLS - 1) / COLS) : SLOTS / COLS;
 		float pad = 6 * s, cell = 20 * s, gap = 2 * s, step = cell + gap, ic = 16 * s;
 		float tfs = 10.5f * s, sfs = 9.5f * s;
-		String title = v.name != null && !v.name.isEmpty() ? v.name : title(v.id), summary = v.stacks == 0 ? "Empty" : v.stacks + "/" + SLOTS + "  \u00b7  " + amount(v.total);
-		title = c.ellipsize(Fonts.SEMIBOLD, tfs, title, 200 * s);
+		String title = title(v.id), summary = v.stacks == 0 ? "Empty" : v.stacks + "/" + SLOTS + "  \u00b7  " + amount(v.total);
 		float headH = header.value ? c.lineHeight(Fonts.SEMIBOLD, tfs) + 6 * s : 0;
 		float headW = header.value ? 12 * s + c.textWidth(Fonts.SEMIBOLD, tfs, title) + 14 * s + c.textWidth(Fonts.MEDIUM, sfs, summary) : 0;
 		boolean empty = compact.value && n == 0;
