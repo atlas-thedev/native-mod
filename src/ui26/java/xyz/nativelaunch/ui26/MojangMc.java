@@ -726,20 +726,54 @@ public final class MojangMc implements McBridge {
 	}
 
 	@Override
-	public boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
+	public String shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
+		LocalPlayer p = client().player;
+		if (p == null) {
+			return null;
+		}
+		String id = shulkerContents(p.getMainHandItem(), out);
+		return id != null ? id : shulkerContents(p.getOffhandItem(), out);
+	}
+
+	@Override
+	public Object hoveredStack() {
+		Object slot = get(screen(), "hoveredSlot"); // AbstractContainerScreen.hoveredSlot
+		return slot == null ? null : call(slot, "getItem");
+	}
+
+	private boolean shulkerWarned;
+
+	@Override
+	public String shulkerContents(Object stack, xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		try {
-			LocalPlayer p = client().player;
-			net.minecraft.world.item.ItemStack st = p == null ? null : p.getMainHandItem();
-			if (st == null || st.isEmpty() || !st.getItem().toString().endsWith("shulker_box")) {
-				return false;
+			if (!(stack instanceof net.minecraft.world.item.ItemStack)) {
+				return null;
+			}
+			net.minecraft.world.item.ItemStack st = (net.minecraft.world.item.ItemStack) stack;
+			String id = st.isEmpty() ? null : xyz.nativelaunch.ui.mod.Game.bareId(st.getItem().toString());
+			if (id == null || !id.endsWith("shulker_box")) {
+				return null;
 			}
 			for (xyz.nativelaunch.ui.mod.Game.Slot s : out) {
 				s.clear();
 			}
 			Object contents = st.get(net.minecraft.core.component.DataComponents.CONTAINER);
-			Object stream = contents == null ? null : call(contents, "itemCopies");
+			if (contents == null) {
+				return id;
+			}
+			// copyInto keeps every slot where it is (empty ones too); the streams are the fallback
+			net.minecraft.core.NonNullList<net.minecraft.world.item.ItemStack> list =
+					net.minecraft.core.NonNullList.withSize(out.length, net.minecraft.world.item.ItemStack.EMPTY);
+			if (named(contents.getClass(), "copyInto", 1) != null) {
+				call(contents, "copyInto", list);
+				for (int i = 0; i < out.length; i++) {
+					stack(list.get(i), out[i]);
+				}
+				return id;
+			}
+			Object stream = call(contents, "itemCopies");
 			if (!(stream instanceof java.util.stream.Stream)) {
-				stream = contents == null ? null : call(contents, "stream");
+				stream = call(contents, "stream");
 			}
 			if (stream instanceof java.util.stream.Stream) {
 				Object[] stacks = ((java.util.stream.Stream<?>) stream).toArray();
@@ -747,9 +781,13 @@ public final class MojangMc implements McBridge {
 					stack((net.minecraft.world.item.ItemStack) stacks[i], out[i]);
 				}
 			}
-			return true;
+			return id;
 		} catch (Throwable t) {
-			return false;
+			if (!shulkerWarned) {
+				shulkerWarned = true;
+				xyz.nativelaunch.core.Log.warn("Could not read a shulker box: {}", t.toString());
+			}
+			return null;
 		}
 	}
 

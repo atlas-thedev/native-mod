@@ -959,16 +959,30 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
-	public boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
+	public String shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		Object p = localPlayer();
-		Object st = p == null ? null : call(p, "method_6047"); // getMainHandStack
+		if (p == null) {
+			return null;
+		}
+		String id = shulkerContents(call(p, "method_6047"), out); // getMainHandStack
+		return id != null ? id : shulkerContents(call(p, "method_6079"), out); // getOffHandStack
+	}
+
+	@Override
+	public Object hoveredStack() {
+		Object slot = get(screen(), "field_2787"); // HandledScreen.focusedSlot
+		return slot == null ? null : call(slot, "method_7677"); // Slot.getStack
+	}
+
+	@Override
+	public String shulkerContents(Object st, xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		if (st == null) {
-			return false;
+			return null;
 		}
 		Object item = call(st, "method_7909"); // getItem
-		String id = item == null ? "" : xyz.nativelaunch.ui.mod.Game.bareId(item.toString());
+		String id = item == null ? null : xyz.nativelaunch.ui.mod.Game.bareId(item.toString());
 		if (id == null || !id.endsWith("shulker_box")) {
-			return false;
+			return null;
 		}
 		for (xyz.nativelaunch.ui.mod.Game.Slot s : out) {
 			s.clear();
@@ -983,7 +997,7 @@ public final class IntermediaryMc implements McBridge {
 						stack(stacks[i], out[i]);
 					}
 				}
-				return true;
+				return id;
 			}
 			if (componentTypes() == null) { // 1.16 - 1.20.4: BlockEntityTag.Items
 				Method sub = method(st.getClass(), "method_7941", String.class); // getSubNbt
@@ -993,20 +1007,36 @@ public final class IntermediaryMc implements McBridge {
 				if (items instanceof java.util.List) {
 					for (Object entry : (java.util.List<?>) items) {
 						Object slot = call2(entry, "method_10571", "Slot"); // getByte
+						int i = slot instanceof Number ? ((Number) slot).intValue() & 0xFF : -1;
+						if (i < 0 || i >= out.length) {
+							continue;
+						}
+						// ItemStack.fromNbt: the real stack, so damage, custom model data and tints come along
+						Method from = method(st.getClass(), "method_7915", entry.getClass());
+						Object made = from == null ? null : from.invoke(null, entry);
+						if (made != null) {
+							stack(made, out[i]);
+							continue;
+						}
 						Object name = call2(entry, "method_10558", "id"); // getString
 						Object count = call2(entry, "method_10571", "Count");
-						int i = slot instanceof Number ? ((Number) slot).intValue() : -1;
-						if (i >= 0 && i < out.length && name instanceof String) {
-							out[i].set(xyz.nativelaunch.ui.mod.Game.bareId((String) name), count instanceof Number ? ((Number) count).intValue() : 1, 0, 0);
+						if (name instanceof String) {
+							out[i].set(xyz.nativelaunch.ui.mod.Game.bareId((String) name), count instanceof Number ? ((Number) count).intValue() & 0xFF : 1, 0, 0);
 						}
 					}
 				}
 			}
-			return true;
+			return id;
 		} catch (Throwable t) {
-			return false;
+			if (!shulkerWarned) {
+				shulkerWarned = true;
+				xyz.nativelaunch.core.Log.warn("Could not read a shulker box: {}", t.toString());
+			}
+			return null;
 		}
 	}
+
+	private boolean shulkerWarned;
 
 	/** target.name(String) for a one-String-argument getter. */
 	private Object call2(Object target, String name, String arg) {

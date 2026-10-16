@@ -1,16 +1,16 @@
-# Native Client (Fabric mod, MC 1.16 - 26.x)
-Java mod: skins/capes, Native UI (title/pause/menu/HUD editor), client HUD modules.
+# Native client (Minecraft mod) – PRD notes
 
-## Done
-- 2026-06: HUD hidden in-game by always-on debug entries -> debugOpen now checks real F3 only (MojangMc, IntermediaryMc)
-- 2026-06: Watermark box measure fix; HUD editor "How this works" removed; watermark module icon = Native logo
-- 2026-06: Custom code-drawn nav icons (gfx/NavIcons: mods, locker hanger, settings sliders) in sidebar, title, pause, hub, pill
-- 2026-06: Right Shift opens HUD hub; Potion Effects right padding; Armor Status list redesign (slot tiles, names, wear bar)
-
-## Build
-JDK 25 at /root/jdk/jdk-25.0.4.1+1; compile-only per user (no run/release).
+## Shulker Tooltip (module id `shulker-preview`, label "Shulker Tooltip") – Jun 2026
+- Replaces the old held-only Shulker Preview. File: src/main/java/xyz/nativelaunch/ui/mod/ShulkerTooltip.java
+- Hover a shulker box in any vanilla inventory/chest -> 9x3 panel next to cursor (above vanilla tooltip, left of cursor if no room), fade-in.
+- Settings: Show on hover (Always / Hold Shift), Compact (merge same items, sorted, totals like 76 / 1.7K / 12K), Item counts,
+  Durability bars, Tint to box colour, Box name + total header, Tooltip size, Also show box in hand (HUD card, main or off hand).
+- Bridge: McBridge.hoveredStack(), shulkerContents(stack, out), shulkerInHand(out) now returns box id (String).
+  Intermediary: HandledScreen.field_2787 / Slot.method_7677; 1.16-1.20.4 uses ItemStack.fromNbt (method_7915) for damage/tints.
+  26.x: AbstractContainerScreen.hoveredSlot; ItemContainerContents.copyInto keeps slot order.
+- Drawn from UiRuntime.frame (shulkerTip flag) over vanilla screens.
+- NOT built / NOT tested (user asked not to build/run/test).
 
 ## Backlog
-- Armor Row layout tile parity; pause "Cosmetics" icon parity
-- 2026-06: Leaving a world/server is deferred to the next game tick (UiRuntime.leaveWorld) - fixes blank screen after Disconnect
-- 2026-06: Armor HUD classic icon+number column (percent, total carried count), Inventory HUD dark-cell 9x3 grid + vertical layout; custom items (item_model / custom model data) in Vanilla.item(Slot)
+- Optionally hide vanilla shulker tooltip lines while panel shows
+- Ender chest contents preview, bundle preview
