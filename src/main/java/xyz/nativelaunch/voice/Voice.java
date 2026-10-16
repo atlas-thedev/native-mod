@@ -53,6 +53,8 @@ public final class Voice {
 		volatile int rtt = -1;
 		volatile long lastPong, lastPing;
 		final long joinedAt = System.currentTimeMillis();
+		/** Someone else has been in this call: from then on, being the only one left means it is over (private calls). */
+		volatile boolean sawOthers;
 
 		Room(String convKey, JsonObject o) {
 			this.key = convKey;
@@ -473,7 +475,10 @@ public final class Voice {
 			return;
 		}
 		String server = mc.inWorld() ? mc.server() : null;
-		String want = enabled && proximityOn && !SVC && server != null && !"Singleplayer".equals(server) ? "srv:" + server : null;
+		// proximity rooms are keyed by the server address: a local or LAN address ("192.168.1.5", "localhost") is the same
+		// string on thousands of unrelated networks, so only public servers get one
+		String want = enabled && proximityOn && !SVC && server != null && !"Singleplayer".equals(server)
+				&& xyz.nativelaunch.presence.PresenceService.isPublicAddress(server) ? "srv:" + server : null;
 		Room p = prox;
 		if (want == null ? proxFor != null : !want.equals(proxFor)) {
 			switchProximity(want);
@@ -618,6 +623,16 @@ public final class Voice {
 		Room c = call, x = prox;
 		if (c != null && room.equals(c.room)) {
 			c.members = members;
+			JsonObject left = p.has("left") && p.get("left").isJsonObject() ? p.getAsJsonObject("left") : null;
+			String me0 = me();
+			boolean meLeft = left != null && me0 != null && me0.equals(str(left, "userId")) && !"left".equals(str(left, "reason")) && !"switched".equals(str(left, "reason"));
+			if (meLeft || callOver(c.key, members, me0, c.sawOthers)) {
+				endedByPeer(c, left == null ? null : str(left, "userId"));
+				return;
+			}
+			if (hasOthers(members, me0)) {
+				c.sawOthers = true;
+			}
 		} else if (x != null && room.equals(x.room)) {
 			x.members = members;
 		}
@@ -870,6 +885,50 @@ public final class Voice {
 			if (client != null) {
 				client.notices.add(new Model.Notice(key, "Missed call", r.name + " tried to call you", r.name, r.skin));
 			}
+		}
+	}
+
+	/** True when somebody other than you is in the roster. */
+	static boolean hasOthers(List<Member> members, String me) {
+		for (Member m : members) {
+			if (me == null || !me.equals(m.userId)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * A private call (dm) is over when someone else was in it and you are now the only one left. Group calls carry on,
+	 * and a call nobody has joined yet is still ringing, not over.
+	 */
+	static boolean callOver(String convKey, List<Member> members, String me, boolean sawOthers) {
+		return convKey != null && convKey.startsWith("dm:") && sawOthers && !hasOthers(members, me);
+	}
+
+	/** The other person left (or the server ended your side): you are taken out of the call too. */
+	private static void endedByPeer(final Room ended, String peerId) {
+		if (call != ended) {
+			return;
+		}
+		call = null;
+		pool.execute(() -> bye(ended));
+		RelayClient client = RelayClient.get();
+		Model.Friend f = client == null || ended.key.length() < 4 || !ended.key.startsWith("dm:") ? null : client.friend(ended.key.substring(3));
+		String who = f != null ? f.display() : "They";
+		note(ended.key.startsWith("dm:") ? who + " left the call" : "The call ended");
+		if (client != null) {
+			client.notices.add(new Model.Notice(ended.key, "Call ended", ended.key.startsWith("dm:") ? who + " left the call" : "The call ended", f == null ? null : f.name,
+					f == null ? null : f.skin));
+		}
+	}
+
+	/** `voice:ended`: the server removed you from a private call because the other person left it. */
+	public static void onEnded(JsonObject p) {
+		String room = str(p, "room");
+		Room c = call;
+		if (room != null && c != null && room.equals(c.room)) {
+			endedByPeer(c, null);
 		}
 	}
 

@@ -399,7 +399,7 @@ public final class PresenceService implements Runnable {
 	}
 
 	/** Loopback, LAN and link-local addresses are useless (and private) for friends and Discord. */
-	static boolean isPublicAddress(String address) {
+	public static boolean isPublicAddress(String address) {
 		if (address == null || address.trim().isEmpty()) {
 			return false;
 		}
