@@ -228,72 +228,65 @@
       "sha256": "4584072968fb7c777c985a90449377c13552f35f5a5f55524ff8a26a33f3e99c"
     },
     {
-      "id": "shulker-preview",
-      "label": "Shulker Preview",
-      "codepoint": "F420",
-      "glyph": "native_shulker_preview",
-      "sha256": "cdfda5e64fdbbd55911c33e9aa257aad4aff8e1f081a815f0bffc4336c56a81d"
-    },
-    {
       "id": "low-fire",
       "label": "Low Fire",
-      "codepoint": "F421",
+      "codepoint": "F420",
       "glyph": "native_low_fire",
       "sha256": "18c57a824085ab34cce55d135d8d97d2c74de2d613c0736830558c1880f42ac0"
     },
     {
       "id": "damage-tint",
       "label": "Damage Tint",
-      "codepoint": "F422",
+      "codepoint": "F421",
       "glyph": "native_damage_tint",
       "sha256": "02ed121564114a32d27184c4ce08ab1ca0567002145188cd91c69ebc89f144d4"
     },
     {
       "id": "combo",
       "label": "Combo Counter",
-      "codepoint": "F423",
+      "codepoint": "F422",
       "glyph": "native_combo",
       "sha256": "d7c5b7a86b184208c5c574ac38366fda0abdad5e260d5e553bd43e2d5e2475b2"
     },
     {
       "id": "cooldowns",
       "label": "Item Cooldowns",
-      "codepoint": "F424",
+      "codepoint": "F423",
       "glyph": "native_cooldowns",
       "sha256": "532f978d043de242de7fc667759159c2b1b78eff1d8cda0e04e011750e4c0799"
     },
     {
       "id": "block-overlay",
       "label": "Block Overlay",
-      "codepoint": "F425",
+      "codepoint": "F424",
       "glyph": "native_block_overlay",
       "sha256": "d3c5a36e3a1001572b3dd8a106b4d4531770bd3498bb33f84e75a480c1eac576"
     },
     {
       "id": "freelook",
       "label": "Freelook",
-      "codepoint": "F426",
+      "codepoint": "F425",
       "glyph": "native_freelook",
       "sha256": "092328e3fc612d8cb6e012577f1b71533a656dcb238576f6ec396352f6a795a0"
     },
     {
       "id": "no-hurt-cam",
       "label": "No Hurt Cam",
-      "codepoint": "F427",
+      "codepoint": "F426",
       "glyph": "native_no_hurt_cam",
       "sha256": "117fc4f17dd666550504342923ac2ae7468f74cae36f681c35fe9039c617fd72"
     },
     {
       "id": "time-changer",
       "label": "Time Changer",
-      "codepoint": "F428",
+      "codepoint": "F427",
       "glyph": "native_time_changer",
       "sha256": "b9267fa3358095f137e5b664ea8c7dc43296c1fd5beb0f14a3976655afacbc60"
     },
     {
       "id": "weather-changer",
       "label": "Weather Changer",
-      "codepoint": "F429",
+      "codepoint": "F428",
       "glyph": "native_weather_changer",
       "sha256": "ab1b8c55a6d8edd2d785d012c1e2e71f52c386f7071bcbde1ba22c62a82fa179"
     }

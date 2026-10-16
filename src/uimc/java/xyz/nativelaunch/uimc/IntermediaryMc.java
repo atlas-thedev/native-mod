@@ -959,66 +959,6 @@ public final class IntermediaryMc implements McBridge {
 	}
 
 	@Override
-	public boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
-		Object p = localPlayer();
-		Object st = p == null ? null : call(p, "method_6047"); // getMainHandStack
-		if (st == null) {
-			return false;
-		}
-		Object item = call(st, "method_7909"); // getItem
-		String id = item == null ? "" : xyz.nativelaunch.ui.mod.Game.bareId(item.toString());
-		if (id == null || !id.endsWith("shulker_box")) {
-			return false;
-		}
-		for (xyz.nativelaunch.ui.mod.Game.Slot s : out) {
-			s.clear();
-		}
-		try {
-			Object container = component(st, "field_49622"); // 1.20.5+: the minecraft:container component
-			if (container != null) {
-				Object stream = call(container, "method_57489"); // ContainerComponent.stream(): every slot, in order
-				if (stream instanceof java.util.stream.Stream) {
-					Object[] stacks = ((java.util.stream.Stream<?>) stream).toArray();
-					for (int i = 0; i < Math.min(out.length, stacks.length); i++) {
-						stack(stacks[i], out[i]);
-					}
-				}
-				return true;
-			}
-			if (componentTypes() == null) { // 1.16 - 1.20.4: BlockEntityTag.Items
-				Method sub = method(st.getClass(), "method_7941", String.class); // getSubNbt
-				Object tag = sub == null ? null : sub.invoke(st, "BlockEntityTag");
-				Method list = tag == null ? null : method(tag.getClass(), "method_10554", String.class, int.class); // getList(name, 10 = compound)
-				Object items = list == null ? null : list.invoke(tag, "Items", 10);
-				if (items instanceof java.util.List) {
-					for (Object entry : (java.util.List<?>) items) {
-						Object slot = call2(entry, "method_10571", "Slot"); // getByte
-						Object name = call2(entry, "method_10558", "id"); // getString
-						Object count = call2(entry, "method_10571", "Count");
-						int i = slot instanceof Number ? ((Number) slot).intValue() : -1;
-						if (i >= 0 && i < out.length && name instanceof String) {
-							out[i].set(xyz.nativelaunch.ui.mod.Game.bareId((String) name), count instanceof Number ? ((Number) count).intValue() : 1, 0, 0);
-						}
-					}
-				}
-			}
-			return true;
-		} catch (Throwable t) {
-			return false;
-		}
-	}
-
-	/** target.name(String) for a one-String-argument getter. */
-	private Object call2(Object target, String name, String arg) {
-		Method m = target == null ? null : method(target.getClass(), name, String.class);
-		try {
-			return m == null ? null : m.invoke(target, arg);
-		} catch (Throwable t) {
-			return null;
-		}
-	}
-
-	@Override
 	public boolean vitals(xyz.nativelaunch.ui.mod.Game g, int needs) {
 		Object p = localPlayer();
 		if (p == null) {

@@ -157,29 +157,4 @@ public final class Freelook extends Module {
 		yawOff = pitchOff = 0;
 		toggled = false;
 	}
-
-	@Override
-	public boolean preview(Ui ui, Game g, float x, float y, float w, float h) {
-		Canvas c = ui.c;
-		c.gradientV(x, y, w, h * 0.6f, 0xFF6BA8E8, 0xFFB9DAF5);
-		c.fill(x, y + h * 0.6f, w, h * 0.4f, 0xFF5E8F3F);
-		float cx = x + w / 2, cy = y + h * 0.7f, u = Math.min(w, h) / 70f;
-		// the player stays put while the camera swings around it
-		int[][] parts = {{-4, 24, 8, 8}, {-4, 12, 8, 12}, {-8, 12, 4, 12}, {4, 12, 4, 12}, {-4, 0, 4, 12}, {0, 0, 4, 12}};
-		int[] col = {0xFFC49A6C, 0xFF2AA3A6, 0xFFC49A6C, 0xFFC49A6C, 0xFF3A44A8, 0xFF3A44A8};
-		for (int i = 0; i < parts.length; i++) {
-			c.fill(cx + parts[i][0] * u, cy - (parts[i][1] + parts[i][3]) * u, parts[i][2] * u, parts[i][3] * u, col[i]);
-		}
-		double a = ui.now / 900.0;
-		float rx = w * 0.36f, ry = h * 0.2f;
-		float camX = cx + (float) Math.sin(a) * rx, camY = cy - 16 * u + (float) Math.cos(a) * ry * 0.5f;
-		c.round(camX - 11, camY - 8, 22, 16, 4, 0xFF15171D);
-		c.outline(camX - 11, camY - 8, 22, 16, 4, 1.5f, Theme.ACCENT);
-		c.circle(camX, camY, 4, Theme.ACCENT);
-		String hint = key.value >= 0 ? (toggle.value ? "Press " : "Hold ") + Keys.name(key.value) + " and move the mouse" : "Set a freelook key";
-		float tw = c.textWidth(Fonts.SEMIBOLD, 10.5f, hint) + 20;
-		c.round(x + (w - tw) / 2, y + h - 34, tw, 22, 11, 0xC0000000);
-		c.text(Fonts.SEMIBOLD, 10.5f, hint, x + (w - tw) / 2 + 10, y + h - 34 + (22 - c.lineHeight(Fonts.SEMIBOLD, 10.5f)) / 2, Theme.TEXT_SECONDARY);
-		return true;
-	}
 }

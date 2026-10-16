@@ -175,14 +175,6 @@ public interface McBridge {
 	}
 
 	/**
-	 * The contents of the shulker box in the main hand (27 slots into {@code out}). False when the hand holds no shulker
-	 * box or this version cannot read it.
-	 */
-	default boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
-		return false;
-	}
-
-	/**
 	 * Items of yours that are on cooldown right now (ender pearl, shield, chorus fruit ...): fills {@code ids} (bare item ids)
 	 * and {@code progress} (1 = just started, 0 = ready) and returns how many. 0 when none or this version cannot be read.
 	 */
