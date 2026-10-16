@@ -33,6 +33,9 @@ public final class ExtraModules {
 		Modules.register(new Playtime());
 		Modules.register(new ReachDisplay());
 		Modules.register(new ShulkerPreview());
+		Modules.register(new Combo());
+		Modules.register(new Cooldowns());
+		Modules.register(new BlockOverlay());
 		Modules.register(new LowFire());
 		Modules.register(new DamageTint());
 	}
@@ -471,6 +474,16 @@ public final class ExtraModules {
 			return sb.toString();
 		}
 
+		static String pretty(String id) {
+			StringBuilder sb = new StringBuilder();
+			for (String part : id.split("_")) {
+				if (!part.isEmpty()) {
+					sb.append(sb.length() > 0 ? " " : "").append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+				}
+			}
+			return sb.toString();
+		}
+
 		@Override
 		int sample() {
 			return 16;
@@ -480,6 +493,150 @@ public final class ExtraModules {
 		String sampleItem() {
 			String id = chosen();
 			return id != null ? id : "ender_pearl";
+		}
+	}
+
+
+	// ── combo counter ───────────────────────────────────────────────────────
+
+	/** The counting rules, apart from the game: a hit adds one (at most one per damage-immunity window), damage taken or silence ends it. */
+	static final class ComboTracker {
+		static final long IMMUNITY_MS = 450;
+		int combo, best;
+		long lastHitAt, lastCountAt;
+
+		/** An attack landed on something in reach. */
+		void hit(long now) {
+			if (combo > 0 && now - lastCountAt < IMMUNITY_MS) {
+				return; // inside the target's damage immunity: this swing did no damage
+			}
+			combo++;
+			best = Math.max(best, combo);
+			lastCountAt = lastHitAt = now;
+		}
+
+		void damaged() {
+			combo = 0;
+		}
+
+		/** No hit for {@code timeoutMs}: the combo is over. */
+		void tick(long now, long timeoutMs) {
+			if (combo > 0 && now - lastHitAt > timeoutMs) {
+				combo = 0;
+			}
+		}
+	}
+
+	static final class Combo extends HudModule {
+		final Setting.Num timeout = add(new Setting.Num("timeout", "Combo ends after", 3, 1, 10, 1, "s"));
+		final Setting.Bool damage = add(new Setting.Bool("damage", "End the combo when I take damage", true));
+		final Setting.Bool best = add(new Setting.Bool("best", "Show my best combo", true));
+		private final ComboTracker tracker = new ComboTracker();
+		private float lastHealth = -1;
+		private boolean wasDown;
+
+		Combo() {
+			super("combo", "Combo Counter", "Counts the hits you land in a row. It ends when you take damage or stop hitting for a few seconds.", Theme.I_SWORD, false, 0f, 0.46f);
+		}
+
+		@Override
+		public int needs() {
+			return Game.NEED_VITALS;
+		}
+
+		@Override
+		public void frame(Game g) {
+			long now = System.currentTimeMillis();
+			float hp = g.health + g.absorption;
+			if (damage.value && lastHealth >= 0 && hp < lastHealth - 0.01f) {
+				tracker.damaged();
+			}
+			lastHealth = hp;
+			boolean down = g.down[Game.ATTACK];
+			if (down && !wasDown) {
+				double d = HudModules.mc().reach(); // something with a hitbox is under the crosshair
+				if (!Double.isNaN(d) && d > 0 && d < 8) {
+					tracker.hit(now);
+				}
+			}
+			wasDown = down;
+			tracker.tick(now, (long) (timeout.value * 1000));
+		}
+
+		@Override
+		protected int lines(Game g, String[] l, String[] v) {
+			int c = g.sample ? 7 : tracker.combo, b = g.sample ? 12 : tracker.best;
+			l[0] = "Combo";
+			v[0] = String.valueOf(c);
+			if (best.value) {
+				l[1] = "Best";
+				v[1] = String.valueOf(Math.max(b, c));
+				return 2;
+			}
+			return 1;
+		}
+	}
+
+	// ── cooldowns ───────────────────────────────────────────────────────────
+
+	static final class Cooldowns extends StatusModules.Box {
+		final Setting.Bool names = add(new Setting.Bool("names", "Show item names", false));
+		private final String[] ids = new String[8];
+		private final float[] progress = new float[8];
+		private final Game.Slot icon = new Game.Slot();
+		private int count;
+		private long next;
+
+		Cooldowns() {
+			super("cooldowns", "Item Cooldowns", "A bar that drains for every item on cooldown: ender pearls, shields, chorus fruit and more.", Theme.I_TIMER, false, 0f, 0.6f);
+			drop(labels, color);
+			style.initial(STYLE_CARD);
+		}
+
+		@Override
+		public void frame(Game g) {
+			long now = System.currentTimeMillis();
+			if (now < next) {
+				return;
+			}
+			next = now + 60;
+			count = HudModules.mc().cooldowns(ids, progress);
+		}
+
+		@Override
+		public boolean visible(Game g) {
+			return g.sample || count > 0;
+		}
+
+		@Override
+		void render(Canvas c, Ui ui, Game g, float x, float y) {
+			float s = scale.value, pad = pad();
+			int n = g.sample ? 2 : count;
+			float ic = 16 * s, barW = 54 * s, barH = 4 * s, rowH = ic + 4 * s, gap = 3 * s;
+			float fs = 10.5f * s;
+			float nameW = 0;
+			for (int i = 0; i < n && names.value; i++) {
+				String id = g.sample ? (i == 0 ? "ender_pearl" : "shield") : ids[i];
+				nameW = Math.max(nameW, c.textWidth(Fonts.REGULAR, fs, ItemCounter.pretty(id)));
+			}
+			float w = pad * 2 + ic + 6 * s + Math.max(barW, nameW), h = pad * 2 + Math.max(1, n) * rowH + Math.max(0, n - 1) * gap;
+			if (ui != null) {
+				for (int i = 0; i < n; i++) {
+					String id = g.sample ? (i == 0 ? "ender_pearl" : "shield") : ids[i];
+					float f = g.sample ? (i == 0 ? 0.6f : 0.25f) + 0.15f * (float) Math.sin(System.currentTimeMillis() / 600.0) : progress[i];
+					float ry = y + pad + i * (rowH + gap);
+					icon.set(id, 1, 0, 0);
+					StatusModules.item(c, icon, x + pad, ry + (rowH - ic) / 2, ic, 0xFFFFFFFF);
+					float bx = x + pad + ic + 6 * s;
+					float by = ry + (names.value ? rowH - barH - 1 * s : (rowH - barH) / 2);
+					if (names.value) {
+						text(c, Fonts.REGULAR, fs, ItemCounter.pretty(id), bx, ry, 0xFFC4C8D4);
+					}
+					c.round(bx, by, barW, barH, barH / 2, 0x33FFFFFF);
+					c.round(bx, by, Math.max(barH, barW * Math.max(0f, Math.min(1f, f))), barH, barH / 2, f > 0.66f ? 0xFFF87171 : f > 0.33f ? 0xFFFBBF24 : 0xFF4ADE80);
+				}
+			}
+			done(w, h);
 		}
 	}
 

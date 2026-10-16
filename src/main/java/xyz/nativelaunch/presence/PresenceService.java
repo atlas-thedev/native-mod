@@ -30,7 +30,6 @@ import java.util.Map;
  */
 public final class PresenceService implements Runnable {
 	static final String CLIENT_ID = "1465139441457827972";
-	private static final String SITE = "https://playnative.net";
 	private static final long TICK_MS = 2000;
 	private static final long PING_MS = 60_000;
 	private static final long DISCORD_RETRY_MS = 15_000;
@@ -218,8 +217,9 @@ public final class PresenceService implements Runnable {
 		JsonObject a = new JsonObject();
 		JsonObject assets = new JsonObject();
 		String version = mcVersion == null ? "Minecraft" : "Minecraft " + mcVersion;
-		assets.addProperty("small_image", "logo");
-		assets.addProperty("small_text", "Native Client · " + version);
+		// The big picture is Minecraft's own default image; the small corner badge is the Native logo. When the big picture
+		// is not available the Native logo becomes the big one and there is no badge: the logo is never shown twice.
+		String big = largeImage();
 		switch (s.kind) {
 			case MULTIPLAYER: {
 				String label = serverLabel(s);
@@ -237,7 +237,7 @@ public final class PresenceService implements Runnable {
 					a.add("party", party);
 				}
 				// never the server's own icon: the default Minecraft picture, like the game shows for a server without one
-				assets.addProperty("large_image", largeImage());
+				assets.addProperty("large_image", big != null ? big : "logo");
 				assets.addProperty("large_text", open ? displayHost(s.address) : (s.lan ? "LAN world" : "Private server"));
 				break;
 			}
@@ -245,33 +245,31 @@ public final class PresenceService implements Runnable {
 				String world = s.worldName == null || s.worldName.trim().isEmpty() ? "a world" : s.worldName.trim();
 				a.addProperty("details", "Playing Singleplayer");
 				a.addProperty("state", s.published ? world + " · Open to LAN" : world);
-				assets.addProperty("large_image", largeImage());
+				assets.addProperty("large_image", big != null ? big : "logo");
 				assets.addProperty("large_text", world);
 				break;
 			}
 			case REALMS:
 				a.addProperty("details", "Playing on Realms");
 				a.addProperty("state", version);
-				assets.addProperty("large_image", largeImage());
+				assets.addProperty("large_image", big != null ? big : "logo");
 				assets.addProperty("large_text", "Minecraft Realms");
 				break;
 			default:
 				a.addProperty("details", "In the menus");
 				a.addProperty("state", version);
-				assets.addProperty("large_image", largeImage());
+				assets.addProperty("large_image", big != null ? big : "logo");
 				assets.addProperty("large_text", "Native Client");
 				break;
 		}
 		JsonObject timestamps = new JsonObject();
 		timestamps.addProperty("start", stateSince);
 		a.add("timestamps", timestamps);
+		if (big != null) {
+			assets.addProperty("small_image", "logo");
+			assets.addProperty("small_text", "Native Client · " + version);
+		}
 		a.add("assets", assets);
-		JsonArray buttons = new JsonArray();
-		JsonObject get = new JsonObject();
-		get.addProperty("label", "Get Native Client");
-		get.addProperty("url", SITE);
-		buttons.add(get);
-		a.add("buttons", buttons);
 		return a;
 	}
 
@@ -298,12 +296,8 @@ public final class PresenceService implements Runnable {
 	 * logo asset until that is ready. Servers' and worlds' own icons are not shown.
 	 */
 	private String largeImage() {
-		String url = null;
 		byte[] png = defaultIconBytes();
-		if (png != null) {
-			url = iconUrl("default-minecraft", png);
-		}
-		return url == null ? "logo" : url;
+		return png == null ? null : iconUrl("default-minecraft", png);
 	}
 
 	private static byte[] defaultIconBytes() {

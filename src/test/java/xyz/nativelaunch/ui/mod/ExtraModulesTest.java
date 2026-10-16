@@ -93,4 +93,51 @@ class ExtraModulesTest {
 		int p = img.argb[y * img.width + x];
 		return (((p >> 16) & 255) + ((p >> 8) & 255) + (p & 255)) / 3;
 	}
+
+	@Test
+	void aComboGrowsPerHitEndsOnDamageAndOnSilence() {
+		ExtraModules.ComboTracker t = new ExtraModules.ComboTracker();
+		t.hit(1000);
+		t.hit(1200); // inside the target's damage immunity: no damage, no combo
+		assertEquals(1, t.combo);
+		t.hit(1500);
+		t.hit(2100);
+		assertEquals(3, t.combo);
+		assertEquals(3, t.best);
+		t.damaged();
+		assertEquals(0, t.combo);
+		assertEquals(3, t.best, "the best of the session stays");
+		t.hit(5000);
+		t.tick(7000, 3000);
+		assertEquals(1, t.combo, "still going 2 s after the hit");
+		t.tick(8100, 3000);
+		assertEquals(0, t.combo, "no hit for over 3 s ends it");
+	}
+
+	@Test
+	void theBlockOutlineIsRecolouredOnlyWhileTheModuleIsOnAndOnlyFromTheGamesDefault() {
+		int vanilla = 0x66000000;
+		assertEquals(vanilla, BlockOverlay.outline(vanilla), "module never started: the game's outline");
+		BlockOverlay m = new BlockOverlay();
+		m.color.value = 0xFF00FF00;
+		m.opacity.value = 50;
+		m.frame(new Game());
+		assertEquals(0x8000FF00, BlockOverlay.outline(vanilla), "green at half strength replaces the default");
+		assertEquals(0xFFFFFFFF, BlockOverlay.outline(0xFFFFFFFF), "a high-contrast outline the player chose stays");
+		float[] rgba = {0f, 0f, 0f, 0.4f};
+		assertTrue(BlockOverlay.outline(rgba));
+		assertEquals(1f, rgba[1], 1e-6);
+		assertEquals(0f, rgba[0], 1e-6);
+		float[] other = {1f, 0f, 0f, 1f};
+		assertFalse(BlockOverlay.outline(other), "debug colours are left alone");
+		m.rainbowSetting.value = true;
+		m.frame(new Game());
+		int c = BlockOverlay.outline(vanilla);
+		assertEquals(0x80, c >>> 24, "the strength still applies to the rainbow");
+		assertEquals(0xFF0000, BlockOverlay.hue(0f, 0) & 0xFFFFFF, "hue 0 is red");
+		assertEquals(0x00FF00, BlockOverlay.hue(1f / 3, 0) & 0xFFFFFF, "a third of the way is green");
+		m.setEnabled(true);
+		m.setEnabled(false);
+		assertEquals(vanilla, BlockOverlay.outline(vanilla), "switched off: the game's outline again");
+	}
 }

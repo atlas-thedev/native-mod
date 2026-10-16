@@ -665,6 +665,38 @@ public final class MojangMc implements McBridge {
 	}
 
 	@Override
+	public int cooldowns(String[] ids, float[] progress) {
+		try {
+			LocalPlayer p = client().player;
+			if (p == null) {
+				return 0;
+			}
+			net.minecraft.world.item.ItemCooldowns manager = p.getCooldowns();
+			net.minecraft.world.entity.player.Inventory inv = p.getInventory();
+			java.util.Set<String> seen = new java.util.HashSet<String>();
+			int n = 0;
+			for (int i = 0; i <= inv.getContainerSize(); i++) {
+				net.minecraft.world.item.ItemStack st = i < inv.getContainerSize() ? inv.getItem(i) : p.getOffhandItem();
+				if (st == null || st.isEmpty()) {
+					continue;
+				}
+				String id = xyz.nativelaunch.ui.mod.Game.bareId(st.getItem().toString());
+				if (id == null || !seen.add(id)) {
+					continue;
+				}
+				float f = manager.getCooldownPercent(st, 0f);
+				if (f > 0.001f && n < ids.length) {
+					ids[n] = id;
+					progress[n++] = f;
+				}
+			}
+			return n;
+		} catch (Throwable t) {
+			return 0;
+		}
+	}
+
+	@Override
 	public boolean shulkerInHand(xyz.nativelaunch.ui.mod.Game.Slot[] out) {
 		try {
 			LocalPlayer p = client().player;
