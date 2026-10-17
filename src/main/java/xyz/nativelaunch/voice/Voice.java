@@ -72,16 +72,30 @@ public final class Voice {
 		public int ping() {
 			return rtt;
 		}
+
+		/** When you joined this room (for the call timer). */
+		public long since() {
+			return joinedAt;
+		}
 	}
+
+	/** Who hears you outside a call ({@link #nearbyTalk}): nearby players only while the push-to-talk key is held, the same as calls, or never. */
+	public static final int NEARBY_HOLD = 0, NEARBY_TALK_MODE = 1, NEARBY_OFF = 2;
+	/** How long the microphone stays open after the push-to-talk key is let go (so the next press is heard at once). */
+	static final long PTT_LINGER_MS = 5000;
 
 	// settings, written by the Voice Chat module every frame
 	public static volatile boolean pushToTalk = true, pttHeld, proximityOn = true;
+	public static volatile int nearbyTalk = NEARBY_HOLD;
+	static volatile long pttAt;
 	public static volatile float thresholdDb = -42, micGain = 1, outVolume = 1, range = 48;
 	public static volatile boolean muted, deafened;
 	/** Chosen devices by name; "" = system default. */
 	public static volatile String micDevice = "", outDevice = "";
 	private static volatile long micTestUntil;
 	static volatile boolean selfSpeaking;
+	/** Your voice is going out to the players near you right now (not just to your call). */
+	static volatile boolean selfNearby;
 	static volatile float selfLevel;
 
 	private static volatile Room call, prox;
@@ -271,6 +285,34 @@ public final class Voice {
 		return selfSpeaking;
 	}
 
+	/** How loud this member is right now, 0 - 1 (0 while silent): drives the talking ring in the call UI. */
+	public static float level(Member m) {
+		String me = me();
+		if (me != null && me.equals(m.userId)) {
+			return selfSpeaking ? Math.min(1f, selfLevel * 6f) : 0f;
+		}
+		RemoteStream s = streams.get(m.sid);
+		return s == null || !s.speaking() ? 0f : Math.min(1f, s.level * 6f);
+	}
+
+	/** True while the players near you can hear you. */
+	public static boolean selfNearby() {
+		return selfNearby;
+	}
+
+	/**
+	 * A nearby (proximity) speaker you can really hear: loaded in your world and within hearing distance. Everyone with
+	 * Native on the server shares one proximity room, so "speaking" alone also matches people on the other side of the map.
+	 */
+	public static boolean audible(Member m) {
+		RemoteStream s = m == null ? null : streams.get(m.sid);
+		if (s == null || !s.proximity || !s.placed || !earValid) {
+			return false;
+		}
+		double dx = s.x - earPos[0], dy = s.y - earPos[1], dz = s.z - earPos[2];
+		return dx * dx + dy * dy + dz * dz < (double) range * range;
+	}
+
 	/** True while this member's voice is coming in. */
 	public static boolean speaking(Member m) {
 		String me = me();
@@ -290,8 +332,50 @@ public final class Voice {
 		return call != null || prox != null;
 	}
 
+	/**
+	 * The microphone is open: in a call, or (only on a server's proximity voice) while you can talk to the players near
+	 * you. With the default "hold the key" nearby setting that is a few seconds around a push-to-talk press, so being on a
+	 * server never leaves your mic live for strangers.
+	 */
 	static boolean wantsMic() {
-		return active() && !muted && !deafened || System.currentTimeMillis() < micTestUntil;
+		long now = System.currentTimeMillis();
+		if (now < micTestUntil) {
+			return true;
+		}
+		if (muted || deafened) {
+			return false;
+		}
+		if (call != null) {
+			return true;
+		}
+		return prox != null && nearbyOpen(now);
+	}
+
+	private static boolean nearbyOpen(long now) {
+		switch (nearbyTalk) {
+			case NEARBY_TALK_MODE:
+				return !pushToTalk || pttHeld || now - pttAt < PTT_LINGER_MS;
+			case NEARBY_OFF:
+				return false;
+			default:
+				return pttHeld || now - pttAt < PTT_LINGER_MS;
+		}
+	}
+
+	/**
+	 * Which rooms one frame of your voice goes to. {@code talk} is the talk mode's answer (key held / above the activation
+	 * level). Your call hears you by the talk mode; nearby players by {@link #nearbyTalk}, so a private call is not
+	 * heard by whoever stands next to you unless you hold the key. Returns bit 1 = call, bit 2 = proximity.
+	 */
+	static int targets(boolean talk, boolean held, boolean inCall, boolean inProx, int nearby) {
+		int out = 0;
+		if (inCall && talk) {
+			out |= 1;
+		}
+		if (inProx && (nearby == NEARBY_TALK_MODE ? talk : nearby == NEARBY_HOLD && held)) {
+			out |= 2;
+		}
+		return out;
 	}
 
 	/** The mic test is on screen: keep the microphone open (and the engine running) for a moment. */
@@ -485,6 +569,9 @@ public final class Voice {
 		} else if (want != null && p == null && !proxBusy && System.currentTimeMillis() > proxRetryAt) {
 			switchProximity(want);
 		}
+		if (pttHeld) {
+			pttAt = System.currentTimeMillis();
+		}
 		boolean ear = mc.player(earPos);
 		if (ear) {
 			earPos[1] += 1.6; // eye height, like the speakers' positions
@@ -553,18 +640,27 @@ public final class Voice {
 
 	// ── network threads ───────────────────────────────────────────────────
 
-	static void sendAudio(byte[] packet, int len) {
+	/** One encoded frame to your call and / or proximity room; {@code toCall} / {@code toProx} say which. */
+	static void sendAudio(byte[] packet, int len, boolean toCall, boolean toProx) {
 		VoiceNet n = net;
 		if (n == null) {
 			return;
 		}
 		Room c = call, p = prox;
-		if (c != null) {
+		if (c != null && toCall) {
 			n.send(c, VoiceNet.T_AUDIO, packet, len);
 		}
-		if (p != null) {
+		if (p != null && toProx) {
 			n.send(p, VoiceNet.T_AUDIO, packet, len);
 		}
+	}
+
+	static boolean inCallRoom() {
+		return call != null;
+	}
+
+	static boolean inProxRoom() {
+		return prox != null;
 	}
 
 	static void onAudio(Room r, int from, int flags, int seq, byte[] opus) {

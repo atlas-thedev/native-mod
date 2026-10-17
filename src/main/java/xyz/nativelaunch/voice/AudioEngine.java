@@ -60,7 +60,7 @@ final class AudioEngine {
 		TargetDataLine line = null;
 		String device = null;
 		int hang = 0;
-		boolean open = false;
+		boolean openCall = false, openProx = false;
 		while (running) {
 			try {
 				if (!Voice.wantsMic()) {
@@ -69,9 +69,10 @@ final class AudioEngine {
 						line.close();
 						line = null;
 					}
-					open = false;
+					openCall = openProx = false;
 					Voice.selfLevel = 0;
 					Voice.selfSpeaking = false;
+					Voice.selfNearby = false;
 					Thread.sleep(100);
 					continue;
 				}
@@ -106,24 +107,37 @@ final class AudioEngine {
 				double rms = Math.sqrt(sum / (double) FRAME) / 32768.0;
 				Voice.selfLevel = (float) rms;
 				double db = rms <= 1e-9 ? -100 : 20 * Math.log10(rms);
-				boolean want;
+				boolean talk;
 				if (Voice.muted || Voice.deafened) {
-					want = false;
+					talk = false;
 				} else if (Voice.pushToTalk) {
-					want = Voice.pttHeld;
+					talk = Voice.pttHeld;
 				} else if (db >= Voice.thresholdDb) {
 					hang = HANGOVER;
-					want = true;
+					talk = true;
 				} else {
-					want = hang-- > 0;
+					talk = hang-- > 0;
 				}
-				Voice.selfSpeaking = want;
-				if (want || open) {
+				boolean held = !Voice.muted && !Voice.deafened && Voice.pttHeld;
+				int to = Voice.targets(talk, held, Voice.inCallRoom(), Voice.inProxRoom(), Voice.nearbyTalk);
+				boolean wantCall = (to & 1) != 0, wantProx = (to & 2) != 0;
+				Voice.selfSpeaking = wantCall || wantProx;
+				Voice.selfNearby = wantProx;
+				if (wantCall || wantProx || openCall || openProx) {
 					int n = encoder.encode(pcm, 0, FRAME, packet, 1, packet.length - 1);
-					packet[0] = (byte) (want ? 0 : RemoteStream.END);
-					Voice.sendAudio(packet, n + 1);
+					// a room that stops hearing you gets one last frame marked END, so its speaker stops cleanly
+					if (wantCall == wantProx || !(openCall || openProx)) {
+						packet[0] = (byte) (wantCall || wantProx ? 0 : RemoteStream.END);
+						Voice.sendAudio(packet, n + 1, wantCall || openCall, wantProx || openProx);
+					} else {
+						packet[0] = 0;
+						Voice.sendAudio(packet, n + 1, wantCall, wantProx);
+						packet[0] = (byte) RemoteStream.END;
+						Voice.sendAudio(packet, n + 1, !wantCall && openCall, !wantProx && openProx);
+					}
 				}
-				open = want;
+				openCall = wantCall;
+				openProx = wantProx;
 			} catch (Throwable t) {
 				micError = t.getMessage() == null ? t.toString() : t.getMessage();
 				Log.debug("Voice microphone: {}", micError);

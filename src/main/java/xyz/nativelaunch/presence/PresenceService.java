@@ -236,7 +236,11 @@ public final class PresenceService implements Runnable {
 					party.add("size", size);
 					a.add("party", party);
 				}
-				// never the server's own icon: the default Minecraft picture, like the game shows for a server without one
+				// the server's own logo; the default Minecraft picture for a server without one (like the server list)
+				String logo = open ? serverIcon(s) : null;
+				if (logo != null) {
+					big = logo;
+				}
 				assets.addProperty("large_image", big != null ? big : "logo");
 				assets.addProperty("large_text", open ? displayHost(s.address) : (s.lan ? "LAN world" : "Private server"));
 				break;
@@ -284,6 +288,27 @@ public final class PresenceService implements Runnable {
 
 	/* ── Icons (Discord needs a URL, so they are hosted by Native) ── */
 
+	/** URL of the current server's own icon (from the server list ping), hosted by Native; null when it has none. */
+	String serverIcon(GameProbe.Snapshot s) {
+		ServerPing.Result p = ping;
+		if (s == null || s.kind != GameProbe.Kind.MULTIPLAYER || p == null || p.icon == null || p.icon.length < 8) {
+			return null;
+		}
+		return iconUrl("srv:" + sha256Bytes(p.icon), p.icon);
+	}
+
+	private static String sha256Bytes(byte[] data) {
+		try {
+			StringBuilder out = new StringBuilder();
+			for (byte b : MessageDigest.getInstance("SHA-256").digest(data)) {
+				out.append(String.format("%02x", b & 0xFF));
+			}
+			return out.toString();
+		} catch (java.security.NoSuchAlgorithmException e) {
+			return Integer.toHexString(java.util.Arrays.hashCode(data));
+		}
+	}
+
 	/** Game asset of the picture Minecraft shows for a server that has no icon of its own (every version ships it). */
 	private static final String[] DEFAULT_ICON_PATHS = {
 		"assets/minecraft/textures/misc/unknown_server.png",
@@ -292,8 +317,8 @@ public final class PresenceService implements Runnable {
 	};
 
 	/**
-	 * Discord's big picture: the default Minecraft "no server icon" image (hosted by Native like other icons), or the Native
-	 * logo asset until that is ready. Servers' and worlds' own icons are not shown.
+	 * Discord's big picture outside a server with its own icon: the default Minecraft "no server icon" image (hosted by
+	 * Native like other icons), or the Native logo asset until that is ready.
 	 */
 	private String largeImage() {
 		byte[] png = defaultIconBytes();
