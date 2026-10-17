@@ -47,6 +47,10 @@ public final class Theme {
 			I_SWORD = 0xF12F, I_PENCIL = 0xF130, I_TRASH = 0xF131, I_CHECKS = 0xF132, I_REPLY_ARROW = 0xF133,
 			I_MIC = 0xF134, I_MIC_OFF = 0xF135, I_PHONE = 0xF136, I_PHONE_OFF = 0xF137, I_HEADPHONES = 0xF138,
 			I_HEADPHONES_OFF = 0xF139, I_VOLUME = 0xF13A, I_CHEVRON_DOWN = 0xF13B, I_CHEVRON_UP = 0xF13C;
+	// music player (scripts/lucide-extra.py, in this order)
+	public static final int I_PAUSE = 0xF13D, I_SKIP_FORWARD = 0xF13E, I_SKIP_BACK = 0xF13F, I_SHUFFLE = 0xF140, I_REPEAT = 0xF141,
+			I_REPEAT_ONE = 0xF142, I_MUSIC = 0xF143, I_FOLDER_OPEN = 0xF144, I_VOLUME_OFF = 0xF145, I_LIST_MUSIC = 0xF146, I_DISC = 0xF147,
+			I_AUDIO_LINES = 0xF148, I_VOLUME_LOW = 0xF149, I_REFRESH_CW = 0xF14A;
 	// drawn in code (gfx.NavIcons)
 	public static final int I_NAV_MODS = xyz.nativelaunch.ui.gfx.NavIcons.MODS, I_NAV_LOCKER = xyz.nativelaunch.ui.gfx.NavIcons.LOCKER,
 			I_NAV_SETTINGS = xyz.nativelaunch.ui.gfx.NavIcons.SETTINGS;

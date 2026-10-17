@@ -289,6 +289,20 @@
       "codepoint": "F428",
       "glyph": "native_weather_changer",
       "sha256": "ab1b8c55a6d8edd2d785d012c1e2e71f52c386f7071bcbde1ba22c62a82fa179"
+    },
+    {
+      "id": "music",
+      "label": "Music Player",
+      "codepoint": "F429",
+      "glyph": "native_music",
+      "sha256": "7d8668d7bd6d8c22b3b3d8da271cdeece560e32bf6a3a46c7dcc101763d14ebd"
+    },
+    {
+      "id": "now-playing",
+      "label": "Now Playing",
+      "codepoint": "F42A",
+      "glyph": "native_now_playing",
+      "sha256": "ffa3d5e47f286a640456d7d66bd53af156a832588250e3dff4026647a8207bfa"
     }
   ]
 }
