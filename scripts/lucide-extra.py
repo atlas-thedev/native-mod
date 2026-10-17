@@ -14,7 +14,9 @@ EXTRA = ['gauge', 'mouse-pointer-click', 'compass', 'map-pin', 'clock-3', 'memor
          'heart', 'star', 'list', 'store', 'ban', 'flask-conical', 'shield', 'heart-pulse', 'minus',
          'circle-help', 'drumstick', 'sword', 'pencil', 'trash-2', 'check-check', 'corner-up-left',
          'mic', 'mic-off', 'phone', 'phone-off', 'headphones', 'headphone-off', 'volume-2',
-         'chevron-down', 'chevron-up']
+         'chevron-down', 'chevron-up',
+         'pause', 'skip-forward', 'skip-back', 'shuffle', 'repeat', 'repeat-1', 'music', 'folder-open', 'volume-x',
+         'list-music', 'disc-3', 'audio-lines', 'volume-1', 'refresh-cw']
 B64 = 'src/main/uiassets/lucide.ttf.b64'
 
 full = TTFont(sys.argv[1])

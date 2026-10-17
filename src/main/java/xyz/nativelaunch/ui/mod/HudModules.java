@@ -39,6 +39,7 @@ public final class HudModules {
 		Modules.register(new WatermarkModule());
 		ExtraModules.register();
 		VoiceModules.register();
+		MusicModules.register();
 	}
 
 	static McBridge mc() {
