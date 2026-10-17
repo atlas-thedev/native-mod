@@ -1379,6 +1379,16 @@ public final class RelayClient {
 				});
 				break;
 			}
+			case "thread:read": {
+				// you read this chat in the launcher (or elsewhere): no unread badge or pending notice for it in game
+				String tid = str(p, "threadId");
+				if (tid != null && "dm".equals(str(p, "kind"))) {
+					final String key = "dm:" + tid;
+					clearUnread(key);
+					notices.removeIf(n -> key.equals(n.convKey));
+				}
+				break;
+			}
 			case "message:read": {
 				final java.util.Set<String> ids = new java.util.HashSet<String>();
 				if (p.has("messageIds") && p.get("messageIds").isJsonArray()) {
