@@ -60,7 +60,7 @@ final class AudioEngine {
 		TargetDataLine line = null;
 		String device = null;
 		int hang = 0;
-		boolean openCall = false, openProx = false;
+		boolean open = false;
 		while (running) {
 			try {
 				if (!Voice.wantsMic()) {
@@ -69,10 +69,9 @@ final class AudioEngine {
 						line.close();
 						line = null;
 					}
-					openCall = openProx = false;
+					open = false;
 					Voice.selfLevel = 0;
 					Voice.selfSpeaking = false;
-					Voice.selfNearby = false;
 					Thread.sleep(100);
 					continue;
 				}
@@ -107,37 +106,24 @@ final class AudioEngine {
 				double rms = Math.sqrt(sum / (double) FRAME) / 32768.0;
 				Voice.selfLevel = (float) rms;
 				double db = rms <= 1e-9 ? -100 : 20 * Math.log10(rms);
-				boolean talk;
+				boolean want;
 				if (Voice.muted || Voice.deafened) {
-					talk = false;
+					want = false;
 				} else if (Voice.pushToTalk) {
-					talk = Voice.pttHeld;
+					want = Voice.pttHeld;
 				} else if (db >= Voice.thresholdDb) {
 					hang = HANGOVER;
-					talk = true;
+					want = true;
 				} else {
-					talk = hang-- > 0;
+					want = hang-- > 0;
 				}
-				boolean held = !Voice.muted && !Voice.deafened && Voice.pttHeld;
-				int to = Voice.targets(talk, held, Voice.inCallRoom(), Voice.inProxRoom(), Voice.nearbyTalk);
-				boolean wantCall = (to & 1) != 0, wantProx = (to & 2) != 0;
-				Voice.selfSpeaking = wantCall || wantProx;
-				Voice.selfNearby = wantProx;
-				if (wantCall || wantProx || openCall || openProx) {
+				Voice.selfSpeaking = want;
+				if (want || open) {
 					int n = encoder.encode(pcm, 0, FRAME, packet, 1, packet.length - 1);
-					// a room that stops hearing you gets one last frame marked END, so its speaker stops cleanly
-					if (wantCall == wantProx || !(openCall || openProx)) {
-						packet[0] = (byte) (wantCall || wantProx ? 0 : RemoteStream.END);
-						Voice.sendAudio(packet, n + 1, wantCall || openCall, wantProx || openProx);
-					} else {
-						packet[0] = 0;
-						Voice.sendAudio(packet, n + 1, wantCall, wantProx);
-						packet[0] = (byte) RemoteStream.END;
-						Voice.sendAudio(packet, n + 1, !wantCall && openCall, !wantProx && openProx);
-					}
+					packet[0] = (byte) (want ? 0 : RemoteStream.END);
+					Voice.sendAudio(packet, n + 1);
 				}
-				openCall = wantCall;
-				openProx = wantProx;
+				open = want;
 			} catch (Throwable t) {
 				micError = t.getMessage() == null ? t.toString() : t.getMessage();
 				Log.debug("Voice microphone: {}", micError);
@@ -163,7 +149,6 @@ final class AudioEngine {
 		AudioFormat fmt = new AudioFormat(RATE, 16, 2, true, false);
 		int[] acc = new int[FRAME * 2];
 		byte[] out = new byte[FRAME * 4];
-		double[] ear = new double[5];
 		SourceDataLine line = null;
 		String device = null;
 		while (running) {
@@ -189,34 +174,13 @@ final class AudioEngine {
 					speakerError = null;
 				}
 				java.util.Arrays.fill(acc, 0);
-				boolean haveEar = Voice.ear(ear);
 				float volume = Voice.outVolume;
-				float range = Voice.range;
 				for (RemoteStream s : Voice.streams()) {
 					short[] pcm = s.pull();
-					if (pcm == null || Voice.deafened || Voice.duplicate(s)) {
+					if (pcm == null || Voice.deafened) {
 						continue;
 					}
-					float uv = volume * Voice.volume(s.userId);
-					float l = uv, r = uv;
-					if (s.proximity) {
-						if (!haveEar || !s.placed) {
-							continue; // not near enough to be loaded in the world: out of earshot
-						}
-						double dx = s.x - ear[0], dy = s.y - ear[1], dz = s.z - ear[2];
-						double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-						if (d >= range) {
-							continue;
-						}
-						float fall = (float) (1 - d / range);
-						fall *= fall;
-						double yaw = Math.toRadians(ear[3]);
-						double pan = d < 0.5 ? 0 : (dx * -Math.cos(yaw) + dz * -Math.sin(yaw)) / Math.max(1e-6, Math.sqrt(dx * dx + dz * dz));
-						pan *= Math.min(1, d / 4); // close by sounds centred
-						double a = (pan + 1) * Math.PI / 4;
-						l = (float) (uv * fall * Math.cos(a) * 1.4142);
-						r = (float) (uv * fall * Math.sin(a) * 1.4142);
-					}
+					float l = volume * Voice.volume(s.userId), r = l;
 					for (int i = 0; i < FRAME; i++) {
 						acc[2 * i] += (int) (pcm[i] * l);
 						acc[2 * i + 1] += (int) (pcm[i] * r);

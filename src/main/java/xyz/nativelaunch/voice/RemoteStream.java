@@ -11,11 +11,7 @@ final class RemoteStream {
 	private static final long START_WAIT_MS = 60;
 
 	final int sid;
-	final boolean proximity;
 	volatile String userId;
-	/** World position of the speaker (proximity), updated by the game thread; valid=false when not in sight. */
-	volatile double x, y, z;
-	volatile boolean placed;
 	volatile float level;
 	volatile long lastPacket;
 
@@ -26,9 +22,8 @@ final class RemoteStream {
 	private boolean playing;
 	private long firstAt;
 
-	RemoteStream(int sid, boolean proximity) throws Exception {
+	RemoteStream(int sid) throws Exception {
 		this.sid = sid;
-		this.proximity = proximity;
 		decoder = new OpusDecoder(48000, 1);
 	}
 
