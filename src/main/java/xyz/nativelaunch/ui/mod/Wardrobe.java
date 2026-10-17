@@ -142,21 +142,7 @@ public final class Wardrobe {
 				JsonObject cat = parse(Http.getJson(api + "/v1/store/catalog", null));
 				List<Item> items = new ArrayList<Item>();
 				for (JsonElement e : cat.getAsJsonArray("items")) {
-					JsonObject o = e.getAsJsonObject();
-					items.add(new Item(str(o, "id"), str(o, "name"), str(o, "kind"), str(o, "slot"), str(o, "stillUrl"), str(o, "modelUrl"),
-							str(o, "textureUrl"), str(o, "dyeUrl"), str(o, "stripUrl"),
-							o.has("frames") && !o.get("frames").isJsonNull() ? o.get("frames").getAsInt() : 1,
-							o.has("fps") && !o.get("fps").isJsonNull() ? o.get("fps").getAsFloat() : 0f));
-					if (o.has("partner") && o.get("partner").isJsonObject()) {
-						JsonObject pt = o.getAsJsonObject("partner");
-						Item it = items.get(items.size() - 1);
-						it.partnerName = str(pt, "name");
-						it.partnerLogo = str(pt, "logoPng");
-						String accent = str(pt, "accent");
-						if (accent != null && accent.matches("#[0-9a-fA-F]{6}")) {
-							it.partnerAccent = 0xFF000000 | Integer.parseInt(accent.substring(1), 16);
-						}
-					}
+					items.add(parseItem(e.getAsJsonObject()));
 				}
 				catalog = Collections.unmodifiableList(items);
 				String ticket = ticket();
@@ -184,6 +170,23 @@ public final class Wardrobe {
 				}
 			}
 		});
+	}
+
+	private static Item parseItem(JsonObject o) {
+		Item it = new Item(str(o, "id"), str(o, "name"), str(o, "kind"), str(o, "slot"), str(o, "stillUrl"), str(o, "modelUrl"),
+				str(o, "textureUrl"), str(o, "dyeUrl"), str(o, "stripUrl"),
+				o.has("frames") && !o.get("frames").isJsonNull() ? o.get("frames").getAsInt() : 1,
+				o.has("fps") && !o.get("fps").isJsonNull() ? o.get("fps").getAsFloat() : 0f);
+		if (o.has("partner") && o.get("partner").isJsonObject()) {
+			JsonObject pt = o.getAsJsonObject("partner");
+			it.partnerName = str(pt, "name");
+			it.partnerLogo = str(pt, "logoPng");
+			String accent = str(pt, "accent");
+			if (accent != null && accent.matches("#[0-9a-fA-F]{6}")) {
+				it.partnerAccent = 0xFF000000 | Integer.parseInt(accent.substring(1), 16);
+			}
+		}
+		return it;
 	}
 
 	/**
@@ -231,6 +234,23 @@ public final class Wardrobe {
 	}
 
 	private static void apply(JsonObject me) {
+		if (me.has("ownedHidden") && me.get("ownedHidden").isJsonArray()) {
+			List<Item> merged = new ArrayList<Item>(catalog);
+			Set<String> seenIds = new HashSet<String>();
+			for (Item existing : merged) {
+				if (existing != null && existing.id != null) seenIds.add(existing.id);
+			}
+			for (JsonElement e : me.getAsJsonArray("ownedHidden")) {
+				if (e.isJsonObject()) {
+					Item hiddenItem = parseItem(e.getAsJsonObject());
+					if (hiddenItem.id != null && !seenIds.contains(hiddenItem.id)) {
+						seenIds.add(hiddenItem.id);
+						merged.add(hiddenItem);
+					}
+				}
+			}
+			catalog = Collections.unmodifiableList(merged);
+		}
 		if (me.has("owned") && me.get("owned").isJsonArray()) {
 			Set<String> set = new HashSet<String>();
 			for (JsonElement e : me.getAsJsonArray("owned")) {
