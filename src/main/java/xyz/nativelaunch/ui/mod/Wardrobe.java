@@ -374,9 +374,17 @@ public final class Wardrobe {
 		} else {
 			body.addProperty("itemId", i.id);
 		}
-		// optimistic
+		// optimistic. Wings / backpacks hang where the cloak does: putting one on takes the cloak off, and a cloak
+		// takes the back item off (the server swaps them too)
+		String swap = null;
 		if (i.isCape()) {
 			equipped = off ? null : i.id;
+			if (!off && wearing.containsKey(BACK)) {
+				Map<String, String> w = new HashMap<String, String>(wearing);
+				w.remove(BACK);
+				wearing = w;
+				swap = BACK;
+			}
 		} else {
 			Map<String, String> w = new HashMap<String, String>(wearing);
 			if (off) {
@@ -385,16 +393,36 @@ public final class Wardrobe {
 				w.put(i.group(), i.id);
 			}
 			wearing = w;
+			if (!off && BACK.equals(i.group()) && equipped != null) {
+				equipped = null;
+				swap = CAPES;
+			}
 		}
-		post(i.id, body);
+		post(i.id, body, swap);
 	}
 
+	private static final String BACK = "back", CAPES = "capes";
+
 	private static void post(final String what, final JsonObject body) {
+		post(what, body, null);
+	}
+
+	/** {@code swap}: the slot ("capes" / "back") the server should have emptied; an older server that kept it gets asked once more. */
+	private static void post(final String what, final JsonObject body, final String swap) {
 		busy = what;
 		IO.execute(() -> {
 			try {
 				String res = Http.postBytes(api() + "/v1/store/equip", ticket(), body.toString().getBytes(StandardCharsets.UTF_8), "application/json");
 				apply(parse(res));
+				boolean stillThere = CAPES.equals(swap) ? equipped != null : BACK.equals(swap) && wearing.containsKey(BACK);
+				if (stillThere) {
+					JsonObject off = new JsonObject();
+					if (BACK.equals(swap)) {
+						off.addProperty("slot", BACK);
+					}
+					off.add("itemId", com.google.gson.JsonNull.INSTANCE);
+					apply(parse(Http.postBytes(api() + "/v1/store/equip", ticket(), off.toString().getBytes(StandardCharsets.UTF_8), "application/json")));
+				}
 				error = null;
 			} catch (Throwable t) {
 				if (Http.unauthorized(t)) {

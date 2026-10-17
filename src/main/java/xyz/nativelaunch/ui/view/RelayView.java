@@ -642,6 +642,11 @@ public final class RelayView {
 				Voice.decline(key);
 			}
 			right -= 38;
+			// a halo that keeps rippling out of Accept while it rings
+			for (int k = 0; k < 2; k++) {
+				float ph = (float) (((ui.now / 1100.0) + k / 2.0) % 1.0);
+				ui.c.round(right - ph * 7, y - ph * 7, 32 + ph * 14, 32 + ph * 14, 8 + ph * 7, Theme.alpha(Theme.ONLINE, 0.35f * (1 - ph)));
+			}
 			if (voiceButton(ui, "relay:call-accept", right, y, Theme.I_PHONE, "Accept", Theme.ONLINE)) {
 				Voice.accept(key);
 			}
@@ -676,37 +681,135 @@ public final class RelayView {
 		return right;
 	}
 
-	/** In a call: everyone else with their own volume slider (up to four rows). Returns the height used. */
+	// the call stage: opens and closes smoothly, per conversation
+	private static float stageH;
+	private static String stageKey;
+	private static long stageFrame;
+	/** Whose volume slider is open under the call stage (a click on their face), or null. */
+	private static String volFor;
+
+	/**
+	 * In a call: a stage with everyone's face (you too), a ring that glows with how loud they talk, mute badges, the call
+	 * timer, ripples while a private call is still ringing out, and one volume slider for the face you click. Returns the
+	 * height used (animated).
+	 */
 	private static float callPanel(Ui ui, String key, float x, float y, float w) {
-		if (!Voice.inCall(key)) {
-			return 0;
-		}
-		String me = Voice.me();
-		List<Voice.Member> others = new ArrayList<Voice.Member>();
-		for (Voice.Member m : Voice.callMembers(key)) {
-			if (me == null || !me.equals(m.userId)) {
-				others.add(m);
-			}
-		}
-		if (others.isEmpty()) {
-			return 0;
-		}
 		Canvas c = ui.c;
-		int rows = Math.min(4, others.size());
-		float h = 10 + rows * 32 + (others.size() > rows ? 18 : 0);
-		c.fill(x, y, w, h, 0x0A22C55E);
-		float rw = Math.min(460, w - 40);
-		for (int i = 0; i < rows; i++) {
-			Voice.Member m = others.get(i);
-			xyz.nativelaunch.ui.mod.VoiceModules.volumeRow(ui, "relay:vol:" + m.userId, m.userId, m.ign != null ? m.ign : m.name, m.skin, Voice.speaking(m),
-					x + 20, y + 5 + i * 32, rw);
-			if (m.muted || m.deafened) {
-				c.icon(m.deafened ? Theme.I_HEADPHONES_OFF : Theme.I_MIC_OFF, 13, x + 20 + rw + 16, y + 5 + i * 32 + 15, Theme.DANGER);
+		boolean in = Voice.inCall(key);
+		List<Voice.Member> members = in ? Voice.callMembers(key) : java.util.Collections.<Voice.Member>emptyList();
+		String me = Voice.me();
+		Voice.Member picked = null;
+		for (Voice.Member m : members) {
+			if (volFor != null && volFor.equals(m.userId) && (me == null || !me.equals(m.userId))) {
+				picked = m;
 			}
 		}
-		if (others.size() > rows) {
-			c.text(Fonts.MEDIUM, 11, "+" + (others.size() - rows) + " more in the call", x + 20, y + 5 + rows * 32, Theme.TEXT_MUTED);
+		if (picked == null) {
+			volFor = null;
 		}
+		float target = in ? (picked != null ? 160 : 124) : 0;
+		if (!key.equals(stageKey)) {
+			stageKey = key;
+			stageH = 0; // a newly opened chat grows its stage in
+		}
+		float dt = stageFrame == 0 ? 0.016f : Math.min(0.1f, (ui.now - stageFrame) / 1000f);
+		stageFrame = ui.now;
+		stageH += (target - stageH) * Math.min(1f, dt * 12f);
+		if (Math.abs(target - stageH) < 0.5f) {
+			stageH = target;
+		}
+		if (stageH < 1) {
+			return 0;
+		}
+		float h = stageH;
+		c.pushClip(x, y, w, h);
+		c.pushAlpha(Math.min(1f, h / Math.max(1f, target == 0 ? 124 : target) * 1.4f));
+		c.gradientV(x, y, w, h, 0x2422C55E, 0x0622C55E);
+
+		// top line: live dot + what is happening + timer
+		Voice.Room room = Voice.call();
+		boolean calling = key.equals(Voice.calling());
+		float pulse = (float) (0.5 + 0.5 * Math.sin(ui.now / 320.0));
+		c.circle(x + 24, y + 18, 4 + pulse * 2.5f, Theme.alpha(Theme.ONLINE, 0.25f));
+		c.circle(x + 24, y + 18, 3.5f, Theme.ONLINE);
+		String head = calling ? "Ringing" : members.size() <= 1 ? "Waiting for others" : "Voice connected";
+		float hw = c.text(Fonts.SEMIBOLD, 11.5f, head, x + 34, y + 18 - c.lineHeight(Fonts.SEMIBOLD, 11.5f) / 2, Theme.ONLINE);
+		if (room != null) {
+			long secs = Math.max(0, (System.currentTimeMillis() - room.since()) / 1000);
+			String time = (secs >= 3600 ? secs / 3600 + ":" : "") + String.format(Locale.ROOT, secs >= 3600 ? "%02d:%02d" : "%d:%02d", (secs / 60) % 60, secs % 60);
+			c.text(Fonts.MEDIUM, 11, time, x + 34 + hw + 10, y + 18 - c.lineHeight(Fonts.MEDIUM, 11) / 2, Theme.TEXT_MUTED);
+		}
+		if (members.size() > 1) {
+			String hint = "Click a face to change their volume";
+			c.text(Fonts.REGULAR, 10.5f, hint, x + w - 20 - c.textWidth(Fonts.REGULAR, 10.5f, hint), y + 18 - c.lineHeight(Fonts.REGULAR, 10.5f) / 2, Theme.TEXT_MUTED);
+		}
+
+		// faces
+		List<Object[]> tiles = new ArrayList<Object[]>(); // {name, skin, userId, member or null}
+		for (Voice.Member m : members) {
+			boolean self = me != null && me.equals(m.userId);
+			tiles.add(new Object[] {self ? "You" : (m.ign != null ? m.ign : m.name), m.skin, self ? null : m.userId, m});
+		}
+		RelayClient client = RelayClient.get();
+		if (calling && client != null && key.startsWith("dm:")) {
+			Model.Friend f = client.friend(key.substring(3));
+			tiles.add(new Object[] {f == null ? "Friend" : f.display(), f == null ? null : f.skin, null, null});
+		}
+		int max = Math.max(1, (int) ((w - 40) / 78));
+		int n = Math.min(max, tiles.size());
+		float face = 44, slot = 78, row0 = x + (w - n * slot) / 2, fy = y + 34;
+		for (int i = 0; i < n; i++) {
+			Object[] t = tiles.get(i);
+			Voice.Member m = (Voice.Member) t[3];
+			float cx = row0 + i * slot + slot / 2, cy = fy + face / 2, r = face / 2;
+			boolean waiting = m == null; // the friend a private call is ringing
+			float lvl = m == null ? 0 : Voice.level(m);
+			boolean talking = m != null && (lvl > 0 || Voice.speaking(m));
+			if (waiting) {
+				for (int k = 0; k < 3; k++) {
+					float ph = (float) (((ui.now / 1500.0) + k / 3.0) % 1.0);
+					c.outline(cx - r - 2 - ph * 16, cy - r - 2 - ph * 16, (r + 2 + ph * 16) * 2, (r + 2 + ph * 16) * 2, r + 2 + ph * 16, 1.5f,
+							Theme.alpha(Theme.ONLINE, 0.55f * (1 - ph)));
+				}
+			} else if (talking) {
+				float glow = 0.35f + 0.65f * Math.max(lvl, 0.3f);
+				c.circle(cx, cy, r + 4 + glow * 5, Theme.alpha(Theme.ONLINE, 0.22f * glow));
+			}
+			boolean sel = t[2] != null && t[2].equals(volFor);
+			boolean over = t[2] != null && ui.hover(cx - r - 4, cy - r - 4, face + 8, face + 8);
+			c.circle(cx, cy, r + 2.5f, talking ? Theme.ONLINE : sel ? 0xFF60A5FA : over ? 0x66FFFFFF : 0x26FFFFFF);
+			c.circle(cx, cy, r + 0.5f, 0xFF08090C);
+			c.pushAlpha(waiting ? 0.55f : 1f);
+			Avatars.drawRound(c, Avatars.api(), (String) t[0], (String) t[1], cx - r, cy - r, face);
+			c.popAlpha();
+			if (m != null && (m.deafened || m.muted || "You".equals(t[0]) && (Voice.muted || Voice.deafened))) {
+				boolean deaf = "You".equals(t[0]) ? Voice.deafened : m.deafened;
+				c.circle(cx + r - 4, cy + r - 4, 8, 0xFF08090C);
+				c.circle(cx + r - 4, cy + r - 4, 6.5f, Theme.DANGER);
+				c.icon(deaf ? Theme.I_HEADPHONES_OFF : Theme.I_MIC_OFF, 8, cx + r - 4, cy + r - 4, 0xFFFFFFFF);
+			}
+			String label = c.ellipsize(Fonts.MEDIUM, 11, (String) t[0], slot - 8);
+			c.text(Fonts.MEDIUM, 11, label, cx - c.textWidth(Fonts.MEDIUM, 11, label) / 2, fy + face + 7, talking ? Theme.TEXT_STRONG : Theme.TEXT_SECONDARY);
+			if (t[2] != null && ui.clicked("relay:stage:" + t[2], cx - r - 4, cy - r - 4, face + 8, face + 8)) {
+				volFor = sel ? null : (String) t[2];
+			}
+			if (over) {
+				ui.tip(sel ? "Hide volume" : "Volume for " + t[0]);
+			}
+		}
+		if (tiles.size() > n) {
+			String more = "+" + (tiles.size() - n);
+			c.text(Fonts.SEMIBOLD, 12, more, row0 + n * slot + 4, fy + face / 2 - c.lineHeight(Fonts.SEMIBOLD, 12) / 2, Theme.TEXT_MUTED);
+		}
+
+		// one volume slider, for the face that was clicked
+		if (picked != null) {
+			float rw = Math.min(460, w - 40);
+			xyz.nativelaunch.ui.mod.VoiceModules.volumeRow(ui, "relay:vol:" + picked.userId, picked.userId, picked.ign != null ? picked.ign : picked.name, picked.skin,
+					Voice.speaking(picked), x + (w - rw) / 2, y + 120, rw);
+		}
+		c.popAlpha();
+		c.popClip();
 		c.fill(x, y + h - 1, w, 1, Theme.HAIRLINE);
 		return h;
 	}

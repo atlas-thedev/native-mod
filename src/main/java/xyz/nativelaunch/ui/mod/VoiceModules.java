@@ -33,6 +33,10 @@ public final class VoiceModules {
 		final Setting.Key ptt = add(new Setting.Key("ptt", "Push-to-talk key", 66));
 		final Setting.Num threshold = add(new Setting.Num("threshold", "Activation level", -42, -70, -10, 1, " dB"));
 		final Setting.Bool proximity = add(new Setting.Bool("proximity", "Proximity voice on servers", true));
+		// Outside a call: nobody on the server hears you unless you mean it (voice activation alone used to leave the
+		// mic live for everyone nearby the moment you joined a server)
+		final Setting.Choice nearbyTalk = add(new Setting.Choice("nearbytalk", "Talk to nearby players", Voice.NEARBY_HOLD,
+				"Hold push-to-talk", "Same as talk mode", "Never (listen only)").shorts("Hold key", "Talk mode", "Never"));
 		final Setting.Num range = add(new Setting.Num("range", "Hearing distance", 48, 8, 96, 4, " blocks"));
 		final Setting.Key mute = add(new Setting.Key("mute", "Mute key", -1));
 		final Setting.Key deafen = add(new Setting.Key("deafen", "Deafen key", -1));
@@ -55,7 +59,9 @@ public final class VoiceModules {
 		@Override
 		protected boolean hidden(Setting s) {
 			boolean svc = Voice.svcInstalled(); // Simple Voice Chat does proximity then; Native keeps calls
-			return s == ptt && mode.value != PTT || s == threshold && mode.value != ACTIVATION || s == range && (!proximity.value || svc) || s == proximity && svc;
+			boolean nearbyKey = proximity.value && !svc && nearbyTalk.value == Voice.NEARBY_HOLD;
+			return s == ptt && mode.value != PTT && !nearbyKey || s == threshold && mode.value != ACTIVATION || s == range && (!proximity.value || svc)
+					|| s == proximity && svc || s == nearbyTalk && (!proximity.value || svc);
 		}
 
 		@Override
@@ -70,6 +76,7 @@ public final class VoiceModules {
 			Voice.micGain = mic.value / 100f;
 			Voice.outVolume = volume.value / 100f;
 			Voice.proximityOn = proximity.value;
+			Voice.nearbyTalk = nearbyTalk.value;
 			Voice.range = range.value;
 			Voice.tick(HudModules.mc(), true);
 		}
@@ -150,14 +157,17 @@ public final class VoiceModules {
 		final Setting.Bool nearby = add(new Setting.Bool("nearby", "Show nearby speakers", true));
 		private final List<Row> rows = new ArrayList<Row>();
 		private final float[] size = new float[2];
+		private static final int NEARBY = 0xFF38BDF8;
 
 		static final class Row {
 			String name, skin, userId;
 			boolean speaking, muted, deafened, self;
+			/** Heard through proximity voice (standing near you), not a member of your call. */
+			boolean nearby;
 		}
 
 		VoiceOverlay() {
-			super("voice-overlay", "Voice Overlay", "Faces of everyone in your voice call, with a green ring while they talk.", Theme.I_HEADPHONES,
+			super("voice-overlay", "Voice Overlay", "Faces of everyone in your voice call (green while they talk), plus nearby players you can hear (blue).", Theme.I_HEADPHONES,
 					true, 0f, 0.3f);
 			drop(style, labels);
 		}
@@ -189,12 +199,25 @@ public final class VoiceModules {
 					r.speaking = Voice.speaking(m);
 					r.muted = r.self ? Voice.muted : m.muted;
 					r.deafened = r.self ? Voice.deafened : m.deafened;
+					r.nearby = false;
 				}
 			}
 			Voice.Room prox = Voice.proximity();
 			if (nearby.value && prox != null) {
+				// you, while the players around you can hear you (outside a call that is the only sign you are live)
+				if (call == null && Voice.selfNearby()) {
+					Row r = row(n++);
+					r.self = true;
+					r.name = "You";
+					r.userId = null;
+					r.skin = Avatars.self(HudModules.mc() == null ? null : HudModules.mc().username());
+					r.speaking = true;
+					r.muted = r.deafened = false;
+					r.nearby = true;
+				}
 				for (Voice.Member m : prox.members()) {
-					if (me != null && me.equals(m.userId) || !Voice.speaking(m) || inCall(call, m.userId)) {
+					// only people you can hear: the proximity room is the whole server, not just who is around you
+					if (me != null && me.equals(m.userId) || !Voice.speaking(m) || !Voice.audible(m) || inCall(call, m.userId)) {
 						continue;
 					}
 					Row r = row(n++);
@@ -204,6 +227,7 @@ public final class VoiceModules {
 					r.skin = m.skin;
 					r.speaking = true;
 					r.muted = r.deafened = false;
+					r.nearby = true;
 				}
 			}
 			if (n == 0 && preview) {
@@ -215,6 +239,7 @@ public final class VoiceModules {
 				a.skin = Avatars.self(HudModules.mc() == null ? null : HudModules.mc().username());
 				a.speaking = true;
 				a.muted = a.deafened = false;
+				a.nearby = false;
 				Row b = row(n++);
 				b.self = false;
 				b.name = client != null && !client.friends.isEmpty() ? client.friends.get(0).display() : "Friend";
@@ -223,6 +248,7 @@ public final class VoiceModules {
 				b.speaking = false;
 				b.muted = true;
 				b.deafened = false;
+				b.nearby = false;
 			}
 			return n;
 		}
@@ -267,7 +293,9 @@ public final class VoiceModules {
 			float text = 0;
 			if (names.value) {
 				for (int i = 0; i < n; i++) {
-					text = Math.max(text, c.textWidth(Fonts.SEMIBOLD, 12 * s, rows.get(i).name));
+					Row r = rows.get(i);
+					String label = r.nearby ? r.name + (r.self ? " · nearby can hear" : " · nearby") : r.name;
+					text = Math.max(text, c.textWidth(Fonts.SEMIBOLD, 12 * s, label));
 				}
 				text += 8 * s;
 			}
@@ -289,17 +317,24 @@ public final class VoiceModules {
 				float fx = layout.value == 1 ? x + pad + i * (face + gap) : x + pad;
 				float fy = layout.value == 1 ? y + pad : y + pad + i * (face + gap);
 				float cx = fx + face / 2, cy = fy + face / 2;
-				c.circle(cx, cy, face / 2 + 2 * s, r.speaking ? 0xFF22C55E : 0x40FFFFFF);
+				// call members talk in green; nearby (proximity) voices in blue with a pin, so they never read as "in your call"
+				int ring = !r.speaking ? 0x40FFFFFF : r.nearby ? NEARBY : 0xFF22C55E;
+				c.circle(cx, cy, face / 2 + 2 * s, ring);
 				c.circle(cx, cy, face / 2 + 0.5f * s, 0xFF08090C);
 				Avatars.drawRound(c, api, r.name, r.skin, fx, fy, face);
 				if (r.muted || r.deafened) {
 					float bx = fx + face - 3 * s, by = fy + face - 3 * s, br = 5.5f * s;
 					c.circle(bx, by, br, Theme.DANGER);
 					c.icon(r.deafened ? Theme.I_HEADPHONES_OFF : Theme.I_MIC_OFF, 7.5f * s, bx, by, 0xFFFFFFFF);
+				} else if (r.nearby) {
+					float bx = fx + face - 3 * s, by = fy + face - 3 * s, br = 5.5f * s;
+					c.circle(bx, by, br, NEARBY);
+					c.icon(Theme.I_MAP_PIN, 7 * s, bx, by, 0xFFFFFFFF);
 				}
 				if (names.value && layout.value == 0) {
 					float ty = cy - c.lineHeight(Fonts.SEMIBOLD, 12 * s) / 2;
-					text(c, s, r.name, fx + face + 8 * s, ty, r.speaking ? 0xFFFFFFFF : Theme.alpha(color.value, 0.7f));
+					String label = r.nearby ? r.name + (r.self ? " · nearby can hear" : " · nearby") : r.name;
+					text(c, s, label, fx + face + 8 * s, ty, r.speaking ? 0xFFFFFFFF : Theme.alpha(color.value, 0.7f));
 				}
 			}
 		}
