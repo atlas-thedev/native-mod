@@ -20,9 +20,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Native Voice: friend / group calls through Relay, plus proximity voice with everyone on the same Minecraft server
- * who runs Native (positions come from the local world, so the Minecraft server needs no plugin).
- * Main-thread API for the UI; network and audio run on their own threads.
+ * Native Voice: friend and group calls through Relay. Nothing else: you are only ever heard by the people in the call
+ * you joined (there is no proximity voice). Main-thread API for the UI; network and audio run on their own threads.
  */
 public final class Voice {
 	public static final class Member {
@@ -43,11 +42,10 @@ public final class Voice {
 	}
 
 	public static final class Room {
-		/** Conversation key ("dm:<friend>", "g:<group>") or "srv:<address>". */
+		/** Conversation key ("dm:<friend>", "g:<group>"). */
 		public final String key, room;
 		final int sid;
 		final byte[] secret;
-		final boolean proximity;
 		final AtomicInteger seq = new AtomicInteger();
 		volatile List<Member> members;
 		volatile int rtt = -1;
@@ -61,7 +59,6 @@ public final class Voice {
 			this.room = str(o, "room");
 			this.sid = (int) o.get("sid").getAsLong();
 			this.secret = java.util.Base64.getDecoder().decode(str(o, "key"));
-			this.proximity = convKey.startsWith("srv:");
 			this.members = Voice.members(o.getAsJsonArray("members"));
 		}
 
@@ -79,26 +76,17 @@ public final class Voice {
 		}
 	}
 
-	/** Who hears you outside a call ({@link #nearbyTalk}): nearby players only while the push-to-talk key is held, the same as calls, or never. */
-	public static final int NEARBY_HOLD = 0, NEARBY_TALK_MODE = 1, NEARBY_OFF = 2;
-	/** How long the microphone stays open after the push-to-talk key is let go (so the next press is heard at once). */
-	static final long PTT_LINGER_MS = 5000;
-
 	// settings, written by the Voice Chat module every frame
-	public static volatile boolean pushToTalk = true, pttHeld, proximityOn = true;
-	public static volatile int nearbyTalk = NEARBY_HOLD;
-	static volatile long pttAt;
-	public static volatile float thresholdDb = -42, micGain = 1, outVolume = 1, range = 48;
+	public static volatile boolean pushToTalk = true, pttHeld;
+	public static volatile float thresholdDb = -42, micGain = 1, outVolume = 1;
 	public static volatile boolean muted, deafened;
 	/** Chosen devices by name; "" = system default. */
 	public static volatile String micDevice = "", outDevice = "";
 	private static volatile long micTestUntil;
 	static volatile boolean selfSpeaking;
-	/** Your voice is going out to the players near you right now (not just to your call). */
-	static volatile boolean selfNearby;
 	static volatile float selfLevel;
 
-	private static volatile Room call, prox;
+	private static volatile Room call;
 	private static volatile String joining;
 	private static volatile String error;
 	private static volatile long errorUntil;
@@ -111,12 +99,6 @@ public final class Voice {
 	});
 	private static VoiceNet net;
 	private static volatile AudioEngine audio;
-	private static final boolean SVC = svcInstalled();
-	private static volatile long proxRetryAt;
-	private static volatile String proxFor;
-	private static volatile boolean proxBusy;
-	private static final double[] earPos = new double[5];
-	private static volatile boolean earValid;
 
 	private Voice() {
 	}
@@ -188,37 +170,23 @@ public final class Voice {
 		}
 	}
 
-	/** A member of your call or proximity room by user id, or null. */
+	/** A member of your call by user id, or null. */
 	public static Member member(String userId) {
-		for (Room r : new Room[] {call, prox}) {
-			if (r != null && userId != null) {
-				for (Member m : r.members) {
-					if (userId.equals(m.userId)) {
-						return m;
-					}
+		Room r = call;
+		if (r != null && userId != null) {
+			for (Member m : r.members) {
+				if (userId.equals(m.userId)) {
+					return m;
 				}
 			}
 		}
 		return null;
 	}
 
-	/** Simple Voice Chat is installed: it owns proximity voice then (Native keeps calls), so nobody is heard twice. */
-	public static boolean svcInstalled() {
-		try {
-			return FabricLoader.getInstance().isModLoaded("voicechat");
-		} catch (Throwable t) {
-			return false;
-		}
-	}
-
 	// ── state for the UI ──────────────────────────────────────────────────
 
 	public static Room call() {
 		return call;
-	}
-
-	public static Room proximity() {
-		return prox;
 	}
 
 	public static boolean inCall(String convKey) {
@@ -295,24 +263,6 @@ public final class Voice {
 		return s == null || !s.speaking() ? 0f : Math.min(1f, s.level * 6f);
 	}
 
-	/** True while the players near you can hear you. */
-	public static boolean selfNearby() {
-		return selfNearby;
-	}
-
-	/**
-	 * A nearby (proximity) speaker you can really hear: loaded in your world and within hearing distance. Everyone with
-	 * Native on the server shares one proximity room, so "speaking" alone also matches people on the other side of the map.
-	 */
-	public static boolean audible(Member m) {
-		RemoteStream s = m == null ? null : streams.get(m.sid);
-		if (s == null || !s.proximity || !s.placed || !earValid) {
-			return false;
-		}
-		double dx = s.x - earPos[0], dy = s.y - earPos[1], dz = s.z - earPos[2];
-		return dx * dx + dy * dy + dz * dz < (double) range * range;
-	}
-
 	/** True while this member's voice is coming in. */
 	public static boolean speaking(Member m) {
 		String me = me();
@@ -329,53 +279,12 @@ public final class Voice {
 	}
 
 	static boolean active() {
-		return call != null || prox != null;
+		return call != null;
 	}
 
-	/**
-	 * The microphone is open: in a call, or (only on a server's proximity voice) while you can talk to the players near
-	 * you. With the default "hold the key" nearby setting that is a few seconds around a push-to-talk press, so being on a
-	 * server never leaves your mic live for strangers.
-	 */
+	/** The microphone is open only in a call (or for the mic test in Settings). */
 	static boolean wantsMic() {
-		long now = System.currentTimeMillis();
-		if (now < micTestUntil) {
-			return true;
-		}
-		if (muted || deafened) {
-			return false;
-		}
-		if (call != null) {
-			return true;
-		}
-		return prox != null && nearbyOpen(now);
-	}
-
-	private static boolean nearbyOpen(long now) {
-		switch (nearbyTalk) {
-			case NEARBY_TALK_MODE:
-				return !pushToTalk || pttHeld || now - pttAt < PTT_LINGER_MS;
-			case NEARBY_OFF:
-				return false;
-			default:
-				return pttHeld || now - pttAt < PTT_LINGER_MS;
-		}
-	}
-
-	/**
-	 * Which rooms one frame of your voice goes to. {@code talk} is the talk mode's answer (key held / above the activation
-	 * level). Your call hears you by the talk mode; nearby players by {@link #nearbyTalk}, so a private call is not
-	 * heard by whoever stands next to you unless you hold the key. Returns bit 1 = call, bit 2 = proximity.
-	 */
-	static int targets(boolean talk, boolean held, boolean inCall, boolean inProx, int nearby) {
-		int out = 0;
-		if (inCall && talk) {
-			out |= 1;
-		}
-		if (inProx && (nearby == NEARBY_TALK_MODE ? talk : nearby == NEARBY_HOLD && held)) {
-			out |= 2;
-		}
-		return out;
+		return call != null && !muted && !deafened || System.currentTimeMillis() < micTestUntil;
 	}
 
 	/** The mic test is on screen: keep the microphone open (and the engine running) for a moment. */
@@ -402,8 +311,8 @@ public final class Voice {
 	}
 
 	static Room roomBySid(int sid) {
-		Room c = call, p = prox;
-		return c != null && c.sid == sid ? c : p != null && p.sid == sid ? p : null;
+		Room c = call;
+		return c != null && c.sid == sid ? c : null;
 	}
 
 	// ── actions ───────────────────────────────────────────────────────────
@@ -457,12 +366,6 @@ public final class Voice {
 	/** Leaves everything (module switched off / game closing). */
 	public static void shutdown() {
 		leaveCall();
-		final Room p = prox;
-		prox = null;
-		proxFor = null;
-		if (p != null) {
-			pool.execute(() -> bye(p));
-		}
 		pool.execute(() -> {
 			if (audio != null) {
 				audio.stop();
@@ -532,142 +435,52 @@ public final class Voice {
 	}
 
 	private static void pushState() {
-		final Room c = call, p = prox;
+		final Room r = call;
 		final boolean m = muted, d = deafened;
-		pool.execute(() -> {
-			for (Room r : new Room[] {c, p}) {
-				if (r == null) {
-					continue;
-				}
-				try {
-					JsonObject body = new JsonObject();
-					body.addProperty("sid", r.sid & 0xFFFFFFFFL);
-					body.addProperty("muted", m);
-					body.addProperty("deafened", d);
-					RelayClient.get().apiPost("/v1/voice/state", body);
-				} catch (Throwable t) {
-					Log.debug("Voice state: {}", t.toString());
-				}
-			}
-		});
-	}
-
-	// ── game thread: proximity room, positions, keep-alive ────────────────
-
-	public static void tick(McBridge mc, boolean enabled) {
-		if (mc == null) {
+		if (r == null) {
 			return;
 		}
-		String server = mc.inWorld() ? mc.server() : null;
-		// proximity rooms are keyed by the server address: a local or LAN address ("192.168.1.5", "localhost") is the same
-		// string on thousands of unrelated networks, so only public servers get one
-		String want = enabled && proximityOn && !SVC && server != null && !"Singleplayer".equals(server)
-				&& xyz.nativelaunch.presence.PresenceService.isPublicAddress(server) ? "srv:" + server : null;
-		Room p = prox;
-		if (want == null ? proxFor != null : !want.equals(proxFor)) {
-			switchProximity(want);
-		} else if (want != null && p == null && !proxBusy && System.currentTimeMillis() > proxRetryAt) {
-			switchProximity(want);
-		}
-		if (pttHeld) {
-			pttAt = System.currentTimeMillis();
-		}
-		boolean ear = mc.player(earPos);
-		if (ear) {
-			earPos[1] += 1.6; // eye height, like the speakers' positions
-		}
-		earValid = ear;
-		if (p != null) {
-			double[] pos = new double[5];
-			for (Member m : p.members) {
-				RemoteStream s = streams.get(m.sid);
-				if (s != null) {
-					boolean ok = m.ign != null && mc.playerPos(m.ign, pos);
-					if (ok) {
-						s.x = pos[0];
-						s.y = pos[1];
-						s.z = pos[2];
-					}
-					s.placed = ok;
-				}
-			}
-		}
-		long now = System.currentTimeMillis();
-		VoiceNet n = net;
-		for (Room r : new Room[] {call, prox}) {
-			if (r != null && n != null && now - r.lastPing > 2000) {
-				r.lastPing = now;
-				n.ping(r);
-			}
-		}
-	}
-
-	private static void switchProximity(final String want) {
-		final Room old = prox;
-		prox = null;
-		proxFor = want;
-		proxBusy = true;
 		pool.execute(() -> {
 			try {
-				if (old != null) {
-					bye(old);
-				}
-				if (want == null) {
-					return;
-				}
-				Room r = join(want);
-				if (want.equals(proxFor)) {
-					prox = r;
-				} else {
-					bye(r);
-				}
+				JsonObject body = new JsonObject();
+				body.addProperty("sid", r.sid & 0xFFFFFFFFL);
+				body.addProperty("muted", m);
+				body.addProperty("deafened", d);
+				RelayClient.get().apiPost("/v1/voice/state", body);
 			} catch (Throwable t) {
-				proxRetryAt = System.currentTimeMillis() + 30_000;
-				Log.debug("Proximity voice unavailable: {}", t.toString());
-			} finally {
-				proxBusy = false;
+				Log.debug("Voice state: {}", t.toString());
 			}
 		});
 	}
 
-	static boolean ear(double[] out) {
-		if (!earValid) {
-			return false;
+	// ── game thread: keep-alive ───────────────────────────────────────────
+
+	public static void tick() {
+		long now = System.currentTimeMillis();
+		VoiceNet n = net;
+		Room r = call;
+		if (r != null && n != null && now - r.lastPing > 2000) {
+			r.lastPing = now;
+			n.ping(r);
 		}
-		System.arraycopy(earPos, 0, out, 0, 5);
-		return true;
 	}
 
 	// ── network threads ───────────────────────────────────────────────────
 
-	/** One encoded frame to your call and / or proximity room; {@code toCall} / {@code toProx} say which. */
-	static void sendAudio(byte[] packet, int len, boolean toCall, boolean toProx) {
+	/** One encoded frame of your voice to your call. */
+	static void sendAudio(byte[] packet, int len) {
 		VoiceNet n = net;
-		if (n == null) {
-			return;
-		}
-		Room c = call, p = prox;
-		if (c != null && toCall) {
+		Room c = call;
+		if (n != null && c != null) {
 			n.send(c, VoiceNet.T_AUDIO, packet, len);
 		}
-		if (p != null && toProx) {
-			n.send(p, VoiceNet.T_AUDIO, packet, len);
-		}
-	}
-
-	static boolean inCallRoom() {
-		return call != null;
-	}
-
-	static boolean inProxRoom() {
-		return prox != null;
 	}
 
 	static void onAudio(Room r, int from, int flags, int seq, byte[] opus) {
 		RemoteStream s = streams.get(from);
 		if (s == null) {
 			try {
-				s = new RemoteStream(from, r.proximity);
+				s = new RemoteStream(from);
 			} catch (Throwable t) {
 				return;
 			}
@@ -681,27 +494,12 @@ public final class Voice {
 		s.push(seq, flags, opus);
 	}
 
-	/** Someone in your call who is also near you: heard once, through the call. */
-	static boolean duplicate(RemoteStream s) {
-		Room c = call;
-		if (!s.proximity || c == null || s.userId == null) {
-			return false;
-		}
-		for (Member m : c.members) {
-			if (s.userId.equals(m.userId)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	private static void dropStreams() {
 		java.util.Set<Integer> keep = new java.util.HashSet<Integer>();
-		for (Room r : new Room[] {call, prox}) {
-			if (r != null) {
-				for (Member m : r.members) {
-					keep.add(m.sid);
-				}
+		Room r = call;
+		if (r != null) {
+			for (Member m : r.members) {
+				keep.add(m.sid);
 			}
 		}
 		streams.keySet().retainAll(keep);
@@ -716,7 +514,7 @@ public final class Voice {
 			return;
 		}
 		List<Member> members = members(p.getAsJsonArray("members"));
-		Room c = call, x = prox;
+		Room c = call;
 		if (c != null && room.equals(c.room)) {
 			c.members = members;
 			JsonObject left = p.has("left") && p.get("left").isJsonObject() ? p.getAsJsonObject("left") : null;
@@ -729,8 +527,6 @@ public final class Voice {
 			if (hasOthers(members, me0)) {
 				c.sawOthers = true;
 			}
-		} else if (x != null && room.equals(x.room)) {
-			x.members = members;
 		}
 		String key = convKey(room);
 		if (key != null && (c == null || !room.equals(c.room))) {
@@ -1116,7 +912,7 @@ public final class Voice {
 		return 0;
 	}
 
-	/** "dm:a:b" -> "dm:<other>", "g:id" -> "g:id"; null for proximity rooms. */
+	/** "dm:a:b" -> "dm:<other>", "g:id" -> "g:id"; null for anything else. */
 	private static String convKey(String room) {
 		if (room.startsWith("g:")) {
 			return room;

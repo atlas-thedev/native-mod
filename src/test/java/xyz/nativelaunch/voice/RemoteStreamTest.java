@@ -27,7 +27,7 @@ class RemoteStreamTest {
 	@Test
 	void lostPacketIsConcealedAndEndStopsPlayback() throws Exception {
 		byte[][] p = sine(20);
-		RemoteStream s = new RemoteStream(7, false);
+		RemoteStream s = new RemoteStream(7);
 		int played = 0;
 		for (int f = 0; f < 20; f++) {
 			if (f != 10) {
@@ -47,7 +47,7 @@ class RemoteStreamTest {
 	@Test
 	void fallingBehindDropsOldAudio() throws Exception {
 		byte[][] p = sine(30);
-		RemoteStream s = new RemoteStream(8, false);
+		RemoteStream s = new RemoteStream(8);
 		for (int f = 0; f < 30; f++) {
 			s.push(f, 0, p[f]);
 		}
